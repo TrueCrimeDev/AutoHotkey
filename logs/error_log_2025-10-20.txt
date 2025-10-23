@@ -1,0 +1,112 @@
+﻿
+════════════════════════════════════════════════════════
+╔════════════════════════════════════════════════════════╗
+║          RUNTIME ERROR INTERCEPTED                     ║
+╚════════════════════════════════════════════════════════╝
+
+Error Type: MethodError
+Message: This value of type "String" has no method named "SubStr".
+
+── Location ──────────────────────────────────────────
+File: C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk
+Line: 340
+
+── Stack Trace ───────────────────────────────────────
+  #01 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (340) : [ErrorDemos.MethodCallError] Return str.SubStr()
+  #02 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (385) : [] Return  ErrorDemos.MethodCallError()
+  #03 > Gui
+
+── Timestamp ─────────────────────────────────────────
+2025-10-20 22:10:21
+════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════
+╔════════════════════════════════════════════════════════╗
+║          RUNTIME ERROR INTERCEPTED                     ║
+╚════════════════════════════════════════════════════════╝
+
+Error Type: UnsetError
+Message: No value was returned.
+
+── Location ──────────────────────────────────────────
+File: C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk
+Line: 385
+
+── Additional Info ───────────────────────────────────
+.MethodCallError()
+
+── Stack Trace ───────────────────────────────────────
+  #01 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (385) : [] Return  ErrorDemos.MethodCallError()
+  #02 > Gui
+
+── Timestamp ─────────────────────────────────────────
+2025-10-20 22:10:21
+════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════
+╔════════════════════════════════════════════════════════╗
+║          RUNTIME ERROR INTERCEPTED                     ║
+╚════════════════════════════════════════════════════════╝
+
+Error Type: ZeroDivisionError
+Message: Divide by zero.
+
+── Location ──────────────────────────────────────────
+File: C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk
+Line: 243
+
+── Stack Trace ───────────────────────────────────────
+  #01 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (243) : [ErrorDemos.DivisionByZero] result := numerator / denominator
+  #02 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (358) : [] Return  ErrorDemos.DivisionByZero()
+  #03 > Gui
+
+── Timestamp ─────────────────────────────────────────
+2025-10-20 22:10:26
+════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════
+╔════════════════════════════════════════════════════════╗
+║          RUNTIME ERROR INTERCEPTED                     ║
+╚════════════════════════════════════════════════════════╝
+
+Error Type: UnsetError
+Message: This local variable has not been assigned a value.
+
+── Location ──────────────────────────────────────────
+File: C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk
+Line: 244
+
+── Additional Info ───────────────────────────────────
+result
+
+── Stack Trace ───────────────────────────────────────
+  #01 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (244) : [ErrorDemos.DivisionByZero] Return result
+  #02 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (358) : [] Return  ErrorDemos.DivisionByZero()
+  #03 > Gui
+
+── Timestamp ─────────────────────────────────────────
+2025-10-20 22:10:26
+════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════
+╔════════════════════════════════════════════════════════╗
+║          RUNTIME ERROR INTERCEPTED                     ║
+╚════════════════════════════════════════════════════════╝
+
+Error Type: UnsetError
+Message: No value was returned.
+
+── Location ──────────────────────────────────────────
+File: C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk
+Line: 358
+
+── Additional Info ───────────────────────────────────
+.DivisionByZero()
+
+── Stack Trace ───────────────────────────────────────
+  #01 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (358) : [] Return  ErrorDemos.DivisionByZero()
+  #02 > Gui
+
+── Timestamp ─────────────────────────────────────────
+2025-10-20 22:10:26
+════════════════════════════════════════════════════════
