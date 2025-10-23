@@ -67,4 +67,4 @@ Line: 474
 ════════════════════════════════════════════════════════
 
 
-kilocode --workspace C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey
+kilocode --workspace /path/to/project

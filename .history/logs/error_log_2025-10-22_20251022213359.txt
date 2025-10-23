@@ -65,6 +65,5 @@ Line: 474
 ── Timestamp ─────────────────────────────────────────
 2025-10-22 09:28:36
 ════════════════════════════════════════════════════════
-
-
-kilocode --workspace C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey
+  @echo off
+  "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" AutoDebug.ahk MyApp.ahk

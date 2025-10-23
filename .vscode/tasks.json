@@ -13,6 +13,49 @@
     },
     "tasks": [
         {
+            "label": "Run AHK with Debug Interceptor",
+            "type": "shell",
+            "command": "& 'C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe' '${workspaceFolder}\\AutoDebug.ahk' '${file}'",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run AHK Normally (No Debug)",
+            "type": "shell",
+            "command": "& 'C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe' '${file}'",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Start Global Debug Server",
+            "type": "shell",
+            "command": "& 'C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe' '${workspaceFolder}\\GlobalDebugServer.ahk'",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
             "label": "build",
             "type": "shell",
             "command": "msbuild",
