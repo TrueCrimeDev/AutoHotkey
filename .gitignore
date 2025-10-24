@@ -10,3 +10,4 @@ source/resources/png/
 *.aps
 *.sdf
 *.opensdf
+logs/*.log
