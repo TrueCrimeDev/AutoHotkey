@@ -40,18 +40,92 @@ AutoHotkey.exe /Debug tutorial1.ahk
 - Displays all variables at each step
 - Demonstrates basic debugging workflow
 
+### Example 3: Native WinAPI Simple Client (C++)
+
+**Pure WinAPI debugger - no Python required!**
+
+```bash
+# Build with MSVC
+build_msvc.bat
+
+# OR build with MinGW
+build_mingw.bat
+
+# Run the debugger
+winapi_simple_client.exe
+
+# In another terminal
+AutoHotkey.exe /Debug test_script.ahk
+```
+
+**What it does:**
+- Native C++ using Windows Sockets API
+- Demonstrates automated debugging workflow
+- Sets breakpoints and steps through code
+- Shows how to use DBGp protocol directly
+
+### Example 4: Interactive WinAPI Client (C++)
+
+**Full-featured interactive debugger in pure C++**
+
+```bash
+# Build (if not already built)
+build_msvc.bat   # or build_mingw.bat
+
+# Run
+winapi_interactive_client.exe
+
+# In another terminal
+AutoHotkey.exe /Debug your_script.ahk
+
+# In the debugger, type commands:
+dbg> step        # Step one line
+dbg> context     # Show variables
+dbg> stack       # Show call stack
+dbg> break 10    # Set breakpoint at line 10
+dbg> run         # Continue execution
+dbg> quit        # Exit
+```
+
+**What it does:**
+- Interactive command-line debugger
+- Real-time stepping and variable inspection
+- Native Windows performance
+- Shows advanced DBGp protocol usage
+
 ## Files
 
+### Python Clients
 | File | Description |
 |------|-------------|
-| `simple_client.py` | Minimal debugger client |
+| `simple_client.py` | Minimal Python debugger client |
+| `tutorial1_client.py` | Step-through Python debugger |
+
+### Native C++ Clients (WinAPI)
+| File | Description |
+|------|-------------|
+| `winapi_simple_client.cpp` | Automated C++ debugger client |
+| `winapi_interactive_client.cpp` | Interactive C++ debugger client |
+| `build_msvc.bat` | Build script for Visual Studio |
+| `build_mingw.bat` | Build script for MinGW/GCC |
+
+### Test Scripts
+| File | Description |
+|------|-------------|
 | `test_script.ahk` | Simple test script |
-| `tutorial1_client.py` | Step-through debugger |
-| `tutorial1.ahk` | Tutorial script |
+| `tutorial1.ahk` | Tutorial script with variables |
 
 ## Requirements
 
+### For Python Examples
 - Python 3.7+ (no external dependencies needed!)
+
+### For C++ Examples
+- **MSVC:** Visual Studio 2017+ or Build Tools
+- **MinGW:** MinGW-w64 or TDM-GCC
+- Windows Sockets library (ws2_32.lib - included with Windows)
+
+### For All Examples
 - AutoHotkey v2 installed or built from this repo
 - Port 9000 available
 

@@ -39,8 +39,9 @@ The debugger client can now:
 | Document | Description | Start Here |
 |----------|-------------|------------|
 | **[QUICK_START_GUIDE.md](QUICK_START_GUIDE.md)** | Complete beginner tutorial with working examples | ⭐ **New users** |
+| **[WINAPI_REFERENCE.md](WINAPI_REFERENCE.md)** | Native C++ debugger using Windows API | ⭐ **C++ developers** |
 | **[IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)** | Advanced techniques, custom commands, security analysis | ⭐ **Advanced users** |
-| **[examples/README.md](examples/README.md)** | Runnable code examples and tutorials | ⭐ **Hands-on learners** |
+| **[examples/README.md](examples/README.md)** | Runnable code examples (Python & C++) | ⭐ **Hands-on learners** |
 
 ---
 
@@ -70,15 +71,20 @@ Watch variable changes, log execution traces, analyze program flow
 
 ```
 debugger-tool/
-├── README.md                    ← You are here
-├── QUICK_START_GUIDE.md         ← Beginner tutorials
-├── IMPLEMENTATION_GUIDE.md      ← Advanced implementation
+├── README.md                          ← You are here
+├── QUICK_START_GUIDE.md               ← Beginner tutorials (Python)
+├── WINAPI_REFERENCE.md                ← Native C++ with WinAPI
+├── IMPLEMENTATION_GUIDE.md            ← Advanced implementation
 ├── examples/
-│   ├── README.md                ← Quick reference
-│   ├── simple_client.py         ← Minimal debugger (30 sec)
-│   ├── tutorial1_client.py      ← Step-through debugger (2 min)
-│   ├── test_script.ahk          ← Test script
-│   └── tutorial1.ahk            ← Tutorial script
+│   ├── README.md                      ← Quick reference
+│   ├── simple_client.py               ← Minimal Python debugger (30 sec)
+│   ├── tutorial1_client.py            ← Step-through Python debugger (2 min)
+│   ├── winapi_simple_client.cpp       ← Native C++ automated debugger
+│   ├── winapi_interactive_client.cpp  ← Native C++ interactive debugger
+│   ├── build_msvc.bat                 ← Build with Visual Studio
+│   ├── build_mingw.bat                ← Build with MinGW/GCC
+│   ├── test_script.ahk                ← Test script
+│   └── tutorial1.ahk                  ← Tutorial script
 └── advanced/
     └── (Coming soon: behavior analyzer, profiler, etc.)
 ```
@@ -87,8 +93,15 @@ debugger-tool/
 
 ## 🔧 Requirements
 
+### For Python Examples
 - **AutoHotkey v2** (installed or built from `../source/`)
 - **Python 3.7+** (no external dependencies - uses standard library only!)
+- **Port 9000** available on localhost
+
+### For Native C++ Examples
+- **AutoHotkey v2** (installed or built from `../source/`)
+- **C++ Compiler**: MSVC (Visual Studio 2017+) or MinGW-w64
+- **Windows Sockets** (ws2_32.lib - included with Windows)
 - **Port 9000** available on localhost
 
 ---
