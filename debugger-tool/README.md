@@ -34,10 +34,15 @@ The debugger client can now:
 
 ---
 
-## 📚 Documentation
+## 📖 Documentation
 
-| Document | Description | Start Here |
-|----------|-------------|------------|
+### 🚀 **[SETUP.md](SETUP.md)** - Complete Setup Guide
+**Start here!** Step-by-step instructions for all debugging methods (30 seconds to 30 minutes depending on method)
+
+### Reference Documentation
+
+| Document | Description | Audience |
+|----------|-------------|----------|
 | **[QUICK_START_GUIDE.md](QUICK_START_GUIDE.md)** | Complete beginner tutorial with working examples | ⭐ **New users** |
 | **[WINAPI_REFERENCE.md](WINAPI_REFERENCE.md)** | Native C++ debugger using Windows Sockets API | ⭐ **C++ developers** |
 | **[CUSTOM_WINAPI_DEBUGGING.md](CUSTOM_WINAPI_DEBUGGING.md)** | 6 different WinAPI debugging methods beyond sockets | ⭐ **Advanced WinAPI** |
@@ -72,20 +77,25 @@ Watch variable changes, log execution traces, analyze program flow
 
 ```
 debugger-tool/
-├── README.md                          ← You are here
-├── QUICK_START_GUIDE.md               ← Beginner tutorials (Python)
-├── WINAPI_REFERENCE.md                ← Native C++ with WinAPI
-├── IMPLEMENTATION_GUIDE.md            ← Advanced implementation
+├── README.md                            ← You are here
+├── SETUP.md                             ← 🚀 Setup guide (start here!)
+├── QUICK_START_GUIDE.md                 ← Beginner tutorials (Python)
+├── WINAPI_REFERENCE.md                  ← Native C++ with WinAPI Sockets
+├── CUSTOM_WINAPI_DEBUGGING.md           ← 6 advanced WinAPI methods
+├── IMPLEMENTATION_GUIDE.md              ← Advanced implementation details
 ├── examples/
-│   ├── README.md                      ← Quick reference
-│   ├── simple_client.py               ← Minimal Python debugger (30 sec)
-│   ├── tutorial1_client.py            ← Step-through Python debugger (2 min)
-│   ├── winapi_simple_client.cpp       ← Native C++ automated debugger
-│   ├── winapi_interactive_client.cpp  ← Native C++ interactive debugger
-│   ├── build_msvc.bat                 ← Build with Visual Studio
-│   ├── build_mingw.bat                ← Build with MinGW/GCC
-│   ├── test_script.ahk                ← Test script
-│   └── tutorial1.ahk                  ← Tutorial script
+│   ├── README.md                        ← Examples quick reference
+│   ├── simple_client.py                 ← Python: Minimal (30 sec)
+│   ├── tutorial1_client.py              ← Python: Step-through (2 min)
+│   ├── winapi_simple_client.cpp         ← C++: DBGp automated
+│   ├── winapi_interactive_client.cpp    ← C++: DBGp interactive
+│   ├── winapi_debug_api.cpp             ← C++: Windows Debug API
+│   ├── winapi_shared_memory_reader.cpp  ← C++: Shared memory (100x faster)
+│   ├── winapi_memory_reader.cpp         ← C++: Direct memory reading
+│   ├── build_msvc.bat                   ← Build all C++ examples (MSVC)
+│   ├── build_mingw.bat                  ← Build all C++ examples (MinGW)
+│   ├── test_script.ahk                  ← Test script
+│   └── tutorial1.ahk                    ← Tutorial script
 └── advanced/
     └── (Coming soon: behavior analyzer, profiler, etc.)
 ```
