@@ -53,22 +53,30 @@ The debugger client can now:
 
 ## 🚀 What Can You Build?
 
-### 1. **IDE Integration**
+### 1. **AI-Powered Debugging** 🤖
+Use Claude, Cursor, or Windsurf to debug AutoHotkey scripts with natural language!
+```
+You: "Find the bug in my calculateTotal function"
+AI: Sets breakpoints, steps through code, inspects variables, suggests fixes
+```
+**→ See [mcp-server/README.md](mcp-server/README.md)**
+
+### 2. **IDE Integration**
 Create debugger extensions for VSCode, Vim, or any editor
 
-### 2. **Automated Testing**
+### 3. **Automated Testing**
 ```python
 client.run()
 assert client.get_variable("result") == "expected"
 ```
 
-### 3. **Performance Profiler**
+### 4. **Performance Profiler**
 Track function execution times, identify bottlenecks, generate flame graphs
 
-### 4. **Security Analyzer**
+### 5. **Security Analyzer**
 Detect malicious patterns: keyloggers, persistence mechanisms, process injection
 
-### 5. **Behavior Monitor**
+### 6. **Behavior Monitor**
 Watch variable changes, log execution traces, analyze program flow
 
 ---
@@ -83,6 +91,12 @@ debugger-tool/
 ├── WINAPI_REFERENCE.md                  ← Native C++ with WinAPI Sockets
 ├── CUSTOM_WINAPI_DEBUGGING.md           ← 6 advanced WinAPI methods
 ├── IMPLEMENTATION_GUIDE.md              ← Advanced implementation details
+├── mcp-server/                          ← 🤖 AI debugging with MCP
+│   ├── README.md                        ← MCP server documentation
+│   ├── src/
+│   │   ├── index.ts                     ← MCP server main
+│   │   └── dbgp-client.ts               ← DBGp protocol client
+│   └── config-examples/                 ← Config for Cursor, Claude, etc.
 ├── examples/
 │   ├── README.md                        ← Examples quick reference
 │   ├── simple_client.py                 ← Python: Minimal (30 sec)
@@ -103,6 +117,12 @@ debugger-tool/
 ---
 
 ## 🔧 Requirements
+
+### For MCP Server (AI Debugging)
+- **Node.js 18+**
+- **AutoHotkey v2** with `/Debug` flag
+- **AI Tool**: Cursor, Claude Desktop, or Windsurf
+- **Port 9000** available on localhost
 
 ### For Python Examples
 - **AutoHotkey v2** (installed or built from `../source/`)
