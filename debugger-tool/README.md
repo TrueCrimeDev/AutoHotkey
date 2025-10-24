@@ -39,7 +39,8 @@ The debugger client can now:
 | Document | Description | Start Here |
 |----------|-------------|------------|
 | **[QUICK_START_GUIDE.md](QUICK_START_GUIDE.md)** | Complete beginner tutorial with working examples | ⭐ **New users** |
-| **[WINAPI_REFERENCE.md](WINAPI_REFERENCE.md)** | Native C++ debugger using Windows API | ⭐ **C++ developers** |
+| **[WINAPI_REFERENCE.md](WINAPI_REFERENCE.md)** | Native C++ debugger using Windows Sockets API | ⭐ **C++ developers** |
+| **[CUSTOM_WINAPI_DEBUGGING.md](CUSTOM_WINAPI_DEBUGGING.md)** | 6 different WinAPI debugging methods beyond sockets | ⭐ **Advanced WinAPI** |
 | **[IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)** | Advanced techniques, custom commands, security analysis | ⭐ **Advanced users** |
 | **[examples/README.md](examples/README.md)** | Runnable code examples (Python & C++) | ⭐ **Hands-on learners** |
 
