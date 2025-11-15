@@ -71,26 +71,43 @@ Start by placing reusable helpers under `scripts/v2/` (or a project `Lib/` equiv
 </EXPLANATION>
 
 ```cpp
-; File: scripts/v2/StringHelpers.ahk
+; File: scripts/v2/StringHelpers.ahk (complete module)
 #Requires AutoHotkey v2.1-alpha.17
 #Module StringHelpers
 
-export CollapseWhitespace(text) {
-    return RegExReplace(text, "\s+", " ")
+Export CollapseWhitespace(text) {
+    if text = ""
+        return ""
+
+    cleaned := RegExReplace(text, "\s+", " ")
+    return Trim(cleaned)
 }
 
-export ToTitleCase(text) {
-    words := StrSplit(CollapseWhitespace(text), " ")
-    for index, word in words
-        words[index] := word ? Format("{1:U}{2:L}", SubStr(word, 1, 1), SubStr(word, 2)) : ""
+Export ToTitleCase(text) {
+    text := CollapseWhitespace(text)
+    if text = ""
+        return ""
+
+    words := StrSplit(text, " ")
+    for index, word in words {
+        if word = ""
+            continue
+        words[index] := Format("{1:U}{2:L}", SubStr(word, 1, 1), SubStr(word, 2))
+    }
     return words.Join(" ")
 }
 ```
 
 ```cpp
-; Consumer script
-Import StringHelpers
-MsgBox StringHelpers.ToTitleCase("  ahk v2 IMPORT tutorial  ")
+; File: scripts/v2/tests/ImportStringHelpersExample.ahk (complete consumer)
+#Requires AutoHotkey v2.1-alpha.17
+#SingleInstance Force
+
+Import StringHelpers as Strings
+
+input := "  ahk v2 IMPORT tutorial  "
+MsgBox Strings.CollapseWhitespace(input)
+MsgBox Strings.ToTitleCase(input)
 ```
 </DEFINE_AND_IMPORT_MODULE>
 
@@ -102,48 +119,76 @@ Selective imports pull exports into the current module scope. Use aliases to avo
 </EXPLANATION>
 
 ```cpp
-; File: scripts/v2/ArrayHelpers.ahk
+; File: scripts/v2/ArrayHelpers.ahk (complete module)
 #Requires AutoHotkey v2.1-alpha.17
 #Module ArrayHelpers
 
-export SetupPrototypeExtensions() {
-    static initialized := false
-    if initialized
+SetupArrayHelpers()
+
+Export EnsureArrayHelpers() {
+    SetupArrayHelpers()
+}
+
+Export Join(array, sep := ",") {
+    SetupArrayHelpers()
+    return array.Join(sep)
+}
+
+Export Split(text, sep := ",", target := unset) {
+    SetupArrayHelpers()
+    if !IsSet(target)
+        target := []
+    target.Split(text, sep)
+    return target
+}
+
+SetupArrayHelpers() {
+    static applied := false
+    if applied
         return
-    initialized := true
 
-    Array.Prototype.DefineProp("Join", {
-        call: (array, sep := ",") => __ArrayJoin(array, sep)
-    })
+    applied := true
 
-    Array.Prototype.DefineProp("Split", {
-        call: (array, text, sep := ",") => __ArraySplit(array, text, sep)
-    })
-}
+    if !ObjHasOwnProp(Array.Prototype, "Join") {
+        Array.Prototype.DefineProp("Join", {
+            call: (array, sep := ",") {
+                result := ""
+                for index, value in array
+                    result .= value (index < array.Length ? sep : "")
+                return result
+            }
+        })
+    }
 
-export __ArrayJoin(array, sep := ",") {
-    output := ""
-    for index, value in array
-        output .= value (index < array.Length ? sep : "")
-    return output
-}
-
-export __ArraySplit(array, text, sep := ",") {
-    for value in StrSplit(text, sep)
-        array.Push(value)
-    return array
+    if !ObjHasOwnProp(Array.Prototype, "Split") {
+        Array.Prototype.DefineProp("Split", {
+            call: (array, text, sep := ",") {
+                for value in StrSplit(text, sep)
+                    array.Push(value)
+                return array
+            }
+        })
+    }
 }
 ```
 
 ```cpp
-; Consumer module using selective imports
-Import { __ArrayJoin as JoinArray, __ArraySplit } from ArrayHelpers
-Import { SetupPrototypeExtensions } from ArrayHelpers
-SetupPrototypeExtensions()
+; File: scripts/v2/tests/ImportArrayHelpersExample.ahk (complete consumer)
+#Requires AutoHotkey v2.1-alpha.17
+#SingleInstance Force
 
-myArray := []
-__ArraySplit(myArray, "alpha,beta,gamma", ",")
-MsgBox JoinArray(myArray, " | ")
+Import ArrayHelpers
+Import { Join as JoinArray, Split as SplitInto } from ArrayHelpers
+
+ArrayHelpers.EnsureArrayHelpers()
+
+values := ["one", "two", "three"]
+MsgBox ArrayHelpers.Join(values, " - ")
+MsgBox JoinArray(values, " | ")
+
+bucket := []
+SplitInto("alpha,beta,gamma", ",", bucket)
+MsgBox bucket.Join(" · ")
 ```
 </SELECTIVE_AND_ALIAS_IMPORTS>
 
@@ -159,13 +204,13 @@ Advanced scenarios combine module aliases, path-based imports, and re-exports to
 #Requires AutoHotkey v2.1-alpha.17
 #Module Helpers
 
-Export Import StringHelpers
-Export Import { SetupPrototypeExtensions, __ArrayJoin as JoinArray } from ArrayHelpers
+Import ArrayHelpers
+Import StringHelpers
 
-HelpersReady() {
-    SetupPrototypeExtensions()
+Export HelpersReady() {
+    ArrayHelpers.EnsureArrayHelpers()
     return {
-        JoinArray: JoinArray,
+        JoinArray: ArrayHelpers.Join,
         TitleCase: StringHelpers.ToTitleCase
     }
 }
@@ -173,6 +218,9 @@ HelpersReady() {
 
 ```cpp
 ; Consumer script loading via explicit path for staging builds
+#Requires AutoHotkey v2.1-alpha.17
+#SingleInstance Force
+
 Import "scripts/v2/Helpers.ahk" as HelpersModule
 bundle := HelpersModule.HelpersReady()
 MsgBox bundle.TitleCase("ahk import pipelines")
