@@ -48,6 +48,30 @@ Object.defineProperty(obj, "computedProp", descriptor)
 3. **Study examples**: Review [EXAMPLE_PropertyDescriptorBracketNotation.ahk](EXAMPLE_PropertyDescriptorBracketNotation.ahk) for practical usage
 4. **Integration help**: Follow [INTEGRATION_PropertyDescriptorBracketNotation.md](INTEGRATION_PropertyDescriptorBracketNotation.md) for implementation
 
+### Including the shared examples in your scripts
+
+All runnable examples live in `notes/property-descriptor/EXAMPLE_PropertyDescriptorBracketNotation.ahk`. To load them from a
+script or test, include the module relative to the file you are running. Examples:
+
+```autohotkey
+; From scripts/PropertyDescriptorDemo.ahk
+#Include "..\\notes\\property-descriptor\\EXAMPLE_PropertyDescriptorBracketNotation.ahk"
+
+; From Tests/PropertyDescriptorTests/Test_*.ahk
+#Include "..\\..\\notes\\property-descriptor\\EXAMPLE_PropertyDescriptorBracketNotation.ahk"
+```
+
+Once included, you can instantiate the example utilities directly:
+
+```autohotkey
+cfg := ConfigManager()
+cfg.Set("api.timeout", 30)
+MsgBox cfg.Get["api.timeout"]
+```
+
+Refer to `scripts/PropertyDescriptorDemo.ahk` for a simple walkthrough and
+`Tests/PropertyDescriptorTests/*.ahk` for assertion-based usage patterns.
+
 ## Related Projects
 
 This PropertyDescriptor implementation is separate from but related to the [debugger system](../debugger/) in this repository.

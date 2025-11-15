@@ -14,6 +14,9 @@ This directory contains AutoHotkey v2 scripts for testing, debugging, and utilit
 - **[test_random_script.ahk](test_random_script.ahk)** - Random behavior testing
 - **[TestErrorWithLLM.ahk](TestErrorWithLLM.ahk)** - Error handling with LLM integration
 
+### Property Descriptor Demo
+- **[PropertyDescriptorDemo.ahk](PropertyDescriptorDemo.ahk)** - Imports the shared property descriptor module and logs example outputs
+
 ### Usage
 
 1. **Run individual scripts**:
@@ -29,6 +32,11 @@ AutoHotkey.exe /debug TestScript1.ahk
 3. **Test error handling**:
 ```bash
 AutoHotkey.exe TestErrorWithLLM.ahk
+```
+
+4. **Run the property descriptor demo**:
+```bash
+AutoHotkey.exe PropertyDescriptorDemo.ahk
 ```
 
 ## Script Categories

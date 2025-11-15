@@ -3,7 +3,7 @@
 ; Test Script for Basic Bracket Parameter Passing Property Descriptor
 
 ; Import the necessary module or source file
-#Include "C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\notes\EXAMPLE_PropertyDescriptorBracketNotation.ahk"
+#Include "..\\..\\notes\\property-descriptor\\EXAMPLE_PropertyDescriptorBracketNotation.ahk"
 
 ; Test suite for BasicExample class
 class BasicExampleTest {
