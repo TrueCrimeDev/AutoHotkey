@@ -1,3 +1,4 @@
+# Build artifacts
 temp/
 bin*/
 ipch/
@@ -10,4 +11,38 @@ source/resources/png/
 *.aps
 *.sdf
 *.opensdf
+
+# Logs
 logs/*.log
+logs/*.txt
+ErrorLogs/*.log
+ErrorLogs/*.txt
+ErrorLogs/*.jsonl
+*.log
+debug_*.log
+server_*.log
+
+# VS Code local history
+.history/
+
+# Node modules
+node_modules/
+dist/
+build/
+
+# Test output
+*.log
+StepTest.txt
+RobustTestResults.log
+TestExecution.log
+
+# Temp files
+PS
+npm
+
+# Generated debug scripts
+_DebugRun_*.ahk
+
+# Misc
+*.exe
+C:\\*
