@@ -1,0 +1,19 @@
+[
+  {
+    "key": "alt+f13",
+    "command": "workbench.action.tasks.runTask",
+    "args": "Run AHK with Debug Interceptor",
+    "when": "editorLangId == ahk2 || resourceExtname == .ahk"
+  },
+  {
+    "key": "ctrl+f13",
+    "command": "workbench.action.tasks.runTask",
+    "args": "Run AHK Normally (No Debug)",
+    "when": "editorLangId == ahk2 || resourceExtname == .ahk"
+  },
+  {
+    "key": "shift+f13",
+    "command": "workbench.action.tasks.runTask",
+    "args": "Start Global Debug Server"
+  }
+]

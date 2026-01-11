@@ -1,0 +1,70 @@
+﻿
+════════════════════════════════════════════════════════
+╔════════════════════════════════════════════════════════╗
+║          RUNTIME ERROR INTERCEPTED                     ║
+╚════════════════════════════════════════════════════════╝
+
+Error Type: OSError
+Message: (3) The system cannot find the path specified.
+What: FileRead
+
+── Location ──────────────────────────────────────────
+File: C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk
+Line: 376
+
+── Stack Trace ───────────────────────────────────────
+  #01 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (376) : [FileRead] content := FileRead("C:\NonExistent\Path\File.txt")
+  #02 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (376) : [ErrorDemos.FileOperationError] content := FileRead("C:\NonExistent\Path\File.txt")
+  #03 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (462) : [] Return  ErrorDemos.FileOperationError()
+  #04 > Gui
+
+── Timestamp ─────────────────────────────────────────
+2025-10-22 09:28:27
+════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════
+╔════════════════════════════════════════════════════════╗
+║          RUNTIME ERROR INTERCEPTED                     ║
+╚════════════════════════════════════════════════════════╝
+
+Error Type: MethodError
+Message: This value of type "String" has no method named "SubStr".
+
+── Location ──────────────────────────────────────────
+File: C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk
+Line: 429
+
+── Stack Trace ───────────────────────────────────────
+  #01 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (429) : [ErrorDemos.MethodCallError] Return str.SubStr()
+  #02 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (474) : [] Return  ErrorDemos.MethodCallError()
+  #03 > Gui
+
+── Timestamp ─────────────────────────────────────────
+2025-10-22 09:28:34
+════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════
+╔════════════════════════════════════════════════════════╗
+║          RUNTIME ERROR INTERCEPTED                     ║
+╚════════════════════════════════════════════════════════╝
+
+Error Type: UnsetError
+Message: No value was returned.
+
+── Location ──────────────────────────────────────────
+File: C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk
+Line: 474
+
+── Additional Info ───────────────────────────────────
+.MethodCallError()
+
+── Stack Trace ───────────────────────────────────────
+  #01 C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey\ErrorInterceptor.ahk (474) : [] Return  ErrorDemos.MethodCallError()
+  #02 > Gui
+
+── Timestamp ─────────────────────────────────────────
+2025-10-22 09:28:36
+════════════════════════════════════════════════════════
+
+
+kilocode --workspace C:\Users\uphol\Documents\Design\Coding\AHK\!Running\AutoHotkey>
