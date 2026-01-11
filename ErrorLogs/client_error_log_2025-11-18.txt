@@ -1,9 +1,0 @@
-﻿
-════════════════════════════════════════════════════════
-CLIENT ERROR (Server Unavailable)
-2025-11-18 12:03:26
-Script: TestAgentStream.ahk (PID: 51952)
-
-RAW PACKET:
-{"type":"error","script":"TestAgentStream.ahk","pid":51952,"timestamp":"2025-11-18T12:03:26","error":{"type":"Error","message":"Unhandled Test Error","file":"C:\\Users\\uphol\\Documents\\Design\\Coding\\AutoHotkey\\TestAgentStream.ahk","line":18,"what":"Auto-execute","stack":"C:\\Users\\uphol\\Documents\\Design\\Coding\\AutoHotkey\\TestAgentStream.ahk (18) : [] throw(Error(\"Unhandled Test Error\", -1, \"Agent Stream Verification\"))\r\n> Auto-execute\r\n","extra":"Agent Stream Verification"}}
-════════════════════════════════════════════════════════
