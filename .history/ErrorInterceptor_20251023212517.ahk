@@ -66,7 +66,7 @@ class GlobalErrorInterceptor {
         if (ErrorConfig.enableLogging) {
             this.LogToFile(errorReport)
         }
-s a
+
         ; Return -1 to suppress the default error dialog
         return -1
     }

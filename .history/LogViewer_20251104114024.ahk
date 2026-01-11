@@ -1,5 +1,4 @@
 #Requires AutoHotkey v2.1-alpha.17
-#SingleInstance Force
 
 ; LogViewer Class
 ; GUI interface for browsing and analyzing error logs

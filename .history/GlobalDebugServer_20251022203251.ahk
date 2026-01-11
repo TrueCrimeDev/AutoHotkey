@@ -300,9 +300,6 @@ class DebugServer {
                 this.ShowNotification(errorData)
                 notificationCount++
             }
-            
-            ; Log to agent stream
-            AgentStream.Log(errorData)
         }
     }
 
@@ -350,67 +347,6 @@ class DebugServer {
                  . errorData["error"]["message"]
 
         TrayTip(title, message, "3")
-    }
-}
-
-; ============================================================================
-; AGENT STREAM LOGGER
-; ============================================================================
-class AgentStream {
-    static streamFile := "ErrorLogs\agent_debug_stream.jsonl"
-    
-    static Log(errorData) {
-        try {
-            ; Ensure directory exists
-            if (!DirExist("ErrorLogs")) {
-                DirCreate("ErrorLogs")
-            }
-            
-            ; Convert to JSON string (re-serialize to ensure single line)
-            jsonLine := this.ToJSON(errorData)
-            
-            ; Append to stream file
-            FileAppend(jsonLine "`n", this.streamFile, "UTF-8")
-        } catch {
-            ; Ignore errors to prevent crashing server
-        }
-    }
-    
-    static ToJSON(obj) {
-        ; Simple JSON serializer for the specific structure we have
-        ; This avoids dependency on external libraries for this specific task
-        
-        json := "{"
-        json .= '"timestamp":"' this.Escape(obj["timestamp"]) '",'
-        json .= '"script":"' this.Escape(obj["script"]) '",'
-        json .= '"pid":' obj["pid"] ','
-        json .= '"type":"' this.Escape(obj["type"]) '",'
-        
-        json .= '"error":{'
-        json .= '"type":"' this.Escape(obj["error"]["type"]) '",'
-        json .= '"message":"' this.Escape(obj["error"]["message"]) '",'
-        json .= '"file":"' this.Escape(obj["error"]["file"]) '",'
-        json .= '"line":' obj["error"]["line"] ','
-        json .= '"what":"' this.Escape(obj["error"]["what"]) '",'
-        json .= '"stack":"' this.Escape(obj["error"]["stack"]) '",'
-        json .= '"extra":"' this.Escape(obj["error"]["extra"]) '"'
-        json .= "}"
-        
-        json .= "}"
-        
-        return json
-    }
-    
-    static Escape(str) {
-        if IsNumber(str)
-            return str
-            
-        str := StrReplace(str, "\", "\\")
-        str := StrReplace(str, '"', '\"')
-        str := StrReplace(str, "`n", "\n")
-        str := StrReplace(str, "`r", "\r")
-        str := StrReplace(str, "`t", "\t")
-        return str
     }
 }
 

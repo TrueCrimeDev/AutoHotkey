@@ -30,7 +30,6 @@ if not exist "%WRAPPER%" (
     exit /b 1
 )
 
-
 REM Check if script specified
 if "%~1"=="" (
     echo Usage: %~nx0 ^<script.ahk^> [args...]

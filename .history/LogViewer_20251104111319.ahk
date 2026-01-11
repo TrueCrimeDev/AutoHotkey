@@ -1,12 +1,13 @@
 #Requires AutoHotkey v2.1-alpha.17
-#SingleInstance Force
 
 ; LogViewer Class
 ; GUI interface for browsing and analyzing error logs
 ; Real-time monitoring with filtering and search capabilities
 
-viewer := LogViewer()
-viewer.Show()
+LogViewer{
+    viewer := LogViewer()
+    viewer.Show()
+}
 
 class LogViewer {
     static Config := Map(
@@ -97,39 +98,58 @@ class LogViewer {
     ApplyDarkModeToListView(lv) {
         static LVM_GETHEADER := 0x101F
         static LVS_EX_DOUBLEBUFFER := 0x10000
-        static LVM_SETTEXTBKCOLOR := 0x1029
-        static LVM_SETTEXTCOLOR := 0x1026
-        static LVM_SETBKCOLOR := 0x1001
+        static NM_CUSTOMDRAW := -12
+        static UIS_SET := 1
+        static UISF_HIDEFOCUS := 0x1
+        static WM_CHANGEUISTATE := 0x0127
+        static WM_NOTIFY := 0x4E
+        static WM_THEMECHANGED := 0x031A
+        static CDDS_ITEMPREPAINT := 0x10001
+        static CDDS_PREPAINT := 0x1
+        static CDRF_DODEFAULT := 0x0
+        static CDRF_NOTIFYITEMDRAW := 0x20
 
-        ; Set the ListView text color to white
-        SendMessage(LVM_SETTEXTCOLOR, 0, 0xFFFFFF, lv)
-
-        ; Set the ListView background to dark
-        SendMessage(LVM_SETBKCOLOR, 0, 0x202020, lv)
-
-        ; Set text background to transparent (same as background)
-        SendMessage(LVM_SETTEXTBKCOLOR, 0, 0x202020, lv)
-
-        ; Get and style the header
         header := SendMessage(LVM_GETHEADER, 0, 0, lv)
-        if (header) {
+        if (header)
             lv.DefineProp("Header", { Value: header })
 
-            ; Set header text color
-            SendMessage(0x1053, 0, 0xFFFFFF, header)  ; HDM_SETTEXTCOLOR
-            ; Set header background color
-            SendMessage(0x1054, 0, 0x2D2D2D, header)  ; HDM_SETBKCOLOR
-        }
+        OnMessage(WM_THEMECHANGED, (*) => 0)
 
-        ; Apply double buffering
+        OnMessage(WM_NOTIFY, (wParam, lParam, msg, hwnd) {
+            try {
+                if (!lParam)
+                    return CDRF_DODEFAULT
+
+                code := NumGet(lParam, 8, "Int")
+                if (code != NM_CUSTOMDRAW)
+                    return CDRF_DODEFAULT
+
+                hwndFrom := NumGet(lParam, 0, "Ptr")
+                if (hwndFrom != header)
+                    return CDRF_DODEFAULT
+
+                drawStage := NumGet(lParam, 16, "UInt")
+
+                if (drawStage = CDDS_PREPAINT)
+                    return CDRF_NOTIFYITEMDRAW
+
+                if (drawStage = CDDS_ITEMPREPAINT) {
+                    hdc := NumGet(lParam, 20, "Ptr")
+                    DllCall("SetTextColor", "Ptr", hdc, "UInt", 0xFFFFFF)
+                }
+
+                return CDRF_DODEFAULT
+            } catch {
+                return CDRF_DODEFAULT
+            }
+        })
+
         lv.Opt("+LV" LVS_EX_DOUBLEBUFFER)
 
-        ; Try to apply dark mode theme if available
-        try {
-            DllCall("uxtheme\SetWindowTheme", "Ptr", lv.Hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
-            if (header)
-                DllCall("uxtheme\SetWindowTheme", "Ptr", header, "Str", "DarkMode_ItemsView", "Ptr", 0)
-        }
+        SendMessage(WM_CHANGEUISTATE, (UIS_SET << 8) | UISF_HIDEFOCUS, 0, lv)
+
+        DllCall("uxtheme\SetWindowTheme", "Ptr", header, "Str", "DarkMode_ItemsView", "Ptr", 0)
+        DllCall("uxtheme\SetWindowTheme", "Ptr", lv.Hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
     }
 
     ReadLogFile() {

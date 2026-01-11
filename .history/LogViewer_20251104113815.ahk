@@ -1,5 +1,4 @@
 #Requires AutoHotkey v2.1-alpha.17
-#SingleInstance Force
 
 ; LogViewer Class
 ; GUI interface for browsing and analyzing error logs
@@ -100,30 +99,30 @@ class LogViewer {
         static LVM_SETTEXTBKCOLOR := 0x1029
         static LVM_SETTEXTCOLOR := 0x1026
         static LVM_SETBKCOLOR := 0x1001
-
+        
         ; Set the ListView text color to white
         SendMessage(LVM_SETTEXTCOLOR, 0, 0xFFFFFF, lv)
-
+        
         ; Set the ListView background to dark
         SendMessage(LVM_SETBKCOLOR, 0, 0x202020, lv)
-
+        
         ; Set text background to transparent (same as background)
         SendMessage(LVM_SETTEXTBKCOLOR, 0, 0x202020, lv)
-
+        
         ; Get and style the header
         header := SendMessage(LVM_GETHEADER, 0, 0, lv)
         if (header) {
             lv.DefineProp("Header", { Value: header })
-
+            
             ; Set header text color
             SendMessage(0x1053, 0, 0xFFFFFF, header)  ; HDM_SETTEXTCOLOR
             ; Set header background color
             SendMessage(0x1054, 0, 0x2D2D2D, header)  ; HDM_SETBKCOLOR
         }
-
+        
         ; Apply double buffering
         lv.Opt("+LV" LVS_EX_DOUBLEBUFFER)
-
+        
         ; Try to apply dark mode theme if available
         try {
             DllCall("uxtheme\SetWindowTheme", "Ptr", lv.Hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
