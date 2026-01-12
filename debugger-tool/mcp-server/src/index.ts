@@ -15,8 +15,9 @@ import {
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { DBGpClient } from './dbgp-client.js';
+import { DBGpClient, ErrorInfo } from './dbgp-client.js';
 import { z } from 'zod';
+import * as fs from 'fs/promises';
 
 const client = new DBGpClient(9000);
 const server = new Server(
@@ -46,6 +47,28 @@ const RemoveBreakpointSchema = z.object({
 
 const EvaluateSchema = z.object({
   expression: z.string().describe('Expression to evaluate'),
+});
+
+const CaptureErrorSchema = z.object({
+  timeout: z.number().optional().describe('Timeout in milliseconds (default: 30000)'),
+});
+
+const AnalyzeErrorSchema = z.object({
+  error: z.any().describe('Error object from capture_error'),
+  use_api: z.boolean().optional().describe('If true, call Claude API directly (requires API key)'),
+});
+
+const ApplyFixSchema = z.object({
+  file: z.string().describe('Path to the file'),
+  line: z.number().describe('Line number to replace'),
+  original: z.string().describe('Original text (for verification)'),
+  replacement: z.string().describe('New text'),
+});
+
+const GetSourceContextSchema = z.object({
+  file: z.string().describe('Path to the file'),
+  line: z.number().describe('Center line number'),
+  radius: z.number().optional().describe('Lines before/after (default: 5)'),
 });
 
 // === MCP Tools ===
@@ -148,6 +171,68 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'stack_trace',
         description: 'Get current call stack',
+        inputSchema: { type: 'object', properties: {}, required: [] },
+      },
+
+      // === LLM Debugger Tools ===
+      {
+        name: 'capture_error',
+        description: 'Wait for the next error from the debugger and return full context including source, stack trace, and variables',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            timeout: { type: 'number', description: 'Timeout in ms (default: 30000)' },
+          },
+          required: [],
+        },
+      },
+      {
+        name: 'analyze_error',
+        description: 'Analyze an error and return structured data for LLM analysis or call Claude API directly',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            error: { type: 'object', description: 'Error object from capture_error' },
+            use_api: { type: 'boolean', description: 'If true, call Claude API directly' },
+          },
+          required: ['error'],
+        },
+      },
+      {
+        name: 'apply_fix',
+        description: 'Apply a code fix directly to a file (auto-applies, no confirmation)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: { type: 'string', description: 'Path to the file' },
+            line: { type: 'number', description: 'Line number to replace' },
+            original: { type: 'string', description: 'Original text (for verification)' },
+            replacement: { type: 'string', description: 'New text' },
+          },
+          required: ['file', 'line', 'original', 'replacement'],
+        },
+      },
+      {
+        name: 'get_source_context',
+        description: 'Get source code lines around a specific line in a file',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: { type: 'string', description: 'Path to the file' },
+            line: { type: 'number', description: 'Center line number' },
+            radius: { type: 'number', description: 'Lines before/after (default: 5)' },
+          },
+          required: ['file', 'line'],
+        },
+      },
+      {
+        name: 'list_errors',
+        description: 'List all queued errors without removing them',
+        inputSchema: { type: 'object', properties: {}, required: [] },
+      },
+      {
+        name: 'clear_errors',
+        description: 'Clear the error queue',
         inputSchema: { type: 'object', properties: {}, required: [] },
       },
     ],
@@ -318,6 +403,227 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: `Call Stack:\n${trace || '  (empty)'}`,
             },
           ],
+        };
+      }
+
+      // === LLM Debugger Tools ===
+
+      case 'capture_error': {
+        const params = CaptureErrorSchema.parse(args);
+        const timeout = params.timeout || 30000;
+        const error = await client.waitForError(timeout);
+
+        if (!error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ status: 'timeout', message: 'No error captured within timeout period' }),
+              },
+            ],
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(error, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'analyze_error': {
+        const params = AnalyzeErrorSchema.parse(args);
+        const error = params.error as ErrorInfo;
+        const useApi = params.use_api || false;
+
+        // Build analysis prompt
+        const sourceLines = error.source_context
+          .map((l) => `${l.is_error_line ? '>>> ' : '    '}${l.line}: ${l.text}`)
+          .join('\n');
+
+        const stackLines = error.stack_trace
+          .map((f) => `  #${f.level} ${f.where || 'main'} at ${f.filename}:${f.lineno}`)
+          .join('\n');
+
+        const localVars = error.local_variables
+          .map((v) => `  ${v.name} = ${v.value} (${v.type})`)
+          .join('\n');
+
+        const analysisPrompt = `Analyze this AutoHotkey v2 error:
+
+ERROR: ${error.error_type}
+MESSAGE: ${error.message}
+FILE: ${error.file}
+LINE: ${error.line}
+
+SOURCE CONTEXT:
+${sourceLines}
+
+STACK TRACE:
+${stackLines || '  (empty)'}
+
+LOCAL VARIABLES:
+${localVars || '  (none)'}
+
+Provide:
+1. Root cause diagnosis
+2. Suggested fix (exact line replacement)
+3. Confidence level (0-1)
+
+Format response as JSON:
+{
+  "diagnosis": "...",
+  "root_cause": "...",
+  "suggested_fix": {
+    "file": "${error.file}",
+    "line": ${error.line},
+    "original": "...",
+    "replacement": "..."
+  },
+  "confidence": 0.0
+}`;
+
+        if (useApi) {
+          // TODO: Call Claude API directly when API key is configured
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  status: 'api_not_configured',
+                  message: 'Claude API integration not yet configured. Use use_api=false for client-side analysis.',
+                  analysis_prompt: analysisPrompt,
+                }),
+              },
+            ],
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error,
+                analysis_prompt: analysisPrompt,
+                suggested_context: [error.file],
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'apply_fix': {
+        const params = ApplyFixSchema.parse(args);
+
+        try {
+          // Read the file
+          const content = await fs.readFile(params.file, 'utf-8');
+          const lines = content.split(/\r?\n/);
+
+          // Verify line exists
+          if (params.line < 1 || params.line > lines.length) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: false,
+                    error: `Line ${params.line} out of range (file has ${lines.length} lines)`,
+                  }),
+                },
+              ],
+              isError: true,
+            };
+          }
+
+          // Verify original matches
+          const actualLine = lines[params.line - 1];
+          if (actualLine.trim() !== params.original.trim()) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: false,
+                    error: 'Original line does not match',
+                    expected: params.original,
+                    actual: actualLine,
+                  }),
+                },
+              ],
+              isError: true,
+            };
+          }
+
+          // Apply the fix
+          lines[params.line - 1] = params.replacement;
+          const newContent = lines.join('\n');
+          await fs.writeFile(params.file, newContent, 'utf-8');
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  file: params.file,
+                  line: params.line,
+                  applied: params.replacement,
+                }),
+              },
+            ],
+          };
+        } catch (err) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: err instanceof Error ? err.message : String(err),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case 'get_source_context': {
+        const params = GetSourceContextSchema.parse(args);
+        const radius = params.radius || 5;
+        const context = await client.getSourceContext(params.file, params.line, radius);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ file: params.file, line: params.line, context }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'list_errors': {
+        const errors = client.getQueuedErrors();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ count: errors.length, errors }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'clear_errors': {
+        client.clearErrorQueue();
+        return {
+          content: [{ type: 'text', text: 'Error queue cleared' }],
         };
       }
 

@@ -6,5 +6,19 @@
   },
   "files.exclude": {
     "**/.history": true
+  },
+  "cmake.configureOnOpen": true,
+  "cmake.generator": "Ninja",
+  "cmake.preferredGenerators": [
+    "Ninja",
+    "Visual Studio 15 2017"
+  ],
+  "cmake.buildDirectory": "${workspaceFolder}/build",
+  "cmake.configureSettings": {
+    "CMAKE_BUILD_TYPE": "Release"
+  },
+  "cmake.useCMakePresets": "never",
+  "files.associations": {
+    "*.ahk": "ahk2"
   }
 }

@@ -35,6 +35,18 @@ export interface StackFrame {
   where?: string;
 }
 
+export interface ErrorInfo {
+  error_type: string;
+  message: string;
+  file: string;
+  line: number;
+  source_context: Array<{ line: number; text: string; is_error_line?: boolean }>;
+  stack_trace: StackFrame[];
+  local_variables: Variable[];
+  global_variables: Variable[];
+  timestamp: number;
+}
+
 export class DBGpClient extends EventEmitter {
   private server: net.Server | null = null;
   private socket: net.Socket | null = null;
@@ -42,6 +54,9 @@ export class DBGpClient extends EventEmitter {
   private port: number;
   private buffer = '';
   private connected = false;
+  private errorQueue: ErrorInfo[] = [];
+  private errorQueueMaxSize = 100;
+  private errorWaiters: Array<(error: ErrorInfo) => void> = [];
 
   constructor(port: number = 9000) {
     super();
@@ -328,5 +343,120 @@ export class DBGpClient extends EventEmitter {
       this.server = null;
     }
     this.connected = false;
+  }
+
+  // === Error Queue Management ===
+
+  /**
+   * Queue an error for later retrieval
+   */
+  queueError(error: ErrorInfo): void {
+    this.errorQueue.push(error);
+    if (this.errorQueue.length > this.errorQueueMaxSize) {
+      this.errorQueue.shift();
+    }
+
+    // Resolve any waiting promises
+    if (this.errorWaiters.length > 0) {
+      const waiter = this.errorWaiters.shift();
+      waiter?.(error);
+    }
+
+    this.emit('error_captured', error);
+  }
+
+  /**
+   * Wait for the next error (blocking)
+   */
+  async waitForError(timeoutMs: number = 30000): Promise<ErrorInfo | null> {
+    // Check if there's already an error in queue
+    if (this.errorQueue.length > 0) {
+      return this.errorQueue.shift() || null;
+    }
+
+    // Wait for next error
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        const idx = this.errorWaiters.indexOf(resolve as any);
+        if (idx > -1) this.errorWaiters.splice(idx, 1);
+        resolve(null);
+      }, timeoutMs);
+
+      this.errorWaiters.push((error) => {
+        clearTimeout(timeout);
+        resolve(error);
+      });
+    });
+  }
+
+  /**
+   * Get all queued errors without removing them
+   */
+  getQueuedErrors(): ErrorInfo[] {
+    return [...this.errorQueue];
+  }
+
+  /**
+   * Clear the error queue
+   */
+  clearErrorQueue(): void {
+    this.errorQueue = [];
+  }
+
+  /**
+   * Capture error with full context - called when exception breakpoint hits
+   */
+  async captureErrorContext(file: string, line: number, errorType: string, message: string): Promise<ErrorInfo> {
+    // Get source context by reading file
+    const sourceContext = await this.getSourceContext(file, line, 5);
+
+    // Get stack trace
+    const stackTrace = await this.getStackTrace();
+
+    // Get variables
+    const localVars = await this.getVariables(0);
+    const globalVars = await this.getVariables(1);
+
+    const errorInfo: ErrorInfo = {
+      error_type: errorType,
+      message,
+      file,
+      line,
+      source_context: sourceContext,
+      stack_trace: stackTrace,
+      local_variables: localVars,
+      global_variables: globalVars,
+      timestamp: Date.now(),
+    };
+
+    this.queueError(errorInfo);
+    return errorInfo;
+  }
+
+  /**
+   * Get source context from a file
+   */
+  async getSourceContext(file: string, line: number, radius: number = 3): Promise<Array<{ line: number; text: string; is_error_line?: boolean }>> {
+    const fs = await import('fs/promises');
+    try {
+      const content = await fs.readFile(file, 'utf-8');
+      const lines = content.split(/\r?\n/);
+      const result: Array<{ line: number; text: string; is_error_line?: boolean }> = [];
+
+      const start = Math.max(0, line - radius - 1);
+      const end = Math.min(lines.length, line + radius);
+
+      for (let i = start; i < end; i++) {
+        result.push({
+          line: i + 1,
+          text: lines[i],
+          is_error_line: i + 1 === line,
+        });
+      }
+
+      return result;
+    } catch {
+      return [{ line, text: '(source unavailable)', is_error_line: true }];
+    }
   }
 }
