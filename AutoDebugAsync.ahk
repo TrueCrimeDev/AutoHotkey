@@ -26,16 +26,16 @@ try {
     ; Create child process
     ; We pass /ErrorStdOut so AHK writes errors to stderr/stdout instead of showing a dialog
     proc := child_process(exePath, ["/ErrorStdOut", targetScript])
-    
+
     ; Setup event handlers
     proc.stdout.onData := (pipe, str) => ForwardOutput("STDOUT", str)
     proc.stderr.onData := (pipe, str) => ForwardOutput("STDERR", str)
-    
+
     ; Wait for process to exit (optional, or we can keep running)
     proc.Wait()
-    
+
     DebugClient.SendDebug("Async session ended. Exit code: " proc.ExitCode)
-    
+
 } catch Error as err {
     DebugClient.SendDebug("Failed to launch child process: " err.Message)
 }
@@ -45,7 +45,7 @@ ForwardOutput(source, text) {
     text := Trim(text, " `t`r`n")
     if (text == "")
         return
-        
+
     ; Send to server
     ; We prefix with source to distinguish
     DebugClient.SendDebug("[" source "] " text)

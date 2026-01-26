@@ -1,0 +1,69 @@
+name: Build AutoHotkey
+
+on:
+  push:
+    branches: [ alpha, main, master ]
+  pull_request:
+    branches: [ alpha, main, master ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        arch: [x64, Win32]
+        include:
+          - arch: x64
+            cmake_arch: x64
+            output_name: AutoHotkey64
+          - arch: Win32
+            cmake_arch: Win32
+            output_name: AutoHotkey32
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Configure CMake
+      run: |
+        cmake -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: |
+        cmake --build build --config Release --parallel
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.output_name }}
+        path: bin/${{ matrix.output_name }}.exe
+        if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/alpha'
+
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: build-${{ github.sha }}
+        name: Build ${{ github.sha }}
+        draft: true
+        files: |
+          artifacts/AutoHotkey64/AutoHotkey64.exe
+          artifacts/AutoHotkey32/AutoHotkey32.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

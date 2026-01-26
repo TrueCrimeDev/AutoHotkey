@@ -740,6 +740,27 @@ ResultType Script::ShowError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR 
 	}
 #endif
 
+	// If /ErrorStdOut is enabled, output runtime errors to stderr instead of showing a dialog.
+	// This enables headless/console operation where all errors go to the shell.
+	if (mErrorStdOut)
+	{
+		TCHAR buf[LINE_SIZE * 2];
+		Line *line = aLine ? aLine : mCurrLine;
+		FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo
+			, line ? line->mFileIndex : mCurrFileIndex
+			, line ? line->mLineNumber : mCombinedLineNumber
+			, aErrorType == WARN);
+		PrintErrorStdOut(buf, (int)_tcslen(buf), _T("**")); // ** means stderr
+
+		// Handle exit behavior based on error type
+		if (aErrorType == CRITICAL_ERROR && mIsReadyToExecute)
+			ExitApp(EXIT_CRITICAL);
+		if (aErrorType == WARN)
+			return OK; // Warnings don't abort execution
+		// For FAIL_OR_OK, we return FAIL to exit the thread (no "Continue" option in console mode)
+		return FAIL;
+	}
+
 	static auto sMod = LoadLibrary(_T("riched20.dll")); // RichEdit20W
 	//static auto sMod = LoadLibrary(_T("msftedit.dll")); // MSFTEDIT_CLASS (RICHEDIT50W)
 	ErrorBoxParam error;
