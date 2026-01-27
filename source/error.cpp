@@ -753,12 +753,12 @@ ResultType Script::ShowError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR 
 		PrintErrorStdOut(buf, (int)_tcslen(buf), _T("**")); // ** means stderr
 
 		// Handle exit behavior based on error type
-		if (aErrorType == CRITICAL_ERROR && mIsReadyToExecute)
-			ExitApp(EXIT_CRITICAL);
 		if (aErrorType == WARN)
 			return OK; // Warnings don't abort execution
-		// For FAIL_OR_OK, we return FAIL to exit the thread (no "Continue" option in console mode)
-		return FAIL;
+		// Set exit code before calling ExitApp
+		mPendingExitCode = (aErrorType == CRITICAL_ERROR) ? 2 : 1;
+		ExitApp((aErrorType == CRITICAL_ERROR) ? EXIT_CRITICAL : EXIT_ERROR);
+		return FAIL; // Not reached, but keeps compiler happy
 	}
 
 	static auto sMod = LoadLibrary(_T("riched20.dll")); // RichEdit20W
