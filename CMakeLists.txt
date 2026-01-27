@@ -108,8 +108,19 @@ set(AHK_RESOURCES
     source/resources/AutoHotkey.rc
 )
 
+# Option for console build
+option(AHK_CONSOLE_BUILD "Build console version (for shell/terminal use)" OFF)
+
 # Create executable
-add_executable(${OUTPUT_NAME} WIN32 ${AHK_SOURCES} ${AHK_RESOURCES})
+if(AHK_CONSOLE_BUILD)
+    # Console build: uses SUBSYSTEM:CONSOLE, enables stdin/stdout/stderr
+    set(OUTPUT_NAME "${OUTPUT_NAME}_Console")
+    add_executable(${OUTPUT_NAME} ${AHK_SOURCES} ${AHK_RESOURCES})
+    target_compile_definitions(${OUTPUT_NAME} PRIVATE AHK_CONSOLE_BUILD)
+else()
+    # GUI build: uses SUBSYSTEM:WINDOWS (default)
+    add_executable(${OUTPUT_NAME} WIN32 ${AHK_SOURCES} ${AHK_RESOURCES})
+endif()
 
 target_include_directories(${OUTPUT_NAME} PRIVATE
     source
@@ -159,4 +170,10 @@ set_target_properties(${OUTPUT_NAME} PROPERTIES
 )
 
 message(STATUS "Building AutoHotkey with _ScriptGetLines support")
+if(AHK_CONSOLE_BUILD)
+    message(STATUS "Console build enabled - errors go to stderr, /ErrorStdOut is default")
+endif()
 message(STATUS "Output: ${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.exe")
+message(STATUS "")
+message(STATUS "Build options:")
+message(STATUS "  -DAHK_CONSOLE_BUILD=ON  Build console version for shell/terminal use")

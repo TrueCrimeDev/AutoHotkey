@@ -63,6 +63,40 @@ void EarlyAppInit()
 }
 
 
+#ifdef AHK_CONSOLE_BUILD
+// Console build entry point - enables proper stdin/stdout/stderr for shell use
+int wmain(int argc, wchar_t *argv[])
+{
+	g_hInstance = GetModuleHandle(NULL);
+
+	// Enable /ErrorStdOut by default for console builds
+	g_script.SetErrorStdOut(NULL);
+
+	EarlyAppInit();
+
+	LPTSTR script_filespec;
+	if (!ParseCmdLineArgs(script_filespec))
+		return CRITICAL_ERROR;
+
+	UINT load_result = g_script.LoadFromFile(script_filespec);
+	if (load_result == LOADING_FAILED)
+		return CRITICAL_ERROR;
+	if (!load_result)
+		return 0;
+
+	switch (CheckPriorInstance())
+	{
+	case EARLY_EXIT: return 0;
+	case FAIL: return CRITICAL_ERROR;
+	}
+
+	if (!InitForExecution())
+		return CRITICAL_ERROR;
+
+	return MainExecuteScript();
+}
+#else
+// GUI build entry point (default)
 int WINAPI _tWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
 {
 	g_hInstance = hInstance;
@@ -90,6 +124,7 @@ int WINAPI _tWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmd
 
 	return MainExecuteScript();
 }
+#endif // AHK_CONSOLE_BUILD
 
 
 ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
