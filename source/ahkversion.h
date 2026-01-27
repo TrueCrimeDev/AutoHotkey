@@ -4,7 +4,8 @@
 
 #ifndef RAW_AHK_VERSION
 	// Fallback version string for when `git describe` fails during build.
-	#define RAW_AHK_VERSION "2.0"
+	// Custom build with /ErrorStdOut runtime error support
+	#define RAW_AHK_VERSION "2.1-console"
 #endif
 #ifdef RC_INVOKED
 	#define AHK_VERSION RAW_AHK_VERSION
