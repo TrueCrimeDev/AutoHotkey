@@ -319,7 +319,7 @@ Script::Script()
 	, mFileSpec(_T("")), mFileDir(_T("")), mFileName(_T("")), mOurEXE(_T("")), mOurEXEDir(_T("")), mMainWindowTitle(_T(""))
 	, mScriptName(NULL)
 	, mIsReadyToExecute(false), mAutoExecSectionIsRunning(false)
-	, mIsRestart(false), mErrorStdOut(false), mErrorStdOutCP(0)
+	, mIsRestart(false), mErrorStdOut(false), mErrorStdOutColor(false), mErrorStdOutCP(0)
 #ifndef AUTOHOTKEYSC
 	, mValidateThenExit(false)
 	, mCmdLineInclude(NULL)

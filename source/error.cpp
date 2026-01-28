@@ -196,8 +196,31 @@ ResultType Script::Win32Error(DWORD aError, ResultType aErrorType)
 }
 
 
-void Script::SetErrorStdOut(LPTSTR aParam)
+void Script::SetErrorStdOut(LPTSTR aParam, bool aColorMode)
 {
+	// Handle color mode: /ErrorStdOut:color
+	if (aColorMode)
+	{
+		mErrorStdOutColor = _tcsicmp(aParam, _T("color")) == 0;
+		if (mErrorStdOutColor)
+		{
+			// Try to enable ANSI escape sequences on stderr (Windows 10+)
+			HANDLE hErr = GetStdHandle(STD_ERROR_HANDLE);
+			DWORD mode;
+			if (GetConsoleMode(hErr, &mode))
+			{
+				// ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+				SetConsoleMode(hErr, mode | 0x0004);
+			}
+			else
+			{
+				// Not a console (e.g., piped), disable colors
+				mErrorStdOutColor = false;
+			}
+		}
+		aParam = NULL; // Use default encoding
+	}
+
 	mErrorStdOutCP = Line::ConvertFileEncoding(aParam);
 	// Seems best not to print errors to stderr if the encoding was invalid.  Current behaviour
 	// for an encoding of -1 would be to print only the ASCII characters and drop the rest, but
@@ -220,21 +243,90 @@ void Script::PrintErrorStdOut(LPCTSTR aErrorText, int aLength, LPCTSTR aFile)
 	tf.Close();
 }
 
-int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraInfo, FileIndexType aFileIndex, LineNumberType aLineNumber, bool aWarn = false)
+int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraInfo,
+	FileIndexType aFileIndex, LineNumberType aLineNumber, bool aWarn = false,
+	Line *aLine = nullptr, bool aIncludeStack = false, bool aUseColor = false)
 {
+	// ANSI color codes
+	#define ANSI_RED     _T("\x1b[31m")
+	#define ANSI_YELLOW  _T("\x1b[33m")
+	#define ANSI_CYAN    _T("\x1b[36m")
+	#define ANSI_RESET   _T("\x1b[0m")
+
+	int n = 0;
+
+	// Error header line (with optional color)
+	if (aUseColor)
+		n += sntprintf(aBuf + n, aBufSize - n, aWarn ? ANSI_YELLOW : ANSI_RED);
+
 	#define STD_ERROR_FORMAT _T("%s (%d) : ==> %s%s\n")
-	int n = sntprintf(aBuf, aBufSize, STD_ERROR_FORMAT, Line::sSourceFile[aFileIndex], aLineNumber
+	n += sntprintf(aBuf + n, aBufSize - n, STD_ERROR_FORMAT, Line::sSourceFile[aFileIndex], aLineNumber
 		, aWarn ? _T("Warning: ") : _T(""), aErrorText);
+
+	if (aUseColor)
+		n += sntprintf(aBuf + n, aBufSize - n, ANSI_RESET);
+
+	// Extra info (Specifically: ...)
 	if (*aExtraInfo)
 		n += sntprintf(aBuf + n, aBufSize - n, _T("     Specifically: %s\n"), aExtraInfo);
+
+	// Source line display
+	if (aLine)
+	{
+		TCHAR line_buf[LINE_SIZE];
+		aLine->ToText(line_buf, _countof(line_buf), false, 0, false, false);
+		if (aUseColor)
+			n += sntprintf(aBuf + n, aBufSize - n, _T("          ") ANSI_CYAN _T("%d| %s") ANSI_RESET _T("\n"),
+				(int)aLineNumber, line_buf);
+		else
+			n += sntprintf(aBuf + n, aBufSize - n, _T("          %d| %s\n"),
+				(int)aLineNumber, line_buf);
+	}
+
+	// Stack trace (for runtime errors)
+#ifdef CONFIG_DEBUGGER
+	if (aIncludeStack && g_Debugger.mStack.Depth() > 0)
+	{
+		TCHAR stack_buf[SCRIPT_STACK_BUF_SIZE];
+		GetScriptStack(stack_buf, _countof(stack_buf));
+		if (*stack_buf)
+		{
+			n += sntprintf(aBuf + n, aBufSize - n, _T("     Call stack:\n"));
+			// Indent each line of the stack trace
+			LPTSTR line_start = stack_buf;
+			for (LPTSTR p = stack_buf; ; ++p)
+			{
+				if (*p == '\r' || *p == '\n' || *p == '\0')
+				{
+					bool is_end = (*p == '\0');
+					TCHAR saved = *p;
+					if (*p == '\r' && *(p+1) == '\n')
+					{
+						*p = '\0';
+						++p;
+					}
+					else
+						*p = '\0';
+					if (*line_start)
+						n += sntprintf(aBuf + n, aBufSize - n, _T("          %s\n"), line_start);
+					if (is_end)
+						break;
+					*p = saved;
+					line_start = p + 1;
+				}
+			}
+		}
+	}
+#endif
+
 	return n;
 }
 
 // For backward compatibility, this actually prints to stderr, not stdout.
-void Script::PrintErrorStdOut(LPCTSTR aErrorText, LPCTSTR aExtraInfo, FileIndexType aFileIndex, LineNumberType aLineNumber)
+void Script::PrintErrorStdOut(LPCTSTR aErrorText, LPCTSTR aExtraInfo, FileIndexType aFileIndex, LineNumberType aLineNumber, Line *aLine)
 {
-	TCHAR buf[LINE_SIZE * 2];
-	auto n = FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo, aFileIndex, aLineNumber);
+	TCHAR buf[LINE_SIZE * 4]; // Increased size for source line
+	auto n = FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo, aFileIndex, aLineNumber, false, aLine, false, mErrorStdOutColor);
 	PrintErrorStdOut(buf, n, _T("**"));
 }
 
@@ -259,7 +351,7 @@ ResultType Line::LineError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR aE
 		// JdeB said:
 		// Just tested it in Textpad, Crimson and Scite. they all recognise the output and jump
 		// to the Line containing the error when you double click the error line in the output
-		// window (like it works in C++).  Had to change the format of the line to: 
+		// window (like it works in C++).  Had to change the format of the line to:
 		// printf("%s (%d) : ==> %s: \n%s \n%s\n",szInclude, nAutScriptLine, szText, szScriptLine, szOutput2 );
 		// MY: Full filename is required, even if it's the main file, because some editors (EditPlus)
 		// seem to rely on that to determine which file and line number to jump to when the user double-clicks
@@ -267,7 +359,7 @@ ResultType Line::LineError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR aE
 		// v1.0.47: Added a space before the colon as originally intended.  Toralf said, "With this minor
 		// change the error lexer of Scite recognizes this line as a Microsoft error message and it can be
 		// used to jump to that line."
-		g_script.PrintErrorStdOut(aErrorText, aExtraInfo, mFileIndex, mLineNumber);
+		g_script.PrintErrorStdOut(aErrorText, aExtraInfo, mFileIndex, mLineNumber, this);
 		return FAIL;
 	}
 
@@ -730,12 +822,12 @@ ResultType Script::ShowError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR 
 #ifdef CONFIG_DEBUGGER
 	if (g_Debugger.HasStdErrHook())
 	{
-		TCHAR buf[LINE_SIZE * 2];
+		TCHAR buf[LINE_SIZE * 4];
 		Line *line = aLine ? aLine : mCurrLine;
 		FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo
 			, line ? line->mFileIndex : mCurrFileIndex
 			, line ? line->mLineNumber : mCombinedLineNumber
-			, aErrorType == WARN);
+			, aErrorType == WARN, line, mIsReadyToExecute, false);
 		g_Debugger.OutputStdErr(buf);
 	}
 #endif
@@ -744,12 +836,12 @@ ResultType Script::ShowError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR 
 	// This enables headless/console operation where all errors go to the shell.
 	if (mErrorStdOut)
 	{
-		TCHAR buf[LINE_SIZE * 2];
+		TCHAR buf[LINE_SIZE * 4 + SCRIPT_STACK_BUF_SIZE]; // Increased for source line + stack trace
 		Line *line = aLine ? aLine : mCurrLine;
 		FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo
 			, line ? line->mFileIndex : mCurrFileIndex
 			, line ? line->mLineNumber : mCombinedLineNumber
-			, aErrorType == WARN);
+			, aErrorType == WARN, line, mIsReadyToExecute, mErrorStdOutColor);
 		PrintErrorStdOut(buf, (int)_tcslen(buf), _T("**")); // ** means stderr
 
 		// Handle exit behavior based on error type
@@ -811,7 +903,7 @@ ResultType Script::ScriptError(LPCTSTR aErrorText, LPCTSTR aExtraInfo)
 	if (g_script.mErrorStdOut && !g_script.mIsReadyToExecute) // i.e. runtime errors are always displayed via dialog.
 	{
 		// See LineError() for details.
-		PrintErrorStdOut(aErrorText, aExtraInfo, mCurrLine ? mCurrLine->mFileIndex : mCurrFileIndex, CurrentLine());
+		PrintErrorStdOut(aErrorText, aExtraInfo, mCurrLine ? mCurrLine->mFileIndex : mCurrFileIndex, CurrentLine(), mCurrLine);
 	}
 	else
 	{
@@ -1401,7 +1493,7 @@ void Script::ScriptWarning(WarnMode warnMode, LPCTSTR aWarningText, LPCTSTR aExt
 		return;
 
 	TCHAR buf[MSGBOX_TEXT_SIZE];
-	auto n = FormatStdErr(buf, _countof(buf), aWarningText, aExtraInfo, fileIndex, lineNumber, true);
+	auto n = FormatStdErr(buf, _countof(buf), aWarningText, aExtraInfo, fileIndex, lineNumber, true, line, false, mErrorStdOutColor);
 
 	if (warnMode == WARNMODE_STDOUT)
 		PrintErrorStdOut(buf, n);
