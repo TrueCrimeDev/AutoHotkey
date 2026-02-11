@@ -117,8 +117,7 @@
       "Bash(\"/mnt/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe\" /ErrorStdOut \"/mnt/c/Users/uphol/Documents/Design/Coding/AHK/!Running/_Tableau.ahk\")",
       "Bash(\"/mnt/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe\" /ErrorStdOut \"GUI_ButtonMaker.ahk\")",
       "SlashCommand(/ahk-orchestrator)",
-      "Bash(\"/mnt/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe\" /ErrorStdOut \"TestPaddedButtons.ahk\")",
-      "SlashCommand(/ahk-orchestrator Create a comprehensive error interceptor script that uses OnError() to catch all runtime errors and displays them in a detailed message box. The message box should show: error message, error line/file, stack trace, and error type. Include examples of different error scenarios to demonstrate the handler. Also add optional file logging capability.)"
+      "Bash(\"/mnt/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe\" /ErrorStdOut \"TestPaddedButtons.ahk\")"
     ],
     "deny": [],
     "ask": []
@@ -126,5 +125,6 @@
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "MCP_DOCKER"
-  ]
+  ],
+  "outputStyle": "Code_Style"
 }
