@@ -1925,6 +1925,7 @@ void ResumeUnderlyingThread()
 			g_script.ExitIfNotPersistent(EXIT_EXIT);
 		// Since above didn't ExitApp(), reset the exit code for when we do eventually ExitApp():
 		g_script.mPendingExitCode = 0;
+		g_script.mHasPendingExitCode = false;
 	}
 }
 

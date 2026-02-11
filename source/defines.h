@@ -137,6 +137,18 @@ enum ExitReasons {EXIT_CRITICAL = -2, EXIT_DESTROY = -1, EXIT_NONE = 0, EXIT_ERR
 	, EXIT_CLOSE, EXIT_MENU, EXIT_EXIT, EXIT_RELOAD, EXIT_SINGLEINSTANCE};
 #define EXITREASON_MUST_EXIT(er) (static_cast<ExitReasons>(er) <= EXIT_DESTROY)
 
+// Process exit codes for CLI/automation workflows.
+enum ProcessExitCode
+{
+	AHK_EXIT_OK = 0,
+	AHK_EXIT_RUNTIME_ERROR = 10,
+	AHK_EXIT_CRITICAL_ERROR = 11,
+	AHK_EXIT_PARSE_ERROR = 12,
+	AHK_EXIT_VALIDATE_ERROR = 13,
+	AHK_EXIT_TEST_FAILURE = 14,
+	AHK_EXIT_CLI_ERROR = 64
+};
+
 enum WarnType {WARN_LOCAL_SAME_AS_GLOBAL, WARN_UNREACHABLE, WARN_VAR_UNSET, WARN_ALL, INVALID_WARN_TYPE};
 #define WARN_TYPE_STRINGS _T("LocalSameAsGlobal"), _T("Unreachable"), _T("VarUnset"), _T("All")
 

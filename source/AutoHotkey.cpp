@@ -71,22 +71,33 @@ int WINAPI _tWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmd
 
 	LPTSTR script_filespec; // Script path as originally specified, or NULL if omitted/defaulted.
 	if (!ParseCmdLineArgs(script_filespec))
-		return CRITICAL_ERROR;
+		return AHK_EXIT_CLI_ERROR;
 
 	UINT load_result = g_script.LoadFromFile(script_filespec);
 	if (load_result == LOADING_FAILED) // Error during load (was already displayed by the function call).
-		return CRITICAL_ERROR;  // Should return this value because PostQuitMessage() also uses it.
+		return g_script.mCheckMode ? AHK_EXIT_VALIDATE_ERROR : AHK_EXIT_PARSE_ERROR;
 	if (!load_result) // LoadFromFile() relies upon us to do this check.  No script was loaded or we're in /iLib mode, so nothing more to do.
-		return 0;
+	{
+#ifndef AUTOHOTKEYSC
+		if (g_script.mCheckMode)
+		{
+			if (g_script.mDiagJson)
+				g_script.PrintErrorStdOut(_T("{\"kind\":\"check\",\"status\":\"pass\"}\n"), 0, _T("*"));
+			else
+				g_script.PrintErrorStdOut(_T("CHECK PASS\n"), 0, _T("*"));
+		}
+#endif
+		return AHK_EXIT_OK;
+	}
 
 	switch (CheckPriorInstance())
 	{
 	case EARLY_EXIT: return 0;
-	case FAIL: return CRITICAL_ERROR;
+	case FAIL: return AHK_EXIT_CLI_ERROR;
 	}
 
 	if (!InitForExecution())
-		return CRITICAL_ERROR;
+		return AHK_EXIT_CRITICAL_ERROR;
 
 	return MainExecuteScript();
 }
@@ -115,6 +126,22 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 	for (i = 1; i < __argc; ++i) // Start at 1 because 0 contains the program name.
 	{
 		LPTSTR param = __targv[i]; // For performance and convenience.
+#ifndef AUTOHOTKEYSC
+		// Support subcommand style: AutoHotkey.exe check script.ahk / AutoHotkey.exe test script.ahk
+		if (i == 1 && !_tcsicmp(param, _T("check")))
+		{
+			g_script.mCheckMode = true;
+			g_script.mValidateThenExit = true;
+			g_script.SetHeadless();
+			continue;
+		}
+		if (i == 1 && !_tcsicmp(param, _T("test")))
+		{
+			g_script.mTestMode = true;
+			g_script.SetHeadless();
+			continue;
+		}
+#endif
 		// Insist that switches be an exact match for the allowed values to cut down on ambiguity.
 		// For example, if the user runs "CompiledScript.exe /find", we want /find to be considered
 		// an input parameter for the script rather than a switch:
@@ -129,6 +156,35 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 			break;
 		else if (!_tcsnicmp(param, _T("/ErrorStdOut"), 12) && (param[12] == '\0' || param[12] == '=' || param[12] == ':'))
 			g_script.SetErrorStdOut(param[12] ? param + 13 : NULL, param[12] == ':');
+		else if (!_tcsicmp(param, _T("/Headless")) || !_tcsicmp(param, _T("--headless")))
+			g_script.SetHeadless();
+		else if ((!_tcsnicmp(param, _T("/Diag"), 5) && (param[5] == '\0' || param[5] == '='))
+			|| (!_tcsnicmp(param, _T("--diag"), 6) && (param[6] == '\0' || param[6] == '=')))
+		{
+			LPTSTR value = NULL;
+			if (!_tcsnicmp(param, _T("/Diag"), 5))
+				value = (param[5] == '=') ? param + 6 : NULL;
+			else
+				value = (param[6] == '=') ? param + 7 : NULL;
+
+			if (!value || !*value || !_tcsicmp(value, _T("text")))
+				g_script.SetDiagJson(false);
+			else if (!_tcsicmp(value, _T("json")))
+				g_script.SetDiagJson(true);
+			else
+				return FAIL;
+		}
+		else if (!_tcsicmp(param, _T("/Check")) || !_tcsicmp(param, _T("--check")))
+		{
+			g_script.mCheckMode = true;
+			g_script.mValidateThenExit = true;
+			g_script.SetHeadless();
+		}
+		else if (!_tcsicmp(param, _T("/Test")) || !_tcsicmp(param, _T("--test")))
+		{
+			g_script.mTestMode = true;
+			g_script.SetHeadless();
+		}
 		else if (!_tcsicmp(param, _T("/include")))
 		{
 			++i; // Consume the next parameter too, because it's associated with this one.
@@ -194,6 +250,11 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 		}
 	}
 	
+#ifndef AUTOHOTKEYSC
+	if ((g_script.mCheckMode || g_script.mTestMode) && !script_filespec)
+		return FAIL;
+#endif
+
 	// Pass any remaining args to the script via the A_Args array.
 	auto args = Array::FromArgV(__targv + i, __argc - i);
 
@@ -213,10 +274,17 @@ ResultType CheckPriorInstance()
 			if (g_AllowOnlyOneInstance == SINGLE_INSTANCE_IGNORE)
 				return EARLY_EXIT;
 			if (g_AllowOnlyOneInstance != SINGLE_INSTANCE_REPLACE)
+			{
+				if (g_script.mHeadless)
+				{
+					g_script.PrintErrorStdOut(_T("Another instance is already running. Use #SingleInstance Force or /force.\n"), 0, _T("**"));
+					return FAIL;
+				}
 				if (MsgBox(_T("An older instance of this script is already running.  Replace it with this")
 					_T(" instance?\nNote: To avoid this message, see #SingleInstance in the help file.")
 					, MB_YESNO, g_script.mFileName) == IDNO)
 					return EARLY_EXIT;
+			}
 			// Otherwise:
 			reason_to_close_prior = AHK_EXIT_BY_SINGLEINSTANCE;
 		}
@@ -247,6 +315,11 @@ ResultType CheckPriorInstance()
 				// This can happen if the previous instance has an OnExit function that takes a long
 				// time to finish, or if it's waiting for a network drive to timeout or some other
 				// operation in which it's thread is occupied.
+				if (g_script.mHeadless)
+				{
+					g_script.PrintErrorStdOut(_T("Timed out waiting for a prior instance to close.\n"), 0, _T("**"));
+					return FAIL;
+				}
 				if (MsgBox(_T("Could not close the previous instance of this script.  Keep waiting?"), 4) == IDNO)
 					return FAIL;
 				interval_count = 0;
@@ -308,8 +381,35 @@ int MainExecuteScript(bool aMsgSleep)
 
 #ifdef CONFIG_DLL
 		if (!aMsgSleep)
-			return exec_result ? 0 : CRITICAL_ERROR;
+			return exec_result ? AHK_EXIT_OK : AHK_EXIT_CRITICAL_ERROR;
 #endif
+		if (g_script.mTestMode)
+		{
+			if (g_script.IsPersistent())
+			{
+				if (g_script.mDiagJson)
+					g_script.PrintErrorStdOut(_T("{\"kind\":\"test\",\"status\":\"fail\",\"reason\":\"persistent_script\"}\n"), 0, _T("**"));
+				else
+					g_script.PrintErrorStdOut(_T("TEST FAIL: test mode requires a non-persistent script.\n"), 0, _T("**"));
+				g_script.mPendingExitCode = AHK_EXIT_TEST_FAILURE;
+				g_script.mHasPendingExitCode = true;
+				g_script.ExitApp(EXIT_ERROR);
+			}
+			else
+			{
+				if (g_script.mDiagJson)
+					g_script.PrintErrorStdOut(exec_result == FAIL
+						? _T("{\"kind\":\"test\",\"status\":\"fail\"}\n")
+						: _T("{\"kind\":\"test\",\"status\":\"pass\"}\n"), 0, _T("*"));
+				else
+					g_script.PrintErrorStdOut(exec_result == FAIL
+						? _T("TEST FAIL\n")
+						: _T("TEST PASS\n"), 0, _T("*"));
+				g_script.mPendingExitCode = exec_result == FAIL ? AHK_EXIT_TEST_FAILURE : AHK_EXIT_OK;
+				g_script.mHasPendingExitCode = true;
+				g_script.ExitApp(exec_result == FAIL ? EXIT_ERROR : EXIT_EXIT);
+			}
+		}
 		if (g_script.IsPersistent())
 		{
 			// Call it in this special mode to kick off the main event loop.
@@ -340,8 +440,8 @@ int MainExecuteScript(bool aMsgSleep)
 		TCHAR buf[127];
 		sntprintf(buf, _countof(buf), msg, ecode);
 		g_script.CriticalError(buf);
-		return ecode;
+		return AHK_EXIT_CRITICAL_ERROR;
 	}
 #endif 
-	return 0;
+	return AHK_EXIT_OK;
 }

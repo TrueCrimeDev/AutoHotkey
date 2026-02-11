@@ -96,6 +96,7 @@ AI: I'll help you debug. Let me set that breakpoint...
 | `debug_step_out` | Step out of current function |
 | `debug_stop` | Stop debug session |
 | `debug_status` | Get current status |
+| `debug_command` | Send a raw DBGp command and inspect parsed/raw response |
 
 ### Breakpoints
 
@@ -117,6 +118,13 @@ AI: I'll help you debug. Let me set that breakpoint...
 | Tool | Description |
 |------|-------------|
 | `stack_trace` | Get current call stack |
+
+### Source Intelligence
+
+| Tool | Description |
+|------|-------------|
+| `source_outline` | Extract classes, functions, hotkeys, and labels from a file |
+| `workspace_symbols` | Build a symbol index across workspace `.ahk` files |
 
 ## Available MCP Resources
 
