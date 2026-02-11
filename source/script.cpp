@@ -319,7 +319,8 @@ Script::Script()
 	, mFileSpec(_T("")), mFileDir(_T("")), mFileName(_T("")), mOurEXE(_T("")), mOurEXEDir(_T("")), mMainWindowTitle(_T(""))
 	, mScriptName(NULL)
 	, mIsReadyToExecute(false), mAutoExecSectionIsRunning(false)
-	, mIsRestart(false), mErrorStdOut(false), mErrorStdOutColor(false), mErrorStdOutCP(0)
+	, mIsRestart(false), mHeadless(false), mCheckMode(false), mTestMode(false), mDiagJson(false)
+	, mErrorStdOut(false), mErrorStdOutColor(false), mErrorStdOutCP(0)
 #ifndef AUTOHOTKEYSC
 	, mValidateThenExit(false)
 	, mCmdLineInclude(NULL)
@@ -1213,6 +1214,27 @@ ResultType Script::Reload(bool aDisplayErrors)
 }
 
 
+void Script::SetHeadless(bool aEnable)
+{
+	mHeadless = aEnable;
+	if (aEnable && !mErrorStdOut)
+		SetErrorStdOut(NULL);
+}
+
+int Script::DefaultExitCode(ExitReasons aExitReason) const
+{
+	switch (aExitReason)
+	{
+	case EXIT_ERROR:
+		return mTestMode ? AHK_EXIT_TEST_FAILURE : AHK_EXIT_RUNTIME_ERROR;
+	case EXIT_CRITICAL:
+		return AHK_EXIT_CRITICAL_ERROR;
+	default:
+		return AHK_EXIT_OK;
+	}
+}
+
+
 
 bif_impl ResultType Exit(optl<int> aExitCode)
 {
@@ -1230,13 +1252,17 @@ bif_impl ResultType Exit(optl<int> aExitCode)
 	// conditions can change during stack-unwind due to __delete or FINALLY.  Instead, this is
 	// reset to 0 in ResumeUnderlyingThread().
 	if (g_nThreads <= 1)
+	{
 		g_script.mPendingExitCode = aExitCode.has_value() ? *aExitCode : 0;
+		g_script.mHasPendingExitCode = aExitCode.has_value();
+	}
 	return EARLY_EXIT;
 }
 
 bif_impl ResultType ExitApp(optl<int> aExitCode)
 {
 	g_script.mPendingExitCode = aExitCode.has_value() ? *aExitCode : 0;
+	g_script.mHasPendingExitCode = aExitCode.has_value();
 	return g_script.ExitApp(EXIT_EXIT);
 }
 
@@ -1250,7 +1276,9 @@ ResultType Script::ExitApp(ExitReasons aExitReason)
 	// If we're called before the script has loaded, it is almost certainly by the ExitApp
 	// button on an error/warning dialog.  Treat it as a load-time error either way since
 	// that's probably what the user wants.
-	int aExitCode = mIsReadyToExecute ? mPendingExitCode : CRITICAL_ERROR;
+	int aExitCode = mIsReadyToExecute
+		? (mHasPendingExitCode ? mPendingExitCode : DefaultExitCode(aExitReason))
+		: AHK_EXIT_PARSE_ERROR;
 
 	// Note that currently, mOnExit.Count() can only be non-zero if the script is in a runnable
 	// state (since registering an OnExit function requires that the script calls OnExit()).
@@ -1404,6 +1432,8 @@ UINT Script::LoadFromFile(LPCTSTR aFileSpec)
 // Returns the number of non-comment lines that were loaded, or LOADING_FAILED on error.
 {
 	mIsReadyToExecute = mAutoExecSectionIsRunning = false;
+	mPendingExitCode = 0;
+	mHasPendingExitCode = false;
 	if (!aFileSpec)
 		aFileSpec = mFileSpec;
 

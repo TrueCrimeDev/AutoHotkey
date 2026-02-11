@@ -231,6 +231,105 @@ void Script::SetErrorStdOut(LPTSTR aParam, bool aColorMode)
 	// be a sufficient clue that the /ErrorStdOut= value was invalid.
 }
 
+static LPCTSTR DiagSeverity(ResultType aErrorType)
+{
+	switch (aErrorType)
+	{
+	case WARN: return _T("warning");
+	case CRITICAL_ERROR: return _T("critical");
+	default: return _T("error");
+	}
+}
+
+static int EscapeJsonText(LPTSTR aDest, int aDestSize, LPCTSTR aSrc)
+{
+	if (!aDest || aDestSize < 1)
+		return 0;
+	if (!aSrc)
+		aSrc = _T("");
+	int n = 0;
+	for (; *aSrc && n < aDestSize - 1; ++aSrc)
+	{
+		LPCTSTR repl = NULL;
+		switch (*aSrc)
+		{
+		case _T('\\'): repl = _T("\\\\"); break;
+		case _T('"'):  repl = _T("\\\""); break;
+		case _T('\r'): repl = _T("\\r"); break;
+		case _T('\n'): repl = _T("\\n"); break;
+		case _T('\t'): repl = _T("\\t"); break;
+		}
+		if (repl)
+		{
+			int wrote = sntprintf(aDest + n, aDestSize - n, _T("%s"), repl);
+			if (wrote <= 0 || wrote >= aDestSize - n)
+				break;
+			n += wrote;
+			continue;
+		}
+		if ((UINT)*aSrc < 0x20)
+		{
+			int wrote = sntprintf(aDest + n, aDestSize - n, _T("\\u%04X"), (UINT)*aSrc);
+			if (wrote <= 0 || wrote >= aDestSize - n)
+				break;
+			n += wrote;
+			continue;
+		}
+		aDest[n++] = *aSrc;
+	}
+	aDest[n] = '\0';
+	return n;
+}
+
+static int FormatDiagJson(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraInfo
+	, FileIndexType aFileIndex, LineNumberType aLineNumber, ResultType aErrorType, Line *aLine, bool aIncludeStack)
+{
+	if (!aBuf || aBufSize < 1)
+		return 0;
+
+	TCHAR msg[LINE_SIZE * 2];
+	TCHAR extra[LINE_SIZE];
+	TCHAR file[T_MAX_PATH * 2];
+	TCHAR source[LINE_SIZE * 2];
+	TCHAR stack[SCRIPT_STACK_BUF_SIZE * 2];
+
+	LPCTSTR file_name = (aFileIndex < Line::sSourceFileCount && Line::sSourceFile[aFileIndex])
+		? Line::sSourceFile[aFileIndex] : _T("");
+
+	EscapeJsonText(msg, _countof(msg), aErrorText ? aErrorText : _T(""));
+	EscapeJsonText(extra, _countof(extra), aExtraInfo ? aExtraInfo : _T(""));
+	EscapeJsonText(file, _countof(file), file_name);
+
+	if (aLine)
+	{
+		TCHAR line_buf[LINE_SIZE];
+		aLine->ToText(line_buf, _countof(line_buf), false, 0, false, false);
+		EscapeJsonText(source, _countof(source), line_buf);
+	}
+	else
+		*source = '\0';
+
+	*stack = '\0';
+#ifdef CONFIG_DEBUGGER
+	if (aIncludeStack)
+	{
+		TCHAR stack_buf[SCRIPT_STACK_BUF_SIZE];
+		GetScriptStack(stack_buf, _countof(stack_buf));
+		EscapeJsonText(stack, _countof(stack), stack_buf);
+	}
+#endif
+
+	int code = (aErrorType == CRITICAL_ERROR) ? AHK_EXIT_CRITICAL_ERROR
+		: (aErrorType == WARN ? 0 : AHK_EXIT_RUNTIME_ERROR);
+
+	int n = sntprintf(aBuf, aBufSize
+		, _T("{\"kind\":\"diagnostic\",\"format\":\"json\",\"severity\":\"%s\",\"code\":%d,\"message\":\"%s\",\"extra\":\"%s\",\"file\":\"%s\",\"line\":%d,\"source\":\"%s\",\"stack\":\"%s\"}\n")
+		, DiagSeverity(aErrorType), code, msg, extra, file, (int)aLineNumber, source, stack);
+	if (n < 0 || n >= aBufSize)
+		return (int)_tcslen(aBuf);
+	return n;
+}
+
 void Script::PrintErrorStdOut(LPCTSTR aErrorText, int aLength, LPCTSTR aFile)
 {
 #ifdef CONFIG_DEBUGGER
@@ -325,8 +424,10 @@ int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraIn
 // For backward compatibility, this actually prints to stderr, not stdout.
 void Script::PrintErrorStdOut(LPCTSTR aErrorText, LPCTSTR aExtraInfo, FileIndexType aFileIndex, LineNumberType aLineNumber, Line *aLine)
 {
-	TCHAR buf[LINE_SIZE * 4]; // Increased size for source line
-	auto n = FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo, aFileIndex, aLineNumber, false, aLine, false, mErrorStdOutColor);
+	TCHAR buf[LINE_SIZE * 4 + SCRIPT_STACK_BUF_SIZE];
+	auto n = mDiagJson
+		? FormatDiagJson(buf, _countof(buf), aErrorText, aExtraInfo, aFileIndex, aLineNumber, FAIL, aLine, false)
+		: FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo, aFileIndex, aLineNumber, false, aLine, false, mErrorStdOutColor);
 	PrintErrorStdOut(buf, n, _T("**"));
 }
 
@@ -832,23 +933,30 @@ ResultType Script::ShowError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR 
 	}
 #endif
 
-	// If /ErrorStdOut is enabled, output runtime errors to stderr instead of showing a dialog.
+	// If /ErrorStdOut or headless mode is enabled, output runtime errors to stderr instead of showing a dialog.
 	// This enables headless/console operation where all errors go to the shell.
-	if (mErrorStdOut)
+	if (mErrorStdOut || mHeadless)
 	{
-		TCHAR buf[LINE_SIZE * 4 + SCRIPT_STACK_BUF_SIZE]; // Increased for source line + stack trace
+		TCHAR buf[LINE_SIZE * 4 + SCRIPT_STACK_BUF_SIZE];
 		Line *line = aLine ? aLine : mCurrLine;
-		FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo
-			, line ? line->mFileIndex : mCurrFileIndex
-			, line ? line->mLineNumber : mCombinedLineNumber
-			, aErrorType == WARN, line, mIsReadyToExecute, mErrorStdOutColor);
+		if (mDiagJson)
+			FormatDiagJson(buf, _countof(buf), aErrorText, aExtraInfo
+				, line ? line->mFileIndex : mCurrFileIndex
+				, line ? line->mLineNumber : mCombinedLineNumber
+				, aErrorType, line, mIsReadyToExecute);
+		else
+			FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo
+				, line ? line->mFileIndex : mCurrFileIndex
+				, line ? line->mLineNumber : mCombinedLineNumber
+				, aErrorType == WARN, line, mIsReadyToExecute, mErrorStdOutColor);
 		PrintErrorStdOut(buf, (int)_tcslen(buf), _T("**")); // ** means stderr
 
 		// Handle exit behavior based on error type
 		if (aErrorType == WARN)
 			return OK; // Warnings don't abort execution
 		// Set exit code before calling ExitApp
-		mPendingExitCode = (aErrorType == CRITICAL_ERROR) ? 2 : 1;
+		mPendingExitCode = (aErrorType == CRITICAL_ERROR) ? AHK_EXIT_CRITICAL_ERROR : AHK_EXIT_RUNTIME_ERROR;
+		mHasPendingExitCode = true;
 		ExitApp((aErrorType == CRITICAL_ERROR) ? EXIT_CRITICAL : EXIT_ERROR);
 		return FAIL; // Not reached, but keeps compiler happy
 	}

@@ -2272,10 +2272,18 @@ public:
 	bool mIsReadyToExecute;
 	bool mAutoExecSectionIsRunning;
 	bool mIsRestart; // The app is restarting rather than starting from scratch.
+	bool mHeadless; // true to disable dialog-first error handling and favor stream output.
+	bool mCheckMode; // true when invoked in syntax-check mode.
+	bool mTestMode; // true when invoked in single-script test mode.
+	bool mDiagJson; // true to emit structured JSON diagnostics.
 	bool mErrorStdOut; // true if load-time syntax errors should be sent to stdout vs. a MsgBox.
 	bool mErrorStdOutColor; // true if ANSI colors should be used in /ErrorStdOut output.
+	bool mHasPendingExitCode = false; // true if mPendingExitCode was explicitly set by script/runtime.
 	UINT mErrorStdOutCP;
 	void SetErrorStdOut(LPTSTR aParam, bool aColorMode = false);
+	void SetHeadless(bool aEnable = true);
+	void SetDiagJson(bool aEnable = true) { mDiagJson = aEnable; }
+	int DefaultExitCode(ExitReasons aExitReason) const;
 	void PrintErrorStdOut(LPCTSTR aErrorText, int aLength = 0, LPCTSTR aFile = _T("*"));
 	void PrintErrorStdOut(LPCTSTR aErrorText, LPCTSTR aExtraInfo, FileIndexType aFileIndex, LineNumberType aLineNumber, Line *aLine = nullptr);
 #ifndef AUTOHOTKEYSC
@@ -2772,4 +2780,3 @@ bool LibNotifyProblem(LPCTSTR aMessage, LPCTSTR aExtra, Line *aLine, bool aWarn 
 #endif
 
 #endif
-

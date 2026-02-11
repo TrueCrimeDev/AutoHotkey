@@ -253,6 +253,10 @@ export class DBGpClient extends EventEmitter {
     return this.sendCommand('status');
   }
 
+  async sendRawCommand(command: string): Promise<DebugResponse> {
+    return this.sendCommand(command);
+  }
+
   // === Breakpoint Commands ===
 
   async setBreakpoint(file: string, line: number, condition?: string): Promise<Breakpoint> {

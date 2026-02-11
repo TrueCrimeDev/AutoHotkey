@@ -18,6 +18,7 @@ import {
 import { DBGpClient, ErrorInfo } from './dbgp-client.js';
 import { z } from 'zod';
 import * as fs from 'fs/promises';
+import * as path from 'path';
 
 const client = new DBGpClient(9000);
 const server = new Server(
@@ -71,6 +72,119 @@ const GetSourceContextSchema = z.object({
   radius: z.number().optional().describe('Lines before/after (default: 5)'),
 });
 
+const DebugCommandSchema = z.object({
+  command: z.string().describe('Raw DBGp command without transaction id, for example: feature_get -n language_name'),
+});
+
+const SourceOutlineSchema = z.object({
+  file: z.string().describe('Path to the AutoHotkey source file'),
+});
+
+const WorkspaceSymbolsSchema = z.object({
+  root: z.string().optional().describe('Workspace root to scan (defaults to current working directory)'),
+  query: z.string().optional().describe('Optional case-insensitive symbol filter'),
+  max_results: z.number().optional().describe('Maximum symbols to return (default: 200)'),
+});
+
+type SourceSymbol = {
+  kind: 'function' | 'class' | 'hotkey' | 'label';
+  name: string;
+  line: number;
+  text: string;
+  file?: string;
+};
+
+const AHK_EXTENSIONS = new Set(['.ahk', '.ah2']);
+
+async function getSourceOutline(file: string): Promise<SourceSymbol[]> {
+  const content = await fs.readFile(file, 'utf-8');
+  const lines = content.split(/\r?\n/);
+  const symbols: SourceSymbol[] = [];
+  const controlFlow = new Set(['if', 'while', 'for', 'loop', 'switch', 'catch', 'try', 'else']);
+
+  lines.forEach((rawLine, idx) => {
+    const lineNo = idx + 1;
+    const line = rawLine.trim();
+    if (!line || line.startsWith(';'))
+      return;
+
+    const classMatch = line.match(/^class\s+([A-Za-z_]\w*)\b/);
+    if (classMatch) {
+      symbols.push({ kind: 'class', name: classMatch[1], line: lineNo, text: rawLine });
+      return;
+    }
+
+    const fnMatch = line.match(/^([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(\{|=>|$)/);
+    if (fnMatch && !controlFlow.has(fnMatch[1].toLowerCase())) {
+      symbols.push({ kind: 'function', name: fnMatch[1], line: lineNo, text: rawLine });
+      return;
+    }
+
+    const hotkeyMatch = line.match(/^([^;\s][^:]*?)::/);
+    if (hotkeyMatch) {
+      symbols.push({ kind: 'hotkey', name: hotkeyMatch[1].trim(), line: lineNo, text: rawLine });
+      return;
+    }
+
+    const labelMatch = line.match(/^([A-Za-z_]\w*)\s*:\s*(?:;.*)?$/);
+    if (labelMatch && labelMatch[1].toLowerCase() !== 'case' && labelMatch[1].toLowerCase() !== 'default') {
+      symbols.push({ kind: 'label', name: labelMatch[1], line: lineNo, text: rawLine });
+    }
+  });
+
+  return symbols;
+}
+
+async function listAhkFiles(root: string, maxFiles: number): Promise<string[]> {
+  const files: string[] = [];
+  const skipDirs = new Set(['.git', 'node_modules', 'build', 'dist', 'bin_debug', 'build_mingw']);
+
+  const walk = async (dir: string): Promise<void> => {
+    if (files.length >= maxFiles)
+      return;
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (files.length >= maxFiles)
+        return;
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!skipDirs.has(entry.name))
+          await walk(fullPath);
+        continue;
+      }
+      if (entry.isFile() && AHK_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
+        files.push(fullPath);
+    }
+  };
+
+  await walk(root);
+  return files;
+}
+
+async function getWorkspaceSymbols(root: string, query = '', maxResults = 200): Promise<SourceSymbol[]> {
+  const files = await listAhkFiles(root, Math.max(maxResults * 2, 500));
+  const needle = query.trim().toLowerCase();
+  const symbols: SourceSymbol[] = [];
+
+  for (const file of files) {
+    if (symbols.length >= maxResults)
+      break;
+    const outline = await getSourceOutline(file);
+    for (const symbol of outline) {
+      if (symbols.length >= maxResults)
+        break;
+      if (!needle || symbol.name.toLowerCase().includes(needle)) {
+        symbols.push({
+          ...symbol,
+          file,
+        });
+      }
+    }
+  }
+
+  return symbols;
+}
+
 // === MCP Tools ===
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -106,6 +220,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: 'debug_status',
         description: 'Get current debug session status',
         inputSchema: { type: 'object', properties: {}, required: [] },
+      },
+      {
+        name: 'debug_command',
+        description: 'Send a raw DBGp command and return parsed attributes plus raw XML',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            command: { type: 'string', description: 'DBGp command without transaction id' },
+          },
+          required: ['command'],
+        },
       },
 
       // Breakpoints
@@ -226,6 +351,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: 'source_outline',
+        description: 'Extract classes, functions, hotkeys, and labels from an AutoHotkey source file',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: { type: 'string', description: 'Path to the AutoHotkey source file' },
+          },
+          required: ['file'],
+        },
+      },
+      {
+        name: 'workspace_symbols',
+        description: 'Scan workspace AutoHotkey files and return symbol index (optionally filtered)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            root: { type: 'string', description: 'Workspace root (defaults to current working directory)' },
+            query: { type: 'string', description: 'Optional symbol name filter' },
+            max_results: { type: 'number', description: 'Maximum symbols to return (default: 200)' },
+          },
+          required: [],
+        },
+      },
+      {
         name: 'list_errors',
         description: 'List all queued errors without removing them',
         inputSchema: { type: 'object', properties: {}, required: [] },
@@ -242,7 +391,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  if (!client.isConnected()) {
+  const requiresDebugger = new Set([
+    'debug_run',
+    'debug_step_into',
+    'debug_step_over',
+    'debug_step_out',
+    'debug_stop',
+    'debug_status',
+    'debug_command',
+    'breakpoint_set',
+    'breakpoint_remove',
+    'breakpoint_list',
+    'variables_get',
+    'evaluate',
+    'stack_trace',
+    'capture_error',
+  ]);
+
+  if (!client.isConnected() && requiresDebugger.has(name)) {
     return {
       content: [
         {
@@ -318,6 +484,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: 'text',
               text: `Status: ${response.status}, Reason: ${response.reason || 'N/A'}`,
+            },
+          ],
+        };
+      }
+
+      case 'debug_command': {
+        const params = DebugCommandSchema.parse(args);
+        const response = await client.sendRawCommand(params.command.trim());
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                command: params.command,
+                parsed: response,
+                raw: response._raw || '',
+              }, null, 2),
             },
           ],
         };
@@ -603,6 +786,39 @@ Format response as JSON:
             {
               type: 'text',
               text: JSON.stringify({ file: params.file, line: params.line, context }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'source_outline': {
+        const params = SourceOutlineSchema.parse(args);
+        const symbols = await getSourceOutline(params.file);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ file: params.file, count: symbols.length, symbols }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'workspace_symbols': {
+        const params = WorkspaceSymbolsSchema.parse(args);
+        const root = params.root ? path.resolve(params.root) : process.cwd();
+        const maxResults = params.max_results ?? 200;
+        const symbols = await getWorkspaceSymbols(root, params.query, maxResults);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                root,
+                query: params.query ?? '',
+                count: symbols.length,
+                symbols,
+              }, null, 2),
             },
           ],
         };

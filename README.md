@@ -15,6 +15,9 @@
 | Area | Change in this fork | Why it matters |
 | --- | --- | --- |
 | Runtime error handling | `/ErrorStdOut` routes runtime errors to `stderr` (`"**"`) instead of GUI-only dialogs | Works cleanly in terminals, scripts, CI, and agent loops |
+| Headless mode | `/Headless` or `--headless` forces non-interactive operation | Prevents blocking dialogs in automation pipelines |
+| Structured diagnostics | `/Diag=json` or `--diag=json` outputs JSON diagnostics | Easy machine parsing for agents and CI |
+| Built-in check/test modes | `check` / `/Check` and `test` / `/Test` | Native syntax-check and single-script test flows |
 | Error formatting | Error output includes file/line format, source line, optional call stack, optional ANSI color (`/ErrorStdOut:color`) | Easier for humans and tools to parse and act on |
 | Exit behavior | Non-warning runtime errors return non-zero exit codes | Reliable failure detection in automation |
 | Source context API | Adds `_ScriptGetLines(Filename, LineNumber, Range?)` | Lets tooling fetch exact nearby source text for debugging/fixes |
@@ -27,8 +30,12 @@
 - Standard run: `AutoHotkey64.exe script.ahk`
 - Debugger mode: `AutoHotkey64.exe /Debug script.ahk`
 - Headless error mode: `AutoHotkey64.exe /ErrorStdOut script.ahk`
+- Hard headless mode: `AutoHotkey64.exe /Headless script.ahk`
+- JSON diagnostics: `AutoHotkey64.exe /Headless /Diag=json script.ahk`
 - Colored error mode: `AutoHotkey64.exe /ErrorStdOut:color script.ahk`
 - Encoding override: `AutoHotkey64.exe /ErrorStdOut=UTF-8 script.ahk`
+- Check mode: `AutoHotkey64.exe check script.ahk` (or `/Check script.ahk`)
+- Test mode: `AutoHotkey64.exe test script.ahk` (or `/Test script.ahk`)
 
 ### 2. Runtime error pipeline
 
@@ -44,7 +51,19 @@ When `/ErrorStdOut` is enabled:
   The historical switch name is <code>/ErrorStdOut</code>, but this fork writes runtime errors to <code>stderr</code> for compatibility with standard tooling and stream separation.
 </details>
 
-### 3. Stream behavior
+### 3. Exit code taxonomy
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `10` | Runtime error |
+| `11` | Critical/internal error |
+| `12` | Parse/load error |
+| `13` | Check/validate failure |
+| `14` | Test failure |
+| `64` | CLI usage/argument error |
+
+### 4. Stream behavior
 
 - ``FileAppend "...`n", "*"`` writes to stdout
 - ``FileAppend "...`n", "**"`` writes to stderr
@@ -60,6 +79,7 @@ This fork is practical for AI-assisted workflows because it provides determinist
 3. Built-in source retrieval: `_ScriptGetLines()` gives precise nearby code context for analysis/fix generation.
 4. Debug protocol support: the included DBGp pipeline works with the MCP server under `debugger-tool/mcp-server`.
 5. Automation-safe exits: non-zero exit codes make retry/fix loops predictable.
+6. Source intelligence tools: MCP now exposes symbol outlines and workspace symbol indexing.
 
 In practice, this supports a tight loop:
 
@@ -138,3 +158,4 @@ bin\AutoHotkey64.exe /Debug your_script.ahk
 - This is a specialized fork, not a drop-in claim of upstream parity.
 - If you need stock behavior, use upstream AutoHotkey builds.
 - For MCP usage details, see `debugger-tool/mcp-server/README.md`.
+- Milestone implementation status is tracked in `V3_MILESTONE_STATUS.md`.
