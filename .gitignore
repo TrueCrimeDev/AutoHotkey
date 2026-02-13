@@ -46,3 +46,10 @@ _DebugRun_*.ahk
 # Misc
 *.exe
 C:\\*
+
+# Local workspace-only artifacts
+.git_corrupt_*/
+build_debug/
+build_msvc/
+build_ninja/
+cmake -G */
