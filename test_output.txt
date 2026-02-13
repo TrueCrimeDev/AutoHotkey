@@ -1,0 +1,6 @@
+AHK Version: 2.0
+A_LineFile: C:\Users\uphol\Documents\Design\Coding\AutoHotkey\test_simple.ahk
+A_ScriptFullPath: C:\Users\uphol\Documents\Design\Coding\AutoHotkey\test_simple.ahk
+_ScriptGetLines returned: String
+Is Object: false
+Value: []
