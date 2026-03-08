@@ -961,8 +961,7 @@ ResultType Script::ShowError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR 
 		return FAIL; // Not reached, but keeps compiler happy
 	}
 
-	static auto sMod = LoadLibrary(_T("riched20.dll")); // RichEdit20W
-	//static auto sMod = LoadLibrary(_T("msftedit.dll")); // MSFTEDIT_CLASS (RICHEDIT50W)
+	static auto sMod = LoadLibrary(_T("msftedit.dll"));
 	ErrorBoxParam error;
 	error.text = aErrorText;
 	error.type = aErrorType;
@@ -1357,13 +1356,17 @@ Line *Script::GetLine(LPCTSTR aFile, int aNumber, Line *aCandidate)
 			break;
 	if (!aCandidate || aCandidate->mFileIndex != file_index || aCandidate->mLineNumber != aNumber) // Keep aLine if it matches, in case of multiple Lines with the same number.
 	{
-		Line *line;
-		for (line = mFirstLine;
-			line && (line->mLineNumber != aNumber || line->mFileIndex != file_index
-				|| !line->mArgc && line->mNextLine && line->mNextLine->mLineNumber == aNumber); // Skip any same-line block-begin/end, try, else or finally.
-			line = line->mNextLine);
-		if (line)
-			return line;
+		for (auto mod = mLastModule; mod; mod = mod->mPrev)
+		{
+			for (Line *line = mod->mFirstLine; line; line = line->mNextLine)
+			{
+				if (line->mLineNumber == aNumber && line->mFileIndex == file_index
+					&& (line->mArgc || !line->mNextLine || line->mNextLine->mLineNumber != aNumber))
+					return line;
+				if (line == mod->mLastLine)
+					break;
+			}
+		}
 	}
 	return aCandidate;
 }

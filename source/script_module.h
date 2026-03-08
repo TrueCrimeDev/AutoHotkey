@@ -3,7 +3,7 @@
 
 struct ScriptImport
 {
-	LPTSTR names = nullptr;
+	LPTSTR names = nullptr, mod_path = nullptr, mod_name = nullptr, var_name = nullptr;
 	ScriptModule *mod = nullptr;
 	ScriptImport *next = nullptr;
 	LineNumberType line_number = 0;
@@ -25,8 +25,8 @@ class ScriptModule : public ObjectBase
 {
 public:
 	LPCTSTR mName = nullptr;
-	Line *mFirstLine = nullptr;
-	Label *mFirstLabel = nullptr;
+	Line *mFirstLine = nullptr, *mLastLine = nullptr;
+	Label *mFirstLabel = nullptr, *mLastLabel = nullptr;
 	ScriptImport *mImports = nullptr;
 	ScriptModule *mPrev = nullptr;
 	VarList mVars;
@@ -34,6 +34,8 @@ public:
 	UnresolvedBaseClass *mUnresolvedBaseClass = nullptr;
 	FileIndexType *mFiles = nullptr, mFilesCount = 0, mFilesCountMax = 0;
 	FileIndexType mSelfFileIndex = ABSOLUTE_MAX_SOURCE_FILES;
+	FileIndexType mOuterFileIndex = ABSOLUTE_MAX_SOURCE_FILES;
+	LineNumberType mDirectiveLineNumber = 0;
 	bool mExecuted = false;
 	bool mIsBuiltinModule = false;
 
@@ -41,6 +43,8 @@ public:
 	WarnMode Warn_LocalSameAsGlobal = WARNMODE_OFF;
 	WarnMode Warn_Unreachable = WARNMODE_ON;
 	WarnMode Warn_VarUnset = WARNMODE_ON;
+
+	bool IsFileModule() const { return mSelfFileIndex != ABSOLUTE_MAX_SOURCE_FILES; }
 
 	bool HasFileIndex(FileIndexType aFile);
 	ResultType AddFileIndex(FileIndexType aFile);

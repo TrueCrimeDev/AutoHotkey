@@ -108,7 +108,7 @@ FuncEntry g_BIF[] =
 	BIFn(RegDelete, 0, 2, BIF_Reg),
 	BIFn(RegDeleteKey, 0, 1, BIF_Reg),
 	BIFn(RegRead, 0, 3, BIF_Reg),
-	BIFn(RegWrite, 0, 4, BIF_Reg),
+	BIFn(RegWrite, 1, 4, BIF_Reg),
 	BIF1(Round, 1, 2),
 	BIFn(RTrim, 1, 2, BIF_Trim),
 	BIF1(Sin, 1, 1),
@@ -306,11 +306,10 @@ VarEntry g_BIV_A[] =
 
 
 Script::Script()
-	: mFirstLine(NULL), mLastLine(NULL), mCurrLine(NULL)
+	: mLastLine(NULL), mCurrLine(NULL)
 	, mThisHotkeyName(_T("")), mPriorHotkeyName(_T("")), mThisHotkeyStartTime(0), mPriorHotkeyStartTime(0)
 	, mEndChar(0), mThisHotkeyModifiersLR(0)
 	, mOnClipboardChangeIsRunning(false)
-	, mLastLabel(NULL)
 	, mFirstTimer(NULL), mLastTimer(NULL), mTimerEnabledCount(0), mTimerCount(0)
 	, mFirstMenu(NULL), mLastMenu(NULL), mMenuCount(0)
 	, mNextLineIsFunctionBody(false)
@@ -590,9 +589,7 @@ ResultType Script::Init(LPTSTR aScriptFilename, IObject *aArgs)
 	// Up to this point, mCurrentModule == &mBuiltinModule for initialization of built-ins.
 	// From this point, declarations should add names to a script module, not mBuiltinModule.
 	mCurrentModule = &mDefaultModule;
-	mModules.Insert(&mDefaultModule, 0); // __Main
-	mModules.Insert(&mBuiltinModule, 1); // AHK
-	ASSERT(mModules.mCount == 2);
+	mDefaultModule.mSelfFileIndex = 0;
 
 	if (aArgs) // Caller-provided command-line args.
 	{
@@ -1063,14 +1060,10 @@ ResultType Script::ExecuteModule(ScriptModule *aModule)
 	if (!aModule->mFirstLine || aModule->mExecuted)
 		return OK;
 	aModule->mExecuted = true; // Set first to block recursion in cases where imp->mod imports aModule.
-	for (auto imp = aModule->mImports; imp; imp = imp->next)
-	{
-		auto result = ExecuteModule(imp->mod);
-		if (result != OK)
-			return result;
-	}
-	mCurrentModule = aModule;
-	return aModule->mFirstLine->ExecUntil(UNTIL_RETURN);
+	auto prev = std::exchange(mCurrentModule, aModule);
+	auto result = aModule->mFirstLine->ExecUntil(UNTIL_RETURN);
+	mCurrentModule = prev;
+	return result;
 }
 
 
@@ -1354,7 +1347,6 @@ ResultType Script::ExitApp(ExitReasons aExitReason)
 
 
 
-#ifdef RELEASE_SOME_OBJECTS_ON_EXIT
 void ReleaseVarObjects(VarList &aVars)
 {
 	for (int v = 0; v < aVars.mCount; ++v)
@@ -1378,7 +1370,6 @@ void ReleaseStaticVarObjects(FuncList &aFuncs)
 		ReleaseVarObjects(f.mStaticVars);
 	}
 }
-#endif
 
 
 
@@ -1386,10 +1377,6 @@ void Script::TerminateApp(ExitReasons aExitReason, int aExitCode)
 // Note that g_script's destructor takes care of most other cleanup work, such as destroying
 // tray icons, menus, and unowned windows such as ToolTip.
 {
-#ifdef RELEASE_SOME_OBJECTS_ON_EXIT
-	// v2.1: This was disabled rather than updating it to iterate through module variables because
-	// it has always been incomplete (doesn't finalize all objects) and caused unexpected behaviour
-	// (some global or static variables are arbitrarily unset before __delete executes).
 	// L31: Release objects stored in variables, where possible.
 	if (aExitReason != EXIT_CRITICAL) // i.e. Avoid making matters worse if EXIT_CRITICAL.
 	{
@@ -1398,10 +1385,10 @@ void Script::TerminateApp(ExitReasons aExitReason, int aExitCode)
 		g_AllowInterruption = FALSE;
 		g->IsPaused = false;
 
-		ReleaseVarObjects(mVars);
+		for (auto mod = mLastModule; mod; mod = mod->mPrev)
+			ReleaseVarObjects(mod->mVars);
 		ReleaseStaticVarObjects(mFuncs);
 	}
-#endif
 #ifdef CONFIG_DEBUGGER // L34: Exit debugger *after* the above to allow debugging of any invoked __Delete handlers.
 	g_Debugger.Exit(aExitReason);
 #endif
@@ -1474,6 +1461,16 @@ UINT Script::LoadFromFile(LPCTSTR aFileSpec)
 
 	if (!CloseCurrentModule() || !ResolveImports())
 		return LOADING_FAILED;
+
+	if (mBuiltinModule.mFirstLine) // `#Module AHK` was used.
+	{
+		// Add AHK module last, so it will execute first.  Must be done before Preparse calls.
+		// Other modules use a flagged alias (Var::SetImport) for every imported name to trigger
+		// module execution on first reference, but that would be wasteful for the built-in
+		// module since built-in functions are usually called very often and early.
+		mBuiltinModule.mPrev = mLastModule;
+		mLastModule = &mBuiltinModule;
+	}
 
 	// Preparse all expressions and resolve all variable references.  The outer-most scope
 	// is preparsed first, then each function, working inward through all nested functions.
@@ -1965,10 +1962,18 @@ process_completed_line:
 				case CONDITION_FALSE:
 					hotkey_flag = NULL; // It doesn't look like valid hotkey syntax, so parse it as something else (so the error message won't be ERR_INVALID_KEYNAME).
 					break;
-				//case CONDITION_TRUE:
+				case CONDITION_TRUE:
 					// It's a key that doesn't exist on the current keyboard layout.  Leave hotkey_flag set
 					// so that the section below handles it as a hotkey.  This ensures any same-line action
-					// or trailing block is interpreted correctly.  A warning will be displayed below.
+					// or trailing block is interpreted correctly.
+#ifndef AUTOHOTKEYSC
+					if (!mValidateThenExit) // Current keyboard layout is not relevant in /validate mode.
+#endif
+					{
+						TCHAR msg_text[128];
+						sntprintf(msg_text, _countof(msg_text), _T("Note: The hotkey %s will not be active because it does not exist in the current keyboard layout."), static_cast<LPTSTR>(buf));
+						MsgBox(msg_text);
+					}
 				}
 				*cp = orig_char; // Undo the temp. termination above.
 			}
@@ -2090,7 +2095,8 @@ process_completed_line:
 					//    might be a mouse button or some longer key name whose actual/correct VK value is relied
 					//    upon by other places below.
 				{
-					auto result = ParseRemap(buf, remap_dest_vk, remap_name, hotkey_flag);
+					auto result = hotkey_validity == CONDITION_TRUE ? OK // Valid syntax but should have no effect.
+						: ParseRemap(buf, remap_dest_vk, remap_name, hotkey_flag);
 					if (!result)
 						return result;
 					if (result != CONDITION_FALSE)
@@ -2147,15 +2153,7 @@ process_completed_line:
 						if (hotkey_validity != CONDITION_TRUE)
 							return FAIL; // It already displayed the error.
 						// This hotkey uses a single-character key name, which could be valid on some other
-						// keyboard layout.  Allow the script to start, but warn the user about the problem.
-#ifndef AUTOHOTKEYSC
-						if (!mValidateThenExit) // Current keyboard layout is not relevant in /validate mode.
-#endif
-						{
-							TCHAR msg_text[128];
-							sntprintf(msg_text, _countof(msg_text), _T("Note: The hotkey %s will not be active because it does not exist in the current keyboard layout."), static_cast<LPTSTR>(buf));
-							MsgBox(msg_text);
-						}
+						// keyboard layout.  Allow the script to start, as the user has already been warned.
 					}
 				}
 				if (hook_action == HK_NORMAL && hk) // For simplicity, there's no detection of invalid stacking of "inactive" single-letter hotkeys (see above).
@@ -2236,7 +2234,8 @@ process_completed_line:
 		// Since above didn't "goto", it's not a label.
 		if (*buf == '#')
 		{
-			if (!_tcsnicmp(buf, _T("#HotIf"), 6) && IS_SPACE_OR_TAB(buf[6]))
+			if (!_tcsnicmp(buf, _T("#HotIf"), 6) && IS_SPACE_OR_TAB(buf[6])
+				|| !_tcsnicmp(buf, _T("#Import"), 7) && IS_SPACE_OR_TAB(buf[7]))
 			{
 				// Allow an expression enclosed in ()/[]/{} to span multiple lines:
 				if (!GetLineContExpr(fp, buf, next_buf, phys_line_number, has_continuation_section))
@@ -2459,10 +2458,6 @@ process_completed_line:
 				return FAIL;
 			goto continue_main_loop;
 		}
-		else if (!mLineParent && ParseImportStatement(buf))
-		{
-			goto continue_main_loop;
-		}
 
 		// Parse the command, assignment or expression, including any same-line open brace or sub-action
 		// for ELSE, TRY, CATCH or FINALLY.  Unlike braces at the start of a line (processed above), this
@@ -2513,7 +2508,13 @@ continue_main_loop: // This method is used in lieu of "continue" for performance
 		ScriptWarning(g_WarnMode, _T("Some non-ASCII characters could not be decoded.\n\nEnsure that the file is saved as UTF-8."));
 	}
 
-	++mCombinedLineNumber; // L40: Put the implicit ACT_EXIT on the line after the last physical line (for the debugger).
+	if (mCurrentModule->mOuterFileIndex == source_file_index)
+	{
+		auto mod = mCurrentModule;
+		do mod = mod->mPrev; while (mod->mOuterFileIndex == source_file_index);
+		ReopenModule(mod);
+	}
+
 	return OK;
 }
 
@@ -3471,6 +3472,10 @@ size_t Script::GetLine(LineBuffer &aBuf, int aInContinuationSection, bool aInBlo
 			*aBuf = '\0';
 			return 0;
 		}
+		else if (*aBuf == '/' && aBuf[1] == '*')
+			// Avoid stripping ;comments since that would prevent detection of the comment-end
+			// in cases like "/* ; */".
+			return aBuf_length;
 	}
 	//else CONTINUATION_SECTION_WITH_COMMENTS (case #3 above), which due to other checking also means that
 	// this line isn't a comment (though it might have a comment on its right side, which is checked below).
@@ -4023,11 +4028,20 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 
 	if (IS_DIRECTIVE_MATCH(_T("#Module")))
 	{
-		if (mLineParent || mClassObjectCount)
+		if (mLineParent || mClassObjectCount || mPendingHotkey)
 			return ScriptError(ERR_UNEXPECTED_DIRECTIVE, aBuf);
 		if (!parameter)
 			return ScriptError(ERR_PARAM1_REQUIRED);
 		return ParseModuleDirective(parameter);
+	}
+
+	if (IS_DIRECTIVE_MATCH(_T("#Import")))
+	{
+		if (mLineParent || mClassObjectCount)
+			return ScriptError(ERR_UNEXPECTED_DIRECTIVE, aBuf);
+		if (!ParseImportDirective(parameter))
+			return ScriptError(_T("Invalid import"), aBuf);
+		return CONDITION_TRUE;
 	}
 
 	if (IS_DIRECTIVE_MATCH(_T("#StructPack")))
@@ -4233,7 +4247,7 @@ ResultType Script::AddLabel(LPTSTR aLabelName, bool aAllowDupe)
 	if (!*aLabelName)
 		return FAIL; // For now, silent failure because callers should check this beforehand.
 	Label *&first_label = g->CurrentFunc ? g->CurrentFunc->mFirstLabel : mCurrentModule->mFirstLabel;
-	Label *&last_label  = g->CurrentFunc ? g->CurrentFunc->mLastLabel  : mLastLabel;
+	Label *&last_label  = g->CurrentFunc ? g->CurrentFunc->mLastLabel  : mCurrentModule->mLastLabel;
 	if (!aAllowDupe && FindLabel(aLabelName))
 	{
 		// Don't attempt to dereference label->mJumpToLine because it might not
@@ -4298,10 +4312,22 @@ ResultType Script::ParseAndAddLine(LPTSTR aLineText, ActionTypeType aActionType)
 		// For v2, the interpretation of a control flow keyword shouldn't be affected by whatever
 		// operator follows it, so this is done before checking for assignments or other operators.
 		if (IS_SPACE_OR_TAB(*end_marker) || *end_marker == '(' || !*end_marker || *end_marker == '{')
+		{
 			aActionType = ConvertActionType(action_name);
-		if (*end_marker == '{' && !(aActionType == ACT_ELSE || aActionType == ACT_LOOP
-			|| aActionType == ACT_SWITCH || aActionType >= ACT_TRY && aActionType <= ACT_FINALLY))
-			aActionType = ACT_INVALID; // Not an action for which "xxx{" is valid.
+			if (!aActionType)
+			{
+				// For backward-compatibility with v2.0, this isn't recognized by ConvertActionType:
+				if (!_tcsicmp(action_name, _T("Export")) && !_tcsnicmp(action_args, _T("Global"), 6)
+					&& IS_SPACE_OR_TAB(action_args[6]))
+				{
+					aActionType = ACT_EXPORT;
+					action_args = omit_leading_whitespace(action_args + 7);
+				}
+			}
+			else if (*end_marker == '{' && !(aActionType == ACT_ELSE || aActionType == ACT_LOOP
+				|| aActionType == ACT_SWITCH || aActionType >= ACT_TRY && aActionType <= ACT_FINALLY))
+				aActionType = ACT_INVALID; // Not an action for which "xxx{" is valid.
+		}
 	}
 	else
 	{
@@ -4818,10 +4844,10 @@ ResultType Script::ParseAndAddLine(LPTSTR aLineText, ActionTypeType aActionType)
 			}
 			if (*last_char == ')')
 			{
-				// Remove the parentheses (and possible open brace) and trailing space.
+				// Remove the parentheses (and possible open brace) and leading/trailing space.
 				ASSERT(action_args == end_marker);
-				++action_args;
-				last_char = omit_trailing_whitespace(end_marker, last_char - 1);
+				action_args = omit_leading_whitespace(end_marker + 1);
+				last_char = omit_trailing_whitespace(action_args, last_char - 1);
 				last_char[1] = '\0';
 				// Treat this like a function call: all parameters are sub-expressions.
 				all_args_are_expressions = true;
@@ -5150,9 +5176,9 @@ ResultType Script::AddLine(ActionTypeType aActionType, LPTSTR aArg[], int aArgc,
 	Line &line = *the_new_line;  // For performance and convenience.
 
 	line.mPrevLine = mLastLine;  // Whether NULL or not.
-	if (mFirstLine == NULL)
-		mFirstLine = the_new_line;
-	else
+	if (!mCurrentModule->mFirstLine)
+		mCurrentModule->mFirstLine = the_new_line;
+	if (mLastLine)
 		mLastLine->mNextLine = the_new_line;
 	// This must be done after the above:
 	mLastLine = the_new_line;
@@ -5204,7 +5230,7 @@ ResultType Script::AddLine(ActionTypeType aActionType, LPTSTR aArg[], int aArgc,
 	case ACT_FINALLY:
 		bool expected = false;
 		Line *parent = mPendingRelatedLine;
-		if (parent->mActionType == ACT_BLOCK_BEGIN) // For mPendingRelatedLine, this means an entire block preceding this line.
+		if (parent && parent->mActionType == ACT_BLOCK_BEGIN) // For mPendingRelatedLine, this means an entire block preceding this line.
 			parent = parent->mParentLine;
 		for (;; parent = parent->mParentLine)
 		{
@@ -5306,7 +5332,7 @@ ResultType Script::AddLine(ActionTypeType aActionType, LPTSTR aArg[], int aArgc,
 	// by searching only g->CurrentFunc, which has no labels in those cases.
 	//if (!mNoUpdateLabels)
 	{
-		for (Label *label = g->CurrentFunc ? g->CurrentFunc->mLastLabel : mLastLabel;
+		for (Label *label = g->CurrentFunc ? g->CurrentFunc->mLastLabel : mCurrentModule->mLastLabel;
 			label != NULL && label->mJumpToLine == NULL; label = label->mPrevLabel)
 		{
 			if (line.mActionType == ACT_ELSE || line.mActionType == ACT_UNTIL || line.mActionType == ACT_CATCH)
@@ -6790,8 +6816,9 @@ LPTSTR Script::FindLibraryFile(LPTSTR aFuncName, size_t aFuncNameLength, bool aI
 	// The legacy behaviour for #Include <A_B> is that all Libs are searched for A_B.ahk before
 	// searching for A.ahk, which means that A_B.ahk takes precedence over A.ahk even if A.ahk
 	// is defined in the local Lib and A_B.ahk is not.
-	if (auto first_underscore = _tcschr(aFuncName, '_'))
-		return FindLibraryFile(aFuncName, first_underscore - aFuncName);
+	for (i = 0; i < (int)aFuncNameLength; ++i)
+		if (aFuncName[i] == '_')
+			return FindLibraryFile(aFuncName, i);
 	return nullptr;
 }
 
@@ -7282,8 +7309,8 @@ Var *Script::FindUpVar(LPCTSTR aVarName, size_t aVarNameLength, UserFunc &aInner
 		return nullptr;
 	auto &outer = *aInner.mOuterFunc;
 	Var *outer_var;
-	if (  (outer_var = outer.mStaticVars.Find(aVarName)) || aInner.mIsStatic  )
-		return outer_var; // Can be nullptr if aInner.mIsStatic.
+	if (  (outer_var = outer.mStaticVars.Find(aVarName))  )
+		return outer_var;
 	if (  !(outer_var = outer.mVars.Find(aVarName))  )
 	{
 		if (  !(outer.mOuterFunc && (outer_var = FindUpVar(aVarName, aVarNameLength, outer, aDisplayError)))  )
@@ -7293,6 +7320,8 @@ Var *Script::FindUpVar(LPCTSTR aVarName, size_t aVarNameLength, UserFunc &aInner
 		if (!outer_var->IsNonStaticLocal())
 			return outer_var;
 	}
+	if (aInner.mIsStatic) // Function was declared static.
+		return nullptr; // "non-static local variables of the outer function are ignored"
 	// At this point, all var refs used in declarations, assignments or &var in the outer
 	// function should have already been parsed, while it's possible that some read-refs
 	// have not.  Ignore all variables that lack an assignment, &var or declaration.
@@ -7655,7 +7684,7 @@ ResultType Script::PreparseExpressions(FuncList &aFuncs)
 ResultType Script::PreparseCommands()
 {
 	for (mCurrentModule = mLastModule; mCurrentModule; mCurrentModule = mCurrentModule->mPrev)
-		if (!PreparseCommands(mCurrentModule->mFirstLine))
+		if (!PreparseCommands(mCurrentModule))
 			return FAIL;
 	mCurrentModule = &mDefaultModule; // Reset in case debugger queries properties prior to AutoExecSection().
 	return OK;
@@ -7663,12 +7692,23 @@ ResultType Script::PreparseCommands()
 
 
 
-ResultType Script::PreparseCommands(Line *aStartingLine)
+ResultType Script::PreparseCommands(ScriptModule *aModule)
 // Preparse any commands which might rely on blocks having been fully preparsed,
 // such as any command which has a jump target (label).
 // Also perform some late-stage optimizations and validation.
 {
-	for (Line *line = aStartingLine; line; line = line->mNextLine)
+	// Terminate each module with a Line so that all labels have a target and
+	// all control flow statements that need it have a non-null mRelatedLine.
+	if (aModule->mLastLine)
+	{
+		mPendingRelatedLine = aModule->mLastLine->mParentLine;
+		mCombinedLineNumber = aModule->mLastLine->mLineNumber + 1; // +1 to distinguish it from the last executable line when debugging.
+		mCurrFileIndex = aModule->mLastLine->mFileIndex;
+	}
+	if (!AddLine(ACT_EXIT))
+		return FAIL;
+
+	for (Line *line = aModule->mFirstLine; line; line = line->mNextLine)
 	{
 		LPTSTR line_raw_arg1 = LINE_RAW_ARG1; // Resolve only once to help reduce code size.
 		LPTSTR line_raw_arg2 = LINE_RAW_ARG2; //
@@ -8725,14 +8765,14 @@ unquoted_literal:
 				if (this_deref_ref.type == DT_QSTRING)
 				{
 					cp = omit_leading_whitespace(cp + 1);
-					if (*cp && _tcschr(_T("+-*&~!"), *cp) && cp[1] != '=' && (cp[1] != '&' || *cp != '&'))
+					if (*cp && _tcschr(_T("+-*&~!"), *cp) && cp[1] != '=' && (cp[1] != '&' || *cp != '&') && cp[1] != '~')
 					{
 						// The symbol following this literal string is either a unary operator or a
 						// binary operator which can't (at least logically) be applied to a literal
 						// string. Since the user's intention isn't clear, treat it as a syntax error.
 						// The most common cases where this helps are:
-						//	MsgBox % "var's address is " &var  ; Misinterpreted as SYM_BITAND.
-						//	MsgBox % "counter is now " ++var   ; Misinterpreted as SYM_POST_INCREMENT.
+						//	MsgBox "var's address is " &var  ; Misinterpreted as SYM_BITAND.
+						//	MsgBox "counter is now " ++var   ; Misinterpreted as SYM_POST_INCREMENT.
 						return LineError(_T("Unexpected operator following literal string."), FAIL, cp);
 					}
 				}
@@ -9178,6 +9218,13 @@ unquoted_literal:
 				// !x  ; Supported even if X contains a negative number, since x is recognized as an isolated operand and not something containing unary minus.
 				//
 
+				if (infix_symbol == SYM_HIGHNOT && this_infix[1].symbol == SYM_REGEXMATCH) // v2.1: !~=
+				{
+					++this_infix;
+					infix_symbol = SYM_REGEXMATCH;
+					sym_next = this_infix[1].symbol;
+				}
+
 				// Perform some rough checks to detect most syntax errors.  This is done after the
 				// precedence check so that it isn't done multiple times for a single token when
 				// the stack contains one or more higher-precedence operators, and also so that
@@ -9444,8 +9491,12 @@ standard_pop_into_postfix: // Use of a goto slightly reduces code size.
 			break;
 
 		case SYM_REGEXMATCH: // a ~= b  ->  RegExMatch(a, b)
+		{
 			this_postfix->symbol = SYM_FUNC;
+			if ((this_postfix-1)->symbol == SYM_HIGHNOT) // !~=
+				postfix[++postfix_count] = this_postfix-1; // It was skipped before, so insert it straight into postfix.
 			break;
+		}
 
 		case SYM_AND:
 		case SYM_OR:

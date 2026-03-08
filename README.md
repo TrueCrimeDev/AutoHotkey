@@ -7,7 +7,7 @@
 <p>
   <strong>Repository:</strong> <a href="https://github.com/TrueCrimeDev/AutoHotkey">TrueCrimeDev/AutoHotkey</a><br>
   <strong>Default branch:</strong> <code>alpha</code><br>
-  <strong>Current engine tag:</strong> <code>2.1-alpha.18+Console</code>
+  <strong>Current engine tag:</strong> <code>2.1-alpha.21+Console</code>
 </p>
 
 ## What This Version Changes
@@ -87,15 +87,16 @@ In practice, this supports a tight loop:
 
 ## Quick Start
 
-### Build (Windows, Visual Studio 2022)
+### Build (Windows)
 
 ```powershell
-msbuild AutoHotkeyx.sln /p:Configuration=Release /p:Platform=x64
+.\build_local.bat
 ```
 
 Output:
 
 - `bin\AutoHotkey64.exe`
+- `build_vs18.cmd` is available when this machine only has Visual Studio Build Tools 18 installed.
 
 ### Verify console behavior
 

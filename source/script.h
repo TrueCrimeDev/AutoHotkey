@@ -2147,18 +2147,16 @@ private:
 #define FDE_SUBSTITUTE_STRING L"(\u2026){}"
 #define FDE_SUBSTITUTE_STRING_LENGTH (_countof(FDE_SUBSTITUTE_STRING)-1)
 
-	Line *mFirstLine, *mLastLine;     // The first and last lines in the linked list.
-	Label *mLastLabel;  // The last defined label.
+	Line *mLastLine; // The last line added while parsing the current module.
 #ifdef CONFIG_DLL
 	int mLabelCount;
 #endif
 	FuncList mFuncs;
 
-	ScriptModuleList mModules;
 	ScriptModule mBuiltinModule { _T("AHK") };
 	ScriptModule mDefaultModule { _T("__Main") };
 	ScriptModule *mCurrentModule = &mBuiltinModule;
-	ScriptModule *mLastModule = nullptr;
+	ScriptModule *mLastModule = &mDefaultModule;
 	
 	WinGroup *mFirstGroup, *mLastGroup;  // The first and last variables in the linked list.
 	Line *mLineParent = nullptr; // While loading the script, the parent line or block-begin for the next line to be added.
@@ -2234,7 +2232,7 @@ private:
 	ResultType PreparseExpressions(FuncList &aFuncs);
 	void PreparseHotkeyIfExpr(Line *aLine);
 	ResultType PreparseCommands();
-	ResultType PreparseCommands(Line *aStartingLine);
+	ResultType PreparseCommands(ScriptModule *aModule);
 	ResultType PreparseCatchVar(Line *aLine);
 	ResultType PreparseCatchClass(Line *aLine);
 	bool IsLabelTarget(Line *aLine);
@@ -2358,7 +2356,7 @@ public:
 	void InitFuncLibrary(FuncLibrary &aLib, LPTSTR aPathBase, LPTSTR aPathSuffix);
 	LPTSTR FindLibraryFile(LPTSTR aName, size_t aNameLength, bool aIsModule = false);
 	LPCWSTR InitModuleSearchPath();
-	ResultType FindModuleFileIndex(LPCTSTR aName, FileIndexType &aFileIndex);
+	ResultType FindModuleFileIndex(LPCTSTR aName, FileIndexType &aFileIndex, FileIndexType aLocalFileIndex);
 #endif
 	IObject *GetBuiltinObject(LPCTSTR aName);
 	static Func *GetBuiltInFunc(LPCTSTR aFuncName);
@@ -2399,11 +2397,14 @@ public:
 	VarList *GlobalVars() { return &CurrentModule()->mVars; }
 	
 	ScriptModule *CurrentModule() { return g->CurrentFunc ? g->CurrentFunc->mModule : mCurrentModule; }
+	ScriptModule *FindDirectiveModule(LPCTSTR aName, ScriptModule *aList);
 	ResultType ParseModuleDirective(LPCTSTR aName);
-	bool ParseImportStatement(LPTSTR aBuf);
+	ResultType ParseImportDirective(LPTSTR aBuf);
 	ResultType CloseCurrentModule();
-	ResultType ResolveImports();
-	ResultType ResolveImports(ScriptImport &aImport);
+	void ReopenModule(ScriptModule *aMod);
+	ScriptModule *CreateModule(LPCTSTR aName);
+	ResultType ResolveImports(ScriptModule *aTerminator = nullptr);
+	ResultType ResolveImports(ScriptImport &aImport, ScriptModule *aDirectiveList);
 	Var *AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, bool aExport);
 	Var *FindImportedVar(LPCTSTR aVarName);
 

@@ -461,9 +461,9 @@ BIV_DECL_R(BIV_MouseHookInstalled)
 
 BIV_DECL_R(BIV_Hotkey)
 {
-	if (aVarName[2] == 'M') // A_MaxHotkeysPerInterval
+	if (ctoupper(aVarName[2]) == 'M') // A_MaxHotkeysPerInterval
 		_f_return_i(g_MaxHotkeysPerInterval);
-	if (aVarName[8] == 'I') // A_HotkeyInterval
+	if (ctoupper(aVarName[8]) == 'I') // A_HotkeyInterval
 		_f_return_i(g_HotkeyThrottleInterval);
 	// A_HotkeyModifierTimeout
 	_f_return_i(g_HotkeyModifierTimeout);

@@ -248,19 +248,22 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 					this_token.SetValue(result, result_length);
 					goto push_this_token;
 				} // end if (reading a var of type VAR_VIRTUAL)
-				if (this_token.var->IsUninitialized())
+				if (this_token.var->IsUninitializedSelf() || this_token.var->IsUninitializedAliasFor())
 				{
-					if (this_token.var->Type() == VAR_CONSTANT)
+					if (this_token.var->CanSelfInitialize())
 					{
-						auto result = this_token.var->InitializeConstant();
+						auto result = this_token.var->SelfInitialize();
 						if (result != OK)
 						{
 							aResult = result;
 							result_to_return = NULL;
 							goto normal_end_skip_output_var;
 						}
+						if (!this_token.var->IsUninitializedAliasFor())
+							goto push_this_token;
+						// Otherwise, the module executed but the imported var is unset.
 					}
-					else if (this_token.var_usage == VARREF_READ)
+					if (this_token.var_usage == VARREF_READ)
 					{
 						// The expression is always aborted in this case, even if the user chooses to continue the thread.
 						// If this is changed, check all other callers of unset_var and VarUnsetError() for consistency.

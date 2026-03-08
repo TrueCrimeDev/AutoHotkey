@@ -2,24 +2,36 @@
 
 ## Prerequisites
 
-- Visual Studio 2022 (Community edition works)
+- Visual Studio 2022, or Visual Studio Build Tools 18 on this machine
 - C++ Desktop Development workload installed
 
 ## Quick Build (Windows)
 
-1. Open **Developer Command Prompt for VS 2022** (search in Start menu)
+1. Use the repo helper script, which auto-detects the supported toolchain on this machine:
 
-2. Navigate to the project:
+   ```cmd
+   build_local.bat
+   ```
+
+   If only Visual Studio Build Tools 18 is installed, you can also run:
+
+   ```cmd
+   build_vs18.cmd
+   ```
+
+2. If you prefer a manual build, open **Developer Command Prompt for VS 2022** (or the equivalent Build Tools prompt)
+
+3. Navigate to the project:
    ```cmd
    cd C:\Users\uphol\Documents\Design\Coding\AutoHotkey
    ```
 
-3. Build x64 Release:
+4. Build x64 Release:
    ```cmd
    msbuild AutoHotkeyx.sln /p:Configuration=Release /p:Platform=x64
    ```
 
-4. Output will be in `bin\AutoHotkey64.exe`
+5. Output will be in `bin\AutoHotkey64.exe`
 
 ## Alternative: Visual Studio GUI
 
@@ -49,7 +61,7 @@ If it shows the MsgBox line text, the build succeeded.
 
 ## Troubleshooting
 
-**MSBuild not found**: Make sure you're using Developer Command Prompt, not regular cmd.
+**MSBuild not found**: Use `build_local.bat` or `build_vs18.cmd`, or make sure you're using a Visual Studio developer prompt instead of regular `cmd`.
 
 **Build errors**: Ensure you have the C++ workload installed in VS Installer.
 

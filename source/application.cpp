@@ -2112,3 +2112,34 @@ bool MenuIsModeless(HMENU aMenu)
 	GetMenuInfo(aMenu, &mi);
 	return (mi.dwStyle & MNS_MODELESS);
 }
+
+
+
+void MenuSelectWorkaround(LPARAM lParam, WPARAM wParam)
+{
+	// The following is a workaround for left click failing to activate a menu item in a modeless
+	// menu if the mouse was moved quickly from the main menu into a submenu (reproduced on Windows
+	// 7 and 11).  Strangely, double-click still activates the item.  Moving the selection restores
+	// normal behaviour, so the workaround just deselects the item and allows it to be reselected.
+	// Care must be taken to avoid a loop, because deselecting the item causes the parent menu to
+	// be reselected, which causes WM_MENUSELECT to be sent.
+	static HMENU sLastSelectedMenu = NULL; // Limits unnecessarily application of the workaround.
+	static bool sRecursiveCall = false; // Prevents looping due to MN_SELECTITEM causing WM_MENUSELECT.
+	if (sLastSelectedMenu != (HMENU)lParam && !sRecursiveCall)
+	{
+		sLastSelectedMenu = (HMENU)lParam; // Before SendMessage() below.
+		constexpr auto MF_WANTED = MF_MOUSESELECT | MF_HILITE; // Item selected by mouse.
+		constexpr auto MF_UNWANTED = MF_GRAYED | MF_DISABLED | MF_POPUP; // Items not needing the workaround.
+		HWND fore_win;
+		if ((HMENU)lParam != g_MenuIsTempModeless // Only submenus need the workaround.
+			&& (HIWORD(wParam) & (MF_WANTED | MF_UNWANTED)) == MF_WANTED
+			&& (fore_win = GetForegroundWindow())
+			&& SendMessage(fore_win, MN_GETHMENU, 0, 0) == lParam)
+		{
+			constexpr auto Mn_SELECTITEM = 0x01E5; // Undocumented message?
+			sRecursiveCall = true;
+			SendMessage(fore_win, Mn_SELECTITEM, -1, 0);
+			sRecursiveCall = false;
+		}
+	}
+}

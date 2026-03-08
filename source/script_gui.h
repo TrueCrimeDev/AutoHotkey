@@ -592,8 +592,8 @@ public:
 	void Escape(); // Similar to close, except typically called when the user presses ESCAPE.
 	void VisibilityChanged();
 
-	static GuiType *FindGui(HWND aHwnd);
-	static GuiType *FindGuiParent(HWND aHwnd);
+	static GuiType *FindGui(HWND aHwnd, bool aVerifyProcess = false);
+	static GuiType *FindGuiParent(HWND aHwnd, bool aVerifyProcess = false);
 
 	GuiIndexType FindControl(LPCTSTR aControlID);
 	GuiIndexType FindControlIndex(HWND aHwnd)

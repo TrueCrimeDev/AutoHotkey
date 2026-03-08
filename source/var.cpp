@@ -1413,19 +1413,67 @@ LPTSTR ResultToken::Malloc(LPTSTR aValue, size_t aLength)
 
 
 
-ResultType Var::InitializeConstant()
+ResultType Var::SelfInitialize()
 {
-	// Caller has verified !IsInitialized() && Type() == VAR_CONSTANT.
-	Var &var = *ResolveAlias();
-	ASSERT(var.mType == VAR_CONSTANT && var.IsObject() && dynamic_cast<::Object*>(var.mObject));
+	ASSERT(CanSelfInitialize());
+	ScriptModule *mod = nullptr;
+	ResultType result;
+	Var *cur = this;
+	for(;;)
+	{
+		Var &var = *cur;
+		if (var.mType == VAR_ALIAS) // Import.
+		{
+			ASSERT(dynamic_cast<ScriptModule*>(var.mObject));
+			mod = (ScriptModule*)var.mObject;
+			cur = var.mAliasFor;
+		}
+		else
+		{
+			ASSERT(var.mType == VAR_CONSTANT && var.IsObject());
+			if (var.mObject->Base() == ScriptModule::sPrototype)
+				mod = (ScriptModule*)var.mObject;
+			else
+				break;
+		}
+
+		var.mAttrib &= ~VAR_ATTRIB_UNINITIALIZED; // Only make one attempt; prevents recursion.
+		result = g_script.ExecuteModule(mod);
+		if (result != OK && result != EARLY_RETURN)
+			return result;
+
+		if (!cur->CanSelfInitialize())
+			// cur is either the module itself or an import which doesn't need initialization.
+			return OK;
+		// cur is an imported var, and either a class or something imported from another module.
+		// The next iteration will determine which and either execute the module or break.
+	}
+	// cur is a reference to a class, either imported or defined in the current module.
+	Var &var = *cur;
+	ASSERT(var.IsObject() && var.mObject->IsOfType(Object::sClassPrototype) && var.IsUninitialized());
 	var.mAttrib &= ~VAR_ATTRIB_UNINITIALIZED; // Only make one attempt; prevents infinite recursion.
 	FuncResult result_token;
 	auto cls = (::Object*)var.mObject;
 	cls->AddRef(); // Necessary because Construct() calls Release() on failure.
-	auto result = cls->Construct(result_token, nullptr, 0);
+	result = cls->Construct(result_token, nullptr, 0);
 	if (result == OK)
 		cls->Release();
 	return result;
+}
+
+
+
+void Var::SetImport(IObject *aModule, Var *aImported)
+{
+	mObject = aModule;
+	mAliasFor = aImported;
+	mType = aImported ? VAR_ALIAS : VAR_CONSTANT;
+	mAttrib |= VAR_ATTRIB_UNINITIALIZED | VAR_ATTRIB_HAS_ASSIGNMENT;
+	if (!aImported)
+	{
+		mAttrib |= VAR_ATTRIB_IS_OBJECT;
+		aModule->AddRef();
+	}
 }
 
 
