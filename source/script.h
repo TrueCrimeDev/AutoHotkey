@@ -2094,11 +2094,12 @@ struct DerefList
 
 struct UnresolvedBaseClass
 {
+	UnresolvedBaseClass *next;
 	Object *subclass, *subclass_proto;
 	LPTSTR name;
-	FileIndexType file_index;
 	LineNumberType line_number;
-	UnresolvedBaseClass *next;
+	FileIndexType file_index;
+	bool is_struct;
 };
 
 
@@ -2365,13 +2366,14 @@ public:
 	Var *AddFuncVar(UserFunc *aFunc);
 	UserFunc *AddFuncToList(UserFunc *aFunc);
 
-	ResultType DefineClass(LPTSTR aBuf, TCHAR aExport);
+	ResultType DefineClass(LPTSTR aBuf, TCHAR aExport, bool aStruct);
 	UserFunc *DefineClassInit(bool aStatic);
 	ResultType DefineClassVars(LPTSTR aBuf, bool aStatic);
 	ResultType DefineClassVarInit(LPTSTR aBuf, bool aStatic, Object *aObject, ActionTypeType aActionType = ACT_INVALID);
 	ResultType DefineClassProperty(LPTSTR aBuf, bool aStatic, bool &aBufHasBraceOrNotNeeded);
 	ResultType DefineClassPropertyXet(LPTSTR aBuf, LPTSTR aEnd);
 	Object *FindClass(LPCTSTR aClassName, size_t aClassNameLength = 0);
+	bool ResolveBaseClass(LPCTSTR aClassName, bool aStruct, Object *&aClass, Object *&aProto);
 
 	static SymbolType ConvertWordOperator(LPCTSTR aWord, size_t aLength);
 	static bool EndsWithOperator(LPTSTR aBuf, LPTSTR aBuf_marker);
@@ -2650,11 +2652,13 @@ BIF_DECL(BIF_ObjPtr);
 // Built-ins also available as methods -- these are available as functions for use primarily by overridden methods (i.e. where using the built-in methods isn't possible as they're no longer accessible).
 BIF_DECL(BIF_ObjXXX);
 
-BIF_DECL(BIF_StructFromPtr);
+BIF_DECL(NewStruct);
+BIF_DECL(Struct_At);
 
 BIF_DECL(BIF_Base);
 BIF_DECL(BIF_HasBase);
 BIF_DECL(BIF_HasProp);
+BIF_DECL(BIF_DefineProp);
 BIF_DECL(BIF_GetMethod);
 BIF_DECL(BIF_Props);
 

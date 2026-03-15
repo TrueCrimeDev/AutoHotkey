@@ -13,6 +13,10 @@
 #include <initializer_list>
 
 
+#define STRUCT_PTR_CLASS_NAME _T("Ptr")
+#define STRUCT_PTR_CLASS_SUFFIX _T(".") STRUCT_PTR_CLASS_NAME
+
+
 //
 // CallMethod - Invoke a method with no parameters, discarding the result.
 //
@@ -116,15 +120,19 @@ Object *Object::Create(ExprTokenType *aParam[], int aParamCount, ResultToken *ap
 	return obj;
 }
 
+Object *Object::CreateStruct()
+{
+	Object *obj = new Object();
+	obj->mFlags |= CannotOwnProps;
+	obj->SetBase(Object::sStructPrototype);
+	return obj;
+}
+
 Object *Object::CreateStructPtr(UINT_PTR aPtr, Object *aBase, ResultToken &aResultToken)
 {
-	auto obj = Create();
-	if (!obj)
-	{
-		aResultToken.MemoryError();
-		return nullptr;
-	}
-	obj->mFlags |= NoCallDelete;
+	Object *obj = new Object();
+	obj->mFlags |= CannotOwnProps | NoCallDelete;
+	obj->SetBase(Object::sStructPrototype);
 	if (!obj->SetBase(aBase, aResultToken))
 	{
 		obj->Release();
@@ -532,8 +540,13 @@ Object::~Object()
 		// Nested objects have been "destructed" but not actually deleted yet.
 		auto si = mBase->GetStructInfo();
 		for (auto i = si->nested_count; i > 0; --i)
-			if (mNested[i] && !mNested[i]->mRefCount)
-				delete mNested[i];
+			if (mNested[i])
+			{
+				if (!mNested[i]->mRefCount)
+					delete mNested[i];
+				else
+					mNested[i]->Release();
+			}
 		delete[] mNested;
 	}
 	if (mBase)
@@ -796,7 +809,7 @@ ResultType Object::SetProperty(ResultToken &aResultToken, int aFlags, name_t aNa
 
 	if (this != that)
 	{
-		if (aFlags & IF_NO_NEW_PROPS)
+		if ((aFlags & IF_NO_NEW_PROPS) || (mFlags & CannotOwnProps))
 			return INVOKE_NOT_HANDLED;
 		if (aParam[0]->symbol == SYM_MISSING)
 			return OK; // No action needed for x.y := unset.
@@ -852,14 +865,17 @@ Object *Object::GetThisForTypedValue(ResultToken &aResultToken, int aFlags, name
 
 ResultType Object::GetTypedValue(ResultToken &aResultToken, int aFlags, TypedProperty &aProp)
 {
-	// TODO: allow inheriting DataPtr()?
-	auto ptr = (void*)(DataPtr() + aProp.data_offset);
+	auto ptr = DataPtr() + aProp.data_offset;
 	if (aProp.class_object) // Struct type.
 	{
+		if (aProp.pointed_proto) // Pointer type.
+		{
+			return GetBoxedPointer(aResultToken, *(UINT_PTR*)ptr, aProp.pointed_proto, aProp.object_index);
+		}
 		Object *nested = mNested ? mNested[aProp.object_index] : nullptr;
 		if (!nested) // Since it wasn't constructed, this must be a pointer, not a real struct.
 		{
-			auto result = NestedSparseInit(aResultToken, aProp, (UINT_PTR)ptr);
+			auto result = NestedSparseInit(aResultToken, aProp, ptr);
 			if (result != OK)
 				return result;
 			nested = mNested[aProp.object_index];
@@ -880,26 +896,62 @@ ResultType Object::GetTypedValue(ResultToken &aResultToken, int aFlags, TypedPro
 	else if (aProp.item_count)
 	{
 		ASSERT(aProp.type == MdType::Void); // Untyped buffer.
-		aResultToken.SetValue((size_t)ptr);
+		aResultToken.SetValue(ptr);
 	}
 	else
 	{
-		TypedPtrToToken(aProp.type, ptr, aResultToken);
+		TypedPtrToToken(aProp.type, (void*)ptr, aResultToken);
 		ASSERT(aResultToken.symbol != SYM_OBJECT); // Shouldn't happen since we don't support typed Object-pointer properties, but if it happened we may need to AddRef().
 	}
 	return OK;
 }
 
 
+ResultType Object::GetBoxedPointer(ResultToken &aResultToken, UINT_PTR aPtr, Object *aPrototype, size_t aCacheIndex)
+{
+	auto sp = mNested ? mNested[aCacheIndex] : nullptr;
+	if (sp && sp->DataPtr() != aPtr)
+	{
+		// Cached struct object pointer no longer matches.
+		mNested[aCacheIndex] = nullptr;
+		sp->Release();
+		sp = nullptr;
+	}
+	if (!sp)
+	{
+		if (!aPtr)
+		{
+			aResultToken.symbol = SYM_MISSING;
+			return OK;
+		}
+		// Caching sp seems more helpful than avoiding the memory allocation when
+		// mNested == nullptr, for behaviour more than performance, especially if
+		// __Value is repeatedly invoked implicitly via a ByRef parameter or struct.
+		if (!mNested && !NestedSparseInit(aResultToken))
+			return FAIL;
+		mNested[aCacheIndex] = sp = CreateStructPtr(aPtr, aPrototype, aResultToken);
+		if (!sp)
+			return FAIL;
+	}
+	sp->AddRef();
+	aResultToken.SetValue(sp);
+	return OK;
+}
+
+
 ResultType Object::SetTypedValue(ResultToken &aResultToken, int aFlags, name_t aName, TypedProperty &aProp, ExprTokenType &aValue)
 {
-	auto ptr = (void*)(DataPtr() + aProp.data_offset);
+	auto ptr = DataPtr() + aProp.data_offset;
 	if (aProp.class_object)
 	{
-		Object* nested = mNested ? mNested[aProp.object_index] : nullptr;
-		if (!nested) // Since it wasn't constructed, this must be a pointer, not a real struct.
+		if (aProp.pointed_proto) // Pointer type.
 		{
-			auto result = NestedSparseInit(aResultToken, aProp, (UINT_PTR)ptr);
+			return SetBoxedPointer(aResultToken, aValue, *(UINT_PTR*)ptr, aProp.pointed_proto, aProp.object_index, aProp.class_object);
+		}
+		Object* nested = mNested ? mNested[aProp.object_index] : nullptr;
+		if (!nested) // Since it wasn't constructed, either "this" is a pointer or aProp is a pointer type.
+		{
+			auto result = NestedSparseInit(aResultToken, aProp, ptr);
 			if (result != OK)
 				return result;
 			nested = mNested[aProp.object_index];
@@ -914,9 +966,87 @@ ResultType Object::SetTypedValue(ResultToken &aResultToken, int aFlags, name_t a
 			return result;
 		return aResultToken.Error(_T("Assignment to struct is not supported."));
 	}
-	if (aProp.item_count || aProp.class_object)
+	if (aProp.item_count)
 		return aResultToken.Error(ERR_PROPERTY_READONLY, aName);
-	return SetValueOfTypeAtPtr(aProp.type, ptr, aValue, aResultToken);
+	return SetValueOfTypeAtPtr(aProp.type, (void*)ptr, aValue, aResultToken);
+}
+
+
+ResultType Object::SetBoxedPointer(ResultToken &aResultToken, ExprTokenType &aValue, UINT_PTR &aPtr, Object *aPrototype, size_t aCacheIndex, Object *aPointerClass)
+{
+	auto v = TokenToObject(aValue);
+	Object *p;
+	UINT_PTR np;
+	if (v && v->IsOfType(aPrototype))
+	{
+		p = (Object*)v;
+		np = p->DataPtr();
+		if (!np)
+			p = nullptr;
+	}
+	else if (aValue.symbol == SYM_MISSING)
+	{
+		p = nullptr;
+		np = 0;
+	}
+	else if (v && v->IsOfType(aPointerClass ? aPointerClass->ClassGetPrototype() : Base())
+		&& (np = ((Object*)v)->DataPtr())) // A pointer struct with no typed data is invalid.
+	{
+		p = (Object*)v; // Struct.Ptr
+		np = *(UINT_PTR*)np; // p->DataPtr() was the address of the pointer variable, so dereference it.
+		p = p->mNested ? p->mNested[1] : nullptr;
+		if (p && p->DataPtr() != np)
+			p = nullptr;
+	}
+	else
+		return aResultToken.TypeError(aPrototype->GetOwnPropString(_T("__Class")), aValue);
+	
+	aPtr = np;
+
+	if (!mNested)
+	{
+		// This is done only now that we have a use for mNested.
+		if (p && !NestedSparseInit(aResultToken))
+			return FAIL;
+	}
+	else if (mNested[aCacheIndex])
+		mNested[aCacheIndex]->Release();
+	if (mNested)
+	{
+		if (p)
+			p->AddRef();
+		mNested[aCacheIndex] = p;
+	}
+	return OK;
+}
+
+
+void Object::StructGet(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
+{
+	switch (aID)
+	{
+	case M_Struct_Ptr: _o_return(DataPtr());
+	case M_Struct_Size: _o_return(DataSize());
+	}
+}
+
+
+BIF_DECL(NewStruct)
+{
+	Object *obj = Object::CreateStruct();
+	obj->New(aResultToken, aParam, aParamCount);
+}
+
+
+void Object::StructPtrInvoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
+{
+	auto si = GetStructInfo();
+	auto proto = si->pointed_class->ClassGetPrototype();
+	auto &ptr = *(UINT_PTR*)DataPtr();
+	if (IS_INVOKE_GET)
+		GetBoxedPointer(aResultToken, ptr, proto, 1);
+	else
+		SetBoxedPointer(aResultToken, *aParam[0], ptr, proto, 1, nullptr);
 }
 
 
@@ -1191,6 +1321,22 @@ Object *Object::GetNativeBase()
 }
 
 
+Object *Object::ClassGetPrototype()
+{
+	if (IObject *p = GetOwnPropObj(_T("Prototype")))
+	{
+		// A valid prototype always has exactly the vftbl of Object::sPrototype.
+		// This produces smaller and faster code than dynamic_cast<Object*>().
+		// Callers want to be sure this is really an Object* and a Prototype,
+		// not something odd like {Prototype: Map()} or {Prototype: RECT()}.
+		if (*(void**)p == *(void**)(IObject*)Object::sPrototype
+			&& ((Object*)p)->IsClassPrototype())
+			return (Object*)p;
+	}
+	return nullptr;
+}
+
+
 bool Object::CanSetBase(Object *aBase)
 {
 	auto new_native_base = (!aBase || aBase->IsNativeClassPrototype())
@@ -1353,6 +1499,39 @@ Object *Object::CreateClass(LPTSTR aClassName, Object *aBase, Object *aPrototype
 	var->MakeReadOnly();
 
 	return class_obj;
+}
+
+void Object::CreatePtrClass(LPTSTR aClassName, Object *aClass)
+{
+	auto len = _tcslen(aClassName);
+	auto buf = len ? (LPTSTR)_malloca((len + _countof(STRUCT_PTR_CLASS_SUFFIX)) * sizeof(TCHAR)) : nullptr;
+	LPTSTR class_name;
+	if (buf)
+	{
+		tmemcpy(buf, aClassName, len);
+		tmemcpy(buf + len, STRUCT_PTR_CLASS_SUFFIX, _countof(STRUCT_PTR_CLASS_SUFFIX));
+		class_name = buf;
+	}
+	else
+		class_name = STRUCT_PTR_CLASS_NAME;
+	auto ptr_pro = CreatePrototype(class_name, Object::sPtrPrototype);
+	auto ptr_cls = CreateClass(ptr_pro, Object::sPtrClass);
+	aClass->DefineClass(STRUCT_PTR_CLASS_NAME, ptr_cls, true);
+	auto tp = ptr_pro->DefineTypedProperty(_T("Value"));
+	tp->type = MdType::IntPtr;
+	tp->class_object = nullptr;
+	tp->item_count = 0;
+	tp->data_offset = 0;
+	auto si = ptr_pro->GetStructInfo(true);
+	si->align = si->size = sizeof(void*);
+	si->nested_count = 1;
+	si->pointed_class = aClass;
+	ObjectMember members[]{
+		Object_Member(__Value, StructPtrInvoke, 0, IT_SET)
+	};
+	DefineMembers(ptr_pro, class_name, members, _countof(members));
+	ptr_pro->mFlags &= ~NativeClassPrototype;
+	_freea(buf);
 }
 
 
@@ -1625,11 +1804,13 @@ TypedProperty *Object::DefineTypedProperty(name_t aName)
 FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, size_t aCount, size_t aPack)
 {
 	size_t psize = 0, palign = 0;
+	StructInfo *psi = nullptr;
 	if (aClass)
 	{
-		if (auto proto = dynamic_cast<Object*>(aClass->GetOwnPropObj(_T("Prototype"))))
+		auto proto = aClass->ClassGetPrototype();
+		if (proto && proto->IsDerivedFrom(Object::sStructPrototype))
 		{
-			if (auto psi = proto->GetStructInfo())
+			if (psi = ((Object*)proto)->GetStructInfo())
 			{
 				psize = psi->size;
 				palign = psi->align;
@@ -1662,6 +1843,7 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 		tprop->object_index = ++si->nested_count; // 1-based, as index 0 is reserved.
 		aClass->AddRef();
 	}
+	tprop->pointed_proto = psi && psi->pointed_class ? psi->pointed_class->ClassGetPrototype() : nullptr;
 	tprop->item_count = aCount;
 	if (aPack && palign > aPack)
 		palign = aPack;
@@ -1706,6 +1888,7 @@ Object::StructInfo *Object::GetStructInfo(bool aDefine)
 			si->size = 0;
 			si->align = 1;
 			si->nested_count = 0;
+			si->pointed_class = nullptr;
 		}
 		mData = si;
 		mFlags |= DataIsStructInfo | DataIsAllocatedFlag;
@@ -1761,9 +1944,11 @@ ResultType FillPropertyFlags(IObject *aObj, bool aSetter, Property &aProp, Resul
 
 void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
 {
+	if (mFlags & CannotOwnProps)
+		_o_throw_type(_T("Object"), ExprTokenType(this));
 	auto name = ParamIndexToString(0, _f_number_buf);
 	if (!*name)
-		_o_throw_param(0);
+		_o_throw_param(0 + aID);
 	ExprTokenType getter, setter, method, value;
 	getter.symbol = SYM_INVALID;
 	setter.symbol = SYM_INVALID;
@@ -1782,7 +1967,7 @@ void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 			AddRef();
 			_o_return(this);
 		case FR_E_ARGS:
-			_o_throw_param(1);
+			_o_throw_param(1 + aID);
 		case FR_E_OUTOFMEM:
 			_o_throw_oom;
 		default:
@@ -1797,7 +1982,7 @@ void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 		// To help prevent errors, throw if none of the above properties were present.  This also serves to
 		// reserve some cases for possible future use, such as passing a function object to imply {get:...}.
 		|| getter.symbol == SYM_INVALID && setter.symbol == SYM_INVALID && method.symbol == SYM_INVALID && value.symbol == SYM_INVALID)
-		_o_throw_param(1);
+		_o_throw_param(1 + aID);
 	if (value.symbol != SYM_INVALID) // Above already verified that neither Get nor Set was present.
 	{
 		if (!SetOwnProp(name, value))
@@ -1880,7 +2065,7 @@ void Object::__Ref(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType
 	{
 		if (auto field = that->FindField(name))
 		{
-			if (field->symbol != SYM_TYPED_FIELD || !field->tprop->class_object)
+			if (field->symbol != SYM_TYPED_FIELD || !field->tprop->class_object || field->tprop->pointed_proto)
 				break;
 			Object *nested = mNested[field->tprop->object_index];
 			if (!nested)
@@ -1989,7 +2174,7 @@ ResultType Object::NestedNew(ResultToken &aResultToken, StructInfo *si)
 		for (index_t i = 0; i < base->mFields.Length(); ++i)
 		{
 			auto &field = base->mFields[i];
-			if (field.symbol == SYM_TYPED_FIELD && field.tprop->class_object)
+			if (field.symbol == SYM_TYPED_FIELD && field.tprop->class_object && !field.tprop->pointed_proto)
 			{
 				ASSERT(field.tprop->object_index <= si->nested_count);
 				ASSERT(!mNested[field.tprop->object_index]); // Should always be null since every new property gets a new object_index, even if it shadows a base property.
@@ -2002,19 +2187,13 @@ ResultType Object::NestedNew(ResultToken &aResultToken, StructInfo *si)
 	auto data_ptr = DataPtr();
 
 	// Second pass: construct objects.
-	ResultType result;
+	ResultType result = OK;
 	size_t i;
 	for (i = 1; i <= si->nested_count; ++i)
 	{
-		if (!mNested[i]) // Possible in case of redefinition via DefineProp.
+		if (!mNested[i]) // Possible in case of redefinition via DefineProp, or Ptr classes.
 			continue;
-		// TODO: support native types other than Object
-		auto nested = Object::Create();
-		if (!nested)
-		{
-			result = aResultToken.MemoryError();
-			break;
-		}
+		auto nested = CreateStruct();
 		nested->SetDataPtr(data_ptr + offsets[i-1]);
 		ExprTokenType prop_class { mNested[i] }, *pcarg {&prop_class};
 		result = nested->New(aResultToken, &pcarg, 1, this);
@@ -2056,7 +2235,9 @@ ResultType Object::NestedSparseInit(ResultToken& aResultToken, TypedProperty& aP
 	ASSERT(!mNested || !mNested[aProp.object_index]);
 	if (!NestedSparseInit(aResultToken))
 		return FAIL;
-	auto proto = dynamic_cast<Object*>(aProp.class_object->GetOwnPropObj(_T("Prototype")));
+	if (aProp.pointed_proto)
+		return OK;
+	auto proto = aProp.class_object->ClassGetPrototype();
 	if (!proto)
 		return INVOKE_NOT_HANDLED;
 	auto nested = CreateStructPtr(aPtr, proto, aResultToken);
@@ -3675,6 +3856,14 @@ ObjectMember PropRef::sMembers[]
 };
 
 
+ObjectMember Object::sStructMembers[]
+{
+	Object_Method1(__Ref, 1, 1),
+	Object_Member(Ptr, StructGet, M_Struct_Ptr, IT_GET),
+	Object_Member(Size, StructGet, M_Struct_Size, IT_GET)
+};
+
+
 
 struct ClassDef
 {
@@ -3803,8 +3992,15 @@ void Object::CreateRootPrototypes()
 		}},
 		{_T("Module"), &ScriptModule::sPrototype},
 		{_T("PropRef"), &PropRef::sPrototype, {PropRef_Call, 3, 3}, PropRef::sMembers, _countof(PropRef::sMembers)},
+		{_T("Struct"), &sStructPrototype, NewStruct, sStructMembers, _countof(sStructMembers)},
 		{_T("VarRef"), &sVarRefPrototype, no_ctor, VarRef::sMembers, _countof(VarRef::sMembers)}
 	});
+
+	sStructClass = (Object*)g_script.FindGlobalVar(_T("Struct"), 6)->Object();
+	sStructClass->DefineMethod(_T("At"), new BuiltInFunc {_T("Struct.At"), Struct_At, 2, 2});
+	sPtrPrototype = CreatePrototype(_T("Struct") STRUCT_PTR_CLASS_SUFFIX, sStructPrototype);
+	sPtrClass = CreateClass(sPtrPrototype, sStructClass);
+	sStructClass->DefineClass(STRUCT_PTR_CLASS_NAME, sPtrClass, true);
 
 	GuiControlType::DefineControlClasses();
 	DefineComPrototypeMembers();
@@ -3820,10 +4016,12 @@ Object *Func::sPrototype;
 Object *Object::sPrototype;
 
 Object *Object::sClassPrototype;
+Object *Object::sStructPrototype, *Object::sPtrPrototype;
 Object *Array::sPrototype;
 Object *Map::sPrototype;
 
 Object *Object::sClass;
+Object *Object::sStructClass, *Object::sPtrClass;
 
 Object *Closure::sPrototype;
 Object *BoundFunc::sPrototype;
@@ -3875,7 +4073,7 @@ Object *Object::ValueBase(ExprTokenType &aValue)
 
 
 
-void Object::DefineClass(name_t aName, Object *aClass)
+void Object::DefineClass(name_t aName, Object *aClass, bool aIsStructPtrClass)
 {
 	auto prop = DefineProperty(aName);
 
@@ -3883,7 +4081,7 @@ void Object::DefineClass(name_t aName, Object *aClass)
 
 	auto info = SimpleHeap::Alloc<NestedClassInfo>();
 	info->class_object = aClass;
-	info->constructed = false;
+	info->constructed = aIsStructPtrClass;
 	aClass->AddRef();
 
 	auto get = new BuiltInFunc { _T(""), Class_GetNestedClass, 1, 1, false, info };
@@ -3947,7 +4145,7 @@ BIF_DECL(Class_New)
 		++aParam, --aParamCount;
 	}
 	Object *base_class = obj0 ? dynamic_cast<Object *>(obj0) : ParamIndexIsOmitted(0) ? Object::sClass : dynamic_cast<Object *>(ParamIndexToObject(0));
-	Object *base_proto = base_class ? dynamic_cast<Object *>(base_class->GetOwnPropObj(_T("Prototype"))) : nullptr;
+	Object *base_proto = base_class ? base_class->ClassGetPrototype() : nullptr;
 	if (!base_proto)
 		return (void)aResultToken.ParamError(obj0 ? 0 : 1, aParam[0], _T("Class"));
 	if (aParamCount)
@@ -3956,6 +4154,10 @@ BIF_DECL(Class_New)
 	auto proto = Object::CreatePrototype(name, base_proto);
 	auto class_obj = Object::CreateClass(proto, base_class);
 	proto->Release();
+
+	if (class_obj->IsDerivedFrom(Object::sStructClass))
+		Object::CreatePtrClass(name, class_obj);
+
 	// Don't call any inherited __Init, since that would reinitialize static variables and duplicate
 	// any typed properties defined by that one class.  This either releases or returns class_obj:
 	class_obj->ConstructNoInit(aResultToken, aParam, aParamCount, ExprTokenType(class_obj));

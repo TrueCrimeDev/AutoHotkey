@@ -53,6 +53,7 @@ FuncEntry g_BIF[] =
 	BIF1(ComObjType, 1, 2),
 	BIF1(ComObjValue, 1, 1),
 	BIF1(Cos, 1, 1),
+	BIF1(DefineProp, 3, 3),
 #ifdef ENABLE_DLLCALL
 	BIFn(DllCall, 1, NA, BIF_DllCall),
 #endif
@@ -74,7 +75,7 @@ FuncEntry g_BIF[] =
 	BIFi(IsLower, 1, 2, BIF_IsTypeish, VAR_TYPE_LOWER),
 	BIFi(IsNumber, 1, 1, BIF_IsTypeish, VAR_TYPE_NUMBER),
 	BIF1(IsObject, 1, 1),
-	BIFi(IsSetRef, 1, 1, BIF_IsSet, 0, {1}),
+	BIFi(IsSetRef, 1, 1, BIF_IsSet, 1, {1}),
 	BIFi(IsSpace, 1, 1, BIF_IsTypeish, VAR_TYPE_SPACE),
 	BIFi(IsTime, 1, 1, BIF_IsTypeish, VAR_TYPE_TIME),
 	BIFi(IsUpper, 1, 2, BIF_IsTypeish, VAR_TYPE_UPPER),
@@ -127,13 +128,12 @@ FuncEntry g_BIF[] =
 	BIF1(StrPtr, 1, 1),
 	BIFn(StrPut, 1, 4, BIF_StrGetPut),
 	BIFn(StrTitle, 1, 1, BIF_StrCase),
-	BIF1(StructFromPtr, 2, 2),
 	BIFn(StrUpper, 1, 1, BIF_StrCase),
 	BIF1(SubStr, 2, 3),
 	BIF1(Tan, 1, 1),
 	BIF1(Throw, 0, NA),
 	BIFn(Trim, 1, 2, BIF_Trim),
-	BIF1(Type, 1, 1),
+	BIF1(Type, 0, 1),
 	BIF1(VarSetStrCapacity, 1, 2, {1}),
 	BIF1(VerCompare, 2, 2),
 	BIFn(WinActive, 0, 4, BIF_WinExistActive),
@@ -1521,9 +1521,10 @@ bool Script::IsFunctionDefinition(LPTSTR aBuf, LPTSTR aNextBuf)
 	LPTSTR action_start = aBuf;
 	LPTSTR action_end = find_identifier_end(aBuf);
 	bool is_default_export = false;
+	bool is_export = false;
 	if (IS_SPACE_OR_TAB(*action_end) && action_end - action_start == 6) // Allow modifier keywords.
 	{
-		bool is_export = !_tcsnicmp(aBuf, _T("Export"), 6);
+		is_export = !_tcsnicmp(aBuf, _T("Export"), 6);
 		if (is_export || !_tcsnicmp(aBuf, _T("Static"), 6))
 			action_start = omit_leading_whitespace(action_end);
 		if (is_default_export = is_export && !_tcsnicmp(action_start, _T("Default"), 7) && IS_SPACE_OR_TAB(action_start[7]))
@@ -1557,12 +1558,12 @@ bool Script::IsFunctionDefinition(LPTSTR aBuf, LPTSTR aNextBuf)
 	LPTSTR next_token = omit_leading_whitespace(param_end + 1);
 	return *next_token == 0 && *aNextBuf == '{' // Brace on next line.
 		|| *next_token == '{' && next_token[1] == 0 // Brace on same line.
-		|| *next_token == '=' && next_token[1] == '>'; // Fn() => expr
+		|| *next_token == '=' && next_token[1] == '>' && !is_export; // Fn() => expr
 }
 
 
 
-inline LPTSTR IsClassDefinition(LPTSTR aBuf, TCHAR *aExport)
+inline LPTSTR IsClassDefinition(LPTSTR aBuf, TCHAR *aExport, bool &aStruct)
 {
 	if (aExport) // Export is permitted.
 	{
@@ -1579,9 +1580,13 @@ inline LPTSTR IsClassDefinition(LPTSTR aBuf, TCHAR *aExport)
 				*aExport = 'E'; // Non-default export.
 		}
 	}
-	if (_tcsnicmp(aBuf, _T("Class"), 5) || !IS_SPACE_OR_TAB(aBuf[5])) // i.e. it's not "Class" followed by a space or tab.
+	if (aStruct = !_tcsnicmp(aBuf, _T("Struct"), 6) && IS_SPACE_OR_TAB(aBuf[6]))
+		aBuf += 7;
+	else if (!_tcsnicmp(aBuf, _T("Class"), 5) && IS_SPACE_OR_TAB(aBuf[5]))
+		aBuf += 6;
+	else
 		return NULL;
-	LPTSTR class_name = omit_leading_whitespace(aBuf + 6);
+	LPTSTR class_name = omit_leading_whitespace(aBuf);
 	if (_tcschr(EXPR_ALL_SYMBOLS, *class_name))
 		// It's probably something like "Class := GetClass()".
 		return NULL;
@@ -1828,6 +1833,8 @@ ResultType Script::LoadIncludedFile(TextStream *fp)
 	int source_file_index = mCurrFileIndex;
 
 	bool blocks_previously_open = mLineParent || mClassObjectCount; // For error detection.
+
+	auto module_previously_open = mCurrentModule;
 
 	LineBuffer buf, next_buf;
 	size_t &buf_length = buf.length, &next_buf_length = next_buf.length;
@@ -2370,15 +2377,19 @@ process_completed_line:
 
 		// Handle this first so that GetLineContExpr() doesn't need to detect it for OTB exclusion:
 		TCHAR class_export_type = 0;
-		if (LPTSTR class_name = IsClassDefinition(buf, mClassObjectCount ? nullptr : &class_export_type))
+		bool is_struct_class;
+		if (LPTSTR class_name = IsClassDefinition(buf, mClassObjectCount ? nullptr : &class_export_type, is_struct_class))
 		{
-			if (g->CurrentFunc)
-				return ScriptError(_T("Functions cannot contain classes."), buf);
-			if (!ClassHasOpenBrace(buf, buf_length, next_buf, next_buf_length))
+			if (ClassHasOpenBrace(buf, buf_length, next_buf, next_buf_length))
+			{
+				if (g->CurrentFunc)
+					return ScriptError(_T("Functions cannot contain classes."), buf);
+				if (!DefineClass(class_name, class_export_type, is_struct_class))
+					return FAIL;
+				goto continue_main_loop;
+			}
+			else if (!is_struct_class)
 				return ScriptError(ERR_MISSING_OPEN_BRACE, buf);
-			if (!DefineClass(class_name, class_export_type))
-				return FAIL;
-			goto continue_main_loop;
 		}
 
 		// Aside from goto/break/continue, anything not already handled above is either an expression
@@ -2508,12 +2519,8 @@ continue_main_loop: // This method is used in lieu of "continue" for performance
 		ScriptWarning(g_WarnMode, _T("Some non-ASCII characters could not be decoded.\n\nEnsure that the file is saved as UTF-8."));
 	}
 
-	if (mCurrentModule->mOuterFileIndex == source_file_index)
-	{
-		auto mod = mCurrentModule;
-		do mod = mod->mPrev; while (mod->mOuterFileIndex == source_file_index);
-		ReopenModule(mod);
-	}
+	if (mCurrentModule != module_previously_open)
+		ReopenModule(module_previously_open);
 
 	return OK;
 }
@@ -6190,13 +6197,15 @@ ResultType Script::DefineFunc(LPTSTR aBuf, bool aStatic, FuncDefType aIsInExpres
 
 
 
-ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport)
+ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport, bool aStruct)
 {
 	if (mClassObjectCount == MAX_NESTED_CLASSES)
 		return ScriptError(_T("This class definition is nested too deep."), aBuf);
 
 	LPTSTR cp, class_name = aBuf, base_class_name = nullptr;
-	Object *outer_class, *base_class = Object::sClass, *base_prototype = Object::sPrototype;
+	Object *outer_class;
+	Object *base_class = aStruct ? Object::sStructClass : Object::sClass;
+	Object *base_prototype = aStruct ? Object::sStructPrototype : Object::sPrototype;
 	Var *class_var;
 	ExprTokenType token;
 
@@ -6211,8 +6220,7 @@ ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport)
 		base_class_name = omit_leading_whitespace(cp + 8);
 		if (!*base_class_name)
 			return ScriptError(_T("Missing class name."), cp);
-		base_class = FindClass(base_class_name);
-		base_prototype = base_class ? (Object *)base_class->GetOwnPropObj(_T("Prototype")) : nullptr;
+		ResolveBaseClass(base_class_name, aStruct, base_class, base_prototype);
 	}
 
 	// Validate the name even if this is a nested definition, for consistency.
@@ -6276,6 +6284,7 @@ ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport)
 		// but it could be a class defined below this point, or a class defined in a module
 		// which hasn't been imported yet or has been imported but hasn't been resolved.
 		auto urc = new UnresolvedBaseClass;
+		urc->is_struct = aStruct;
 		urc->subclass = class_object;
 		urc->subclass_proto = prototype;
 		urc->name = _tcsdup(base_class_name);
@@ -6311,6 +6320,9 @@ ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport)
 		if (!DefineClassVarInit(base_class_name, true, class_object, ACT_EXPRESSION))
 			return FAIL;
 	}
+
+	if (aStruct)
+		Object::CreatePtrClass(mClassName, class_object);
 	
 	// This line enables a class without any static methods to be freed at program exit,
 	// or sooner if it's a nested class and the script removes it from the outer class.
@@ -6517,7 +6529,7 @@ ResultType Script::DefineClassVars(LPTSTR aBuf, bool aStatic)
 					TCHAR qu[2] { 0 };
 					if (TypeCode(type_name) != MdType::Void)
 						qu[0] = '\'';
-					_sntprintf(type_buf, _countof(type_buf), _T("this.Prototype.DefineProp('%s',{Type:%s%s%s,Pack:%i})")
+					_sntprintf(type_buf, _countof(type_buf), _T("DefineProp(this.Prototype,'%s',{Type:%s%s%s,Pack:%i})")
 						, item, qu, type_name, qu, mClassStructPack[mClassObjectCount]);
 					if (!DefineClassVarInit(type_buf, true, class_object, ACT_EXPRESSION))
 						return FAIL;
@@ -6722,6 +6734,16 @@ Object *Script::FindClass(LPCTSTR aClassName, size_t aClassNameLength)
 	}
 
 	return base_object;
+}
+
+
+bool Script::ResolveBaseClass(LPCTSTR aClassName, bool aStruct, Object *&aClass, Object *&aProto)
+{
+	aClass = FindClass(aClassName);
+	aProto = aClass ? (Object*)aClass->GetOwnPropObj(_T("Prototype")) : nullptr;
+	return aProto
+		&& aStruct == (aProto->IsDerivedFrom(Object::sStructPrototype)
+					|| aProto == Object::sStructPrototype);
 }
 
 
@@ -8060,7 +8082,7 @@ ResultType Line::ExpressionToPostfix(ArgStruct &aArg, ExprTokenType *&aInfix)
 	// IsSet is constructed here because it's a sort of intrinsic function with its own
 	// special rules.  ExprOp<> isn't used because it doesn't have parameter count limits
 	// or a name (which is displayed when the parameter count is invalid, for instance).
-	static BuiltInFunc *sIsSetFunc = new BuiltInFunc { _T("IsSet"), BIF_IsSet, 1, 1 };
+	static BuiltInFunc *sIsSetFunc = new BuiltInFunc { _T("IsSet"), BIF_IsSet, 0, 1 };
 
 	ExprTokenType *infix = NULL;
 	int infix_size = 0, infix_count = 0, allow_for_extra_postfix = 0;
@@ -9218,19 +9240,20 @@ unquoted_literal:
 				// !x  ; Supported even if X contains a negative number, since x is recognized as an isolated operand and not something containing unary minus.
 				//
 
+				sym_prev = this_infix > infix ? this_infix[-1].symbol : SYM_INVALID;
+
 				if (infix_symbol == SYM_HIGHNOT && this_infix[1].symbol == SYM_REGEXMATCH) // v2.1: !~=
 				{
 					++this_infix;
 					infix_symbol = SYM_REGEXMATCH;
-					sym_next = this_infix[1].symbol;
 				}
+				
+				sym_next = this_infix[1].symbol; // It will be SYM_INVALID if there are no more.
 
 				// Perform some rough checks to detect most syntax errors.  This is done after the
 				// precedence check so that it isn't done multiple times for a single token when
 				// the stack contains one or more higher-precedence operators, and also so that
 				// the left operand (if this is a binary operator) has been popped into postfix.
-				sym_prev = this_infix > infix ? this_infix[-1].symbol : SYM_INVALID;
-				sym_next = this_infix[1].symbol; // It will be SYM_INVALID if there are no more.
 				SymbolType sym_postfix = postfix_count ? postfix[postfix_count-1]->symbol : SYM_INVALID;
 				if (IS_ASSIGNMENT_OR_POST_OP(infix_symbol))
 				{
@@ -9468,7 +9491,8 @@ standard_pop_into_postfix: // Use of a goto slightly reduces code size.
 			}
 			else if ((this_postfix->callsite->flags & IT_BITMASK) == IT_CALL)
 			{
-				if (this_postfix->callsite->param_count == 1 && this_postfix->callsite->func == sIsSetFunc)
+				if (this_postfix->callsite->param_count == 1 && this_postfix->callsite->func == sIsSetFunc
+					&& !(this_postfix->callsite->flags & EIF_ISSET_UNSET))
 				{
 					auto &last_postfix = *postfix[postfix_count - 1];
 					if (last_postfix.symbol == SYM_VAR || last_postfix.symbol == SYM_DYNAMIC)
@@ -9485,7 +9509,8 @@ standard_pop_into_postfix: // Use of a goto slightly reduces code size.
 							break;
 						}
 					}
-					return LineError(_T("IsSet requires a variable."), FAIL, this_postfix->error_reporting_marker);
+					if (last_postfix.symbol != SYM_MISSING)
+						return LineError(_T("IsSet requires a variable or unset expression."), FAIL, this_postfix->error_reporting_marker);
 				}
 			}
 			break;
@@ -9566,7 +9591,12 @@ standard_pop_into_postfix: // Use of a goto slightly reduces code size.
 			if (IS_CPAREN_LIKE(infix_symbol) || infix_symbol == SYM_COMMA)
 			{
 				if (stack_symbol == SYM_FUNC && this_postfix < chain_end)
-					return LineError(_T("This unset expression requires a final \"?\" or \"??\"."), FAIL, this_postfix->error_reporting_marker);
+				{
+					if ((**stk).callsite->func == sIsSetFunc)
+						(**stk).callsite->flags |= EIF_ISSET_UNSET;
+					else
+						return LineError(_T("This unset expression requires a final \"?\" or \"??\"."), FAIL, this_postfix->error_reporting_marker);
+				}
 			}
 			else if (infix_symbol == SYM_OR_MAYBE || infix_symbol == SYM_MAYBE) // SYM_MAYBE is right-associative, so found in infix_symbol only due to parentheses; e.g. ((a?.b)?)
 			{
@@ -12562,15 +12592,15 @@ ResultType Script::PreparseVarRefs()
 		if (!PreparseVarRefs(mCurrentModule->mFirstLine))
 			return FAIL;
 
+		mCurrLine = nullptr;
 		while (auto *unc = mCurrentModule->mUnresolvedBaseClass)
 		{
-			Object *proto, *cls = FindClass(unc->name);
-			if (!cls || !(proto = (Object*)cls->GetOwnPropObj(_T("Prototype"))))
+			Object *proto, *cls;
+			if (!ResolveBaseClass(unc->name, unc->is_struct, cls, proto))
 			{
-				mCurrLine = NULL;
 				mCurrFileIndex = unc->file_index;
 				mCombinedLineNumber = unc->line_number;
-				return ScriptError(_T("Unknown class."), unc->name);
+				return ScriptError(_T("Invalid base class."), unc->name);
 			}
 			unc->subclass->SetBase(cls);
 			unc->subclass_proto->SetBase(proto);

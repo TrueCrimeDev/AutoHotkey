@@ -219,7 +219,7 @@ Var *Script::AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, 
 
 ResultType Script::ResolveImports(ScriptModule *aTerminator)
 {
-	ScriptModule *directive_list = nullptr;
+	ScriptModule *directive_list = mLastModule;
 	for (auto mod = mCurrentModule = mLastModule; mod != aTerminator; mod = mCurrentModule = mCurrentModule->mPrev)
 	{
 		if (!directive_list && !mod->IsFileModule())

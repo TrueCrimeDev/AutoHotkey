@@ -187,7 +187,7 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 			}
 			if (this_token.symbol == SYM_VAR && (!VARREF_IS_WRITE(this_token.var_usage) || this_token.var_usage == VARREF_LVALUE_MAYBE))
 			{
-				if (this_token.var->IsVirtual() && VARREF_IS_READ(this_token.var_usage))
+				if (this_token.var->IsVirtual() && (VARREF_IS_READ(this_token.var_usage) || this_token.var_usage == VARREF_ISSET))
 				{
 					// FUTURE: This should be merged with the SYM_FUNC handling at some point to improve
 					// maintainability, reduce code size, and take advantage of SYM_FUNC's optimizations.
@@ -206,7 +206,7 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 
 					if (result_token.symbol != SYM_STRING || result_token.marker_length == 0)
 					{
-						if (result_token.symbol == SYM_MISSING && this_token.var_usage != VARREF_READ_MAYBE)
+						if (result_token.symbol == SYM_MISSING && this_token.var_usage == VARREF_READ)
 						{
 							error_value = &this_token;
 							goto unset_var;

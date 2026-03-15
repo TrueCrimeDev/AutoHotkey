@@ -338,6 +338,7 @@ struct DECLSPEC_NOVTABLE IDebugProperties
 #define EIF_LEAVE_PARAMS	0x040000
 #define EIF_UNSET_RETURN	0x100000
 #define EIF_UNSET_PROP		0x200000
+#define EIF_ISSET_UNSET		0x400000
 
 
 // Helper function for event handlers and __Delete:

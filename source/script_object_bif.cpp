@@ -217,6 +217,15 @@ BIF_DECL(BIF_HasProp)
 }
 
 
+BIF_DECL(BIF_DefineProp)
+{
+	IObject *iobj = TokenToObject(*aParam[0]);
+	if (!iobj || !iobj->IsOfType(Object::sPrototype))
+		_f_throw_param(0);
+	((Object *)iobj)->DefineProp(aResultToken, 1, 0, aParam + 1, aParamCount - 1);
+}
+
+
 BIF_DECL(BIF_Props)
 {
 	auto obj = ParamToObjectOrBase(*aParam[0]);
@@ -258,15 +267,15 @@ BIF_DECL(BIF_GetMethod)
 }
 
 
-BIF_DECL(BIF_StructFromPtr)
+BIF_DECL(Struct_At)
 {
-	Object *base = dynamic_cast<Object *>(ParamIndexToObject(0));
-	Object *proto = base ? dynamic_cast<Object *>(base->GetOwnPropObj(_T("Prototype"))) : nullptr;
-	if (!proto || proto->LockStructSize() == 0)
-		_f_throw_param(0);
+	auto class_ = ParamIndexToObject(0);
+	auto proto = class_ && class_->IsOfType(Object::sPrototype) ? ((Object*)class_)->ClassGetPrototype() : nullptr;
+	if (!proto || !proto->IsDerivedFrom(Object::sStructPrototype) || proto->LockStructSize() == 0)
+		_f_throw(_T("Invalid class"));
 	auto ptr = (UINT_PTR)ParamIndexToInt64(1);
 	if (ptr < 65536)
-		_f_throw_param(1);
+		return (void)aResultToken.ParamError(0, aParam[1]);
 	auto obj = Object::CreateStructPtr(ptr, proto, aResultToken);
 	if (obj)
 		_f_return(obj);
