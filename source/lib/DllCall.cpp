@@ -368,6 +368,29 @@ void ConvertDllArgType(LPTSTR aBuf, DYNAPARM &aDynaParam)
 }
 
 
+bool Object::GetStructArgInfo(DYNAPARM &aType, Object *&aPointedClass)
+{
+	if (auto si = GetStructInfo())
+	{
+		if (si->dllcall_type)
+		{
+			aType.type = (DllArgTypes)si->dllcall_type;
+			aType.is_unsigned = si->is_unsigned;
+			aType.passed_by_address = si->pointed_class != nullptr;
+			aPointedClass = nullptr;
+		}
+		else if (si->size)
+		{
+			aType.type = DLL_ARG_STRUCT;
+			aType.struct_size = si->item_count ? -1 : (int)si->size;
+			aPointedClass = si->pointed_class;
+		}
+		return true;
+	}
+	return false;
+}
+
+
 void *GetDllProcAddress(LPCTSTR aDllFileFunc, HMODULE *hmodule_to_free) // L31: Contains code extracted from BIF_DllCall for reuse in ExpressionToPostfix.
 {
 	int i;
@@ -615,8 +638,13 @@ BIF_DECL(BIF_DllCall)
 				return_proto = return_class->ClassGetPrototype();
 				if (return_proto && return_proto->IsDerivedFrom(Object::sStructPrototype))
 				{
-					if (return_struct_size = (int)return_proto->LockStructSize())
-						return_attrib.type = DLL_ARG_STRUCT;
+					Object *unused;
+					return_proto->GetStructArgInfo(return_attrib, unused);
+					if (return_attrib.type == DLL_ARG_STRUCT)
+					{
+						return_struct_size = return_attrib.struct_size;
+						return_attrib.struct_size = 0;
+					}
 				}
 			}
 		}
@@ -685,7 +713,7 @@ has_valid_return_type:
 				if (param_proto && param_proto->IsDerivedFrom(Object::sStructPrototype))
 				{
 					Object *pointed_class;
-					if (param_proto->GetStructArgInfo(this_dyna_param.struct_size, pointed_class))
+					if (param_proto->GetStructArgInfo(this_dyna_param, pointed_class))
 					{
 						if (pointed_class && !(this_param_obj && this_param_obj->IsOfType(param_proto)))
 						{
@@ -708,9 +736,6 @@ has_valid_return_type:
 								this_dyna_param.type = DLL_ARG_STRUCT;
 							}
 						}
-						else
-							if (this_dyna_param.struct_size)
-								this_dyna_param.type = DLL_ARG_STRUCT;
 					}
 				}
 			}

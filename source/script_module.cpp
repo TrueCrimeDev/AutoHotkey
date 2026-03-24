@@ -192,7 +192,7 @@ Var *Script::AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, 
 	if (var)
 	{
 		// mVars should contain only declared or exported variables at this point.
-		if (var->IsDeclared())
+		if (var->IsDeclared() || aAliasFor && aAliasFor->ResolveAlias() == var)
 		{
 			if (aAliasFor ? var->IsAlias() && var->GetAliasFor() == aAliasFor : var->ToObject() == aModule)
 				return var; // Already imported.
@@ -268,6 +268,8 @@ ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveLis
 		{
 			if (m->mSelfFileIndex == file_index)
 			{
+				if (!new_last) // A file with no #modules
+					new_last = m; // should still resolve :__Init.
 				imp.mod = m;
 				break;
 			}
@@ -335,6 +337,8 @@ ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveLis
 				while (IS_SPACE_OR_TAB(c)) c = *++cp; // Find next non-whitespace.
 				int at;
 				auto exported = imp.mod->mVars.Find(mod_name, &at);
+				if (!exported && imp.mod->mIsBuiltinModule)
+					exported = g_script.FindOrAddBuiltInVar(mod_name, true, nullptr);
 				if (!exported)
 				{
 					// Since ResolveImports() does everything in one stage, imported names for some
@@ -343,7 +347,6 @@ ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveLis
 					exported = new Var(mod_name, VAR_GLOBAL);
 					if (!exported || !imp.mod->mVars.Insert(exported, at))
 						return MemoryError();
-					//return ScriptError(_T("No such export"), mod_name);
 				}
 				if (!_tcsnicmp(cp, _T("as"), 2) && IS_SPACE_OR_TAB(cp[2]))
 				{

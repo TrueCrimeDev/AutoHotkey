@@ -552,7 +552,17 @@ Object::~Object()
 	if (mBase)
 		mBase->Release();
 	if (mFlags & DataIsAllocatedFlag)
+	{
+		if (mFlags & DataIsStructInfo)
+		{
+			auto &si = *(StructInfo*)mData;
+			if (si.pointed_class)
+				si.pointed_class->Release();
+			if (si.array_class_map)
+				si.array_class_map->Release();
+		}
 		free(mData);
+	}
 }
 
 
@@ -1026,8 +1036,42 @@ void Object::StructGet(ResultToken &aResultToken, int aID, int aFlags, ExprToken
 	switch (aID)
 	{
 	case M_Struct_Ptr: _o_return(DataPtr());
-	case M_Struct_Size: _o_return(DataSize());
+	case M_Struct_Size: _o_return(mBase->StructSize());
+	case M_CArray_Length:
+		auto si = mBase->GetStructInfo();
+		_o_return(si->item_count);
 	}
+}
+
+
+void Object::CArrayItem(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
+{
+	auto si = mBase->GetStructInfo();
+	
+	auto index = ParamIndexToInt64(aParamCount - 1);
+	index += index < 0 ? si->item_count : -1;
+	if (index < 0 || (size_t)index >= si->item_count)
+		_o_throw(ERR_INVALID_INDEX, *aParam[aParamCount - 1], ErrorPrototype::Index);
+
+	Object *element_class = si->native_type == MdType::Void ? si->pointed_class : nullptr;
+	ASSERT(si->native_type != MdType::Void || element_class);
+
+	Object *pointed_proto = nullptr;
+	if (element_class && element_class->IsDerivedFrom(Object::sPtrClass))
+		if (auto ptr_pro = element_class->ClassGetPrototype())
+			if (auto ppsi = ptr_pro->GetStructInfo())
+				if (ppsi->pointed_class)
+					pointed_proto = ppsi->pointed_class->ClassGetPrototype();
+
+	size_t item_size = si->size / si->item_count;
+	ASSERT(si->size == item_size * si->item_count);
+
+	TypedProperty tp{ si->native_type, element_class, pointed_proto, (size_t)index * item_size, (size_t)index + 1 };
+	if (IS_INVOKE_GET)
+		GetTypedValue(aResultToken, 0, tp);
+	else
+		SetTypedValue(aResultToken, 0, _T("__Item"), tp, *aParam[0]);
+	tp.class_object = nullptr;
 }
 
 
@@ -1501,7 +1545,7 @@ Object *Object::CreateClass(LPTSTR aClassName, Object *aBase, Object *aPrototype
 	return class_obj;
 }
 
-void Object::CreatePtrClass(LPTSTR aClassName, Object *aClass)
+void Object::CreatePtrClass(LPTSTR aClassName, Object *aClass, StructInfo *aNative)
 {
 	auto len = _tcslen(aClassName);
 	auto buf = len ? (LPTSTR)_malloca((len + _countof(STRUCT_PTR_CLASS_SUFFIX)) * sizeof(TCHAR)) : nullptr;
@@ -1520,18 +1564,83 @@ void Object::CreatePtrClass(LPTSTR aClassName, Object *aClass)
 	auto tp = ptr_pro->DefineTypedProperty(_T("Value"));
 	tp->type = MdType::IntPtr;
 	tp->class_object = nullptr;
+	tp->pointed_proto = nullptr;
 	tp->item_count = 0;
 	tp->data_offset = 0;
 	auto si = ptr_pro->GetStructInfo(true);
 	si->align = si->size = sizeof(void*);
 	si->nested_count = 1;
 	si->pointed_class = aClass;
+	if (aClass)
+		aClass->AddRef();
+	if (aNative)
+	{
+		si->dllcall_type = aNative->dllcall_type;
+		si->is_unsigned = aNative->is_unsigned;
+	}
 	ObjectMember members[]{
 		Object_Member(__Value, StructPtrInvoke, 0, IT_SET)
 	};
 	DefineMembers(ptr_pro, class_name, members, _countof(members));
 	ptr_pro->mFlags &= ~NativeClassPrototype;
 	_freea(buf);
+}
+
+void Object::CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClass, size_t aCount)
+{
+	auto sc_ = TokenToObject(aOfClass);
+	auto sc = sc_->IsOfType(Object::sPrototype) ? (Object*)sc_ : nullptr;
+	auto sp = sc ? sc->ClassGetPrototype() : nullptr;
+	auto spsi = sp ? sp->GetStructInfo() : nullptr;
+	Map *map = spsi ? spsi->array_class_map : nullptr;
+	if (!map)
+	{
+		if (!spsi || !sp->IsDerivedFrom(Object::sStructPrototype))
+			return (void)aResultToken.TypeError(_T("Struct class"), aOfClass);
+		spsi->array_class_map = map = Map::Create();
+	}
+	ExprTokenType key = (__int64)aCount;
+	if (map->GetItem(aResultToken, key))
+		return;
+
+	TCHAR class_name[MAX_CLASS_NAME_LENGTH + 1];
+	sntprintf(class_name, _countof(class_name), _T("%s[%zi]"), sp->GetOwnPropString(_T("__Class")), aCount);
+
+	// No cached class, so create one.
+	auto ap = CreatePrototype(class_name, Object::sCArrayPrototype);
+	auto ac = CreateClass(ap, Object::sCArrayClass);
+	auto si = ap->GetStructInfo();
+	ap->Release();
+
+	// Cache it.
+	if (!map->SetItem(key, ExprTokenType(ac)))
+	{
+		ac->Release();
+		return (void)aResultToken.MemoryError();
+	}
+
+	sc->AddRef();
+	if (!spsi->item_count)
+		si->native_type = spsi->native_type;
+	if (si->native_type == MdType::Void)
+	{
+		si->pointed_class = sc;
+		si->nested_count = aCount;
+	}
+	si->size = aCount * sp->LockStructSize();
+	si->item_count = aCount;
+
+	aResultToken.SetValue(ac);
+}
+
+BIF_DECL(Struct_Item)
+{
+	if (!ParamIndexIsNumeric(1))
+		return (void)aResultToken.ParamError(0, aParam[1], _T("Integer"));
+	auto count = ParamIndexToInt64(1);
+	if (count < 1)
+		return (void)aResultToken.ParamError(0, aParam[1]);
+	Object::CreateCArrayClass(aResultToken, *aParam[0], (size_t)count);
 }
 
 
@@ -1812,8 +1921,16 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 		{
 			if (psi = ((Object*)proto)->GetStructInfo())
 			{
-				psize = psi->size;
-				palign = psi->align;
+				if (psi->native_type != MdType::Void && !psi->item_count)
+				{
+					aClass = nullptr;
+					aType = psi->native_type;
+				}
+				else
+				{
+					psize = psi->size;
+					palign = psi->align;
+				}
 			}
 		}
 	}
@@ -1825,10 +1942,8 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 			palign = aPack ? aPack : 1;
 		}
 	}
-	else
-	{
+	if (!psize)
 		palign = psize = TypeSize(aType);
-	}
 	if (!psize)
 		return FR_E_ARGS;
 	auto si = GetStructInfo(true);
@@ -1843,7 +1958,7 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 		tprop->object_index = ++si->nested_count; // 1-based, as index 0 is reserved.
 		aClass->AddRef();
 	}
-	tprop->pointed_proto = psi && psi->pointed_class ? psi->pointed_class->ClassGetPrototype() : nullptr;
+	tprop->pointed_proto = psi && psi->pointed_class && !psi->item_count ? psi->pointed_class->ClassGetPrototype() : nullptr;
 	tprop->item_count = aCount;
 	if (aPack && palign > aPack)
 		palign = aPack;
@@ -1873,24 +1988,38 @@ Object::StructInfo *Object::GetStructInfo(bool aDefine)
 	}
 	if (!(mFlags & DataIsStructInfo))
 	{
-		auto bsi = mBase ? mBase->GetStructInfo(false) : nullptr;
+		auto pbsi = mBase ? mBase->GetStructInfo(false) : nullptr;
 		if (mFlags & DataIsSetFlag)
-			return aDefine ? nullptr : bsi;
-		auto si = (StructInfo*)malloc(sizeof(StructInfo));
-		if (!si)
+			return aDefine ? nullptr : pbsi;
+		auto psi = (StructInfo*)malloc(sizeof(StructInfo));
+		if (!psi)
 			return nullptr;
-		if (bsi)
+		auto &si = *psi;
+		if (pbsi)
 		{
-			*si = *bsi;
+			auto &bsi = *pbsi;
+			si.size = bsi.size;
+			si.align = bsi.align;
+			si.nested_count = bsi.nested_count;
+			si.item_count = bsi.item_count;
+			si.pointed_class = bsi.pointed_class;
+			si.array_class_map = nullptr; // Each subclass must create its own map.
+			si.native_type = MdType::Void; // Revert to a normal struct if extending a numeric type.
+			si.dllcall_type = DLL_ARG_INVALID;
 		}
 		else
 		{
-			si->size = 0;
-			si->align = 1;
-			si->nested_count = 0;
-			si->pointed_class = nullptr;
+			si.size = 0;
+			si.align = 1;
+			si.native_type = MdType::Void;
+			si.dllcall_type = DLL_ARG_INVALID;
+			si.is_unsigned = false;
+			si.nested_count = 0;
+			si.item_count = 0;
+			si.pointed_class = nullptr;
+			si.array_class_map = nullptr;
 		}
-		mData = si;
+		mData = &si;
 		mFlags |= DataIsStructInfo | DataIsAllocatedFlag;
 	}
 	return (StructInfo*)mData;
@@ -2136,7 +2265,9 @@ ResultType Object::New(ResultToken &aResultToken, ExprTokenType *aParam[], int a
 				return aResultToken.MemoryError();
 			}
 			ZeroMemory(mNested, sizeof(Object *) * (si->nested_count + 1));
-			auto result = NestedNew(aResultToken, si);
+			auto result = si->item_count ? CArrayNew(aResultToken, si)
+				: si->pointed_class ? OK // Pointer classes don't have constructible properties.
+				: NestedNew(aResultToken, si);
 			if (result != OK)
 				return result;
 		}
@@ -2160,7 +2291,7 @@ ResultType Object::New(ResultToken &aResultToken, ExprTokenType *aParam[], int a
 
 ResultType Object::NestedNew(ResultToken &aResultToken, StructInfo *si)
 {
-	ASSERT(si->nested_count && mNested);
+	ASSERT(si->nested_count && mNested && !si->item_count);
 	
 	// TODO: probably make an ordered list in si during definition (or when the struct definition is finalized) instead of this?
 	auto offsets = (size_t*)_alloca(sizeof(size_t) * si->nested_count);
@@ -2176,6 +2307,7 @@ ResultType Object::NestedNew(ResultToken &aResultToken, StructInfo *si)
 			auto &field = base->mFields[i];
 			if (field.symbol == SYM_TYPED_FIELD && field.tprop->class_object && !field.tprop->pointed_proto)
 			{
+				ASSERT(field.tprop->object_index > 0);
 				ASSERT(field.tprop->object_index <= si->nested_count);
 				ASSERT(!mNested[field.tprop->object_index]); // Should always be null since every new property gets a new object_index, even if it shadows a base property.
 				mNested[field.tprop->object_index] = field.tprop->class_object;
@@ -2218,6 +2350,43 @@ ResultType Object::NestedNew(ResultToken &aResultToken, StructInfo *si)
 	return result;
 }
 
+ResultType Object::CArrayNew(ResultToken &aResultToken, StructInfo *si)
+{
+	ASSERT(si->nested_count && si->nested_count == si->item_count && si->pointed_class && mNested);
+
+	auto proto = si->pointed_class->ClassGetPrototype();
+
+	ExprTokenType prop_class{ si->pointed_class }, *pcarg{ &prop_class };
+
+	auto data_ptr = DataPtr();
+	size_t item_size = si->size / si->nested_count;
+
+	ResultType result = OK;
+	size_t i;
+	for (i = 1; i <= si->nested_count; ++i, data_ptr += item_size)
+	{
+		auto nested = CreateStruct();
+		nested->SetDataPtr(data_ptr);
+		result = nested->New(aResultToken, &pcarg, 1, this);
+		if (result != OK)
+			break;
+		// During construction, 'nested' has a non-zero mRefCount and a counted reference to 'this'.
+		// Now it needs to have mRefCount == 0 to reflect that there aren't any external references.
+		nested->mRefCount--;
+		mRefCount--;
+		aResultToken.symbol = SYM_INTEGER; // New has set this to nested.  Reset to default without calling Release().
+		ASSERT(nested->mRefCount == 0 && mRefCount);
+		mNested[i] = nested;
+	}
+	if (i <= si->nested_count)
+	{
+		ASSERT(result != OK);
+		// this object won't be returned, since construction failed.
+		Release();
+	}
+	return result;
+}
+
 ResultType Object::NestedSparseInit(ResultToken& aResultToken)
 {
 	if (mNested)
@@ -2244,7 +2413,9 @@ ResultType Object::NestedSparseInit(ResultToken& aResultToken, TypedProperty& aP
 	if (!nested)
 		return FAIL; // Error was already raised.
 	mNested[aProp.object_index] = nested;
-	nested->mRefCount--; // Nested object without external references should have mRefCount == 0.
+	// Zero mRefCount must only be used when nested->mNested[0] refers to the outer
+	// object, which isn't the case here.
+	//nested->mRefCount--;
 	return OK;
 }
 
@@ -3863,6 +4034,12 @@ ObjectMember Object::sStructMembers[]
 	Object_Member(Size, StructGet, M_Struct_Size, IT_GET)
 };
 
+ObjectMember Object::sCArrayMembers[]
+{
+	Object_Member(__Item, CArrayItem, 0, IT_SET, 1, 1),
+	Object_Member(Length, StructGet, M_CArray_Length, IT_GET)
+};
+
 
 
 struct ClassDef
@@ -3998,9 +4175,39 @@ void Object::CreateRootPrototypes()
 
 	sStructClass = (Object*)g_script.FindGlobalVar(_T("Struct"), 6)->Object();
 	sStructClass->DefineMethod(_T("At"), new BuiltInFunc {_T("Struct.At"), Struct_At, 2, 2});
+	auto struct_item = sStructClass->DefineProperty(_T("__Item"));
+	struct_item->SetGetter(new BuiltInFunc{ _T("Struct.__Item"), Struct_Item, 2, 2 });
+	struct_item->NoEnumGet = true;
 	sPtrPrototype = CreatePrototype(_T("Struct") STRUCT_PTR_CLASS_SUFFIX, sStructPrototype);
 	sPtrClass = CreateClass(sPtrPrototype, sStructClass);
+	sCArrayPrototype = CreatePrototype(_T("Struct.Array"), sStructPrototype);
+	sCArrayClass = CreateClass(sCArrayPrototype, sStructClass);
+	DefineMembers(sCArrayPrototype, _T("Struct.Array"), sCArrayMembers, _countof(sCArrayMembers));
+	sCArrayPrototype->mFlags &= ~NativeClassPrototype;
 	sStructClass->DefineClass(STRUCT_PTR_CLASS_NAME, sPtrClass, true);
+	sStructClass->DefineClass(_T("Array"), sCArrayClass, true);
+
+	LPTSTR const type_names[]{ _T("Float32"), _T("Float64"), _T("Int16"), _T("Int32"), _T("Int64"), _T("Int8"), _T("IntPtr"), _T("UInt16"), _T("UInt32"), _T("UInt8")};
+	MdType const type_codes[]{ MdType::Float32, MdType::Float64, MdType::Int16, MdType::Int32, MdType::Int64, MdType::Int8, MdType::IntPtr, MdType::UInt16, MdType::UInt32, MdType::UInt8 };
+	UCHAR const type_dllcall[]{ DLL_ARG_FLOAT, DLL_ARG_DOUBLE, DLL_ARG_SHORT, DLL_ARG_INT, DLL_ARG_INT64, DLL_ARG_CHAR, Exp32or64(DLL_ARG_INT,DLL_ARG_INT64), DLL_ARG_SHORT, DLL_ARG_INT, DLL_ARG_CHAR};
+	for (int i = 0; i < _countof(type_names); ++i)
+	{
+		auto p = CreatePrototype(type_names[i], sStructPrototype);
+		auto si = p->GetStructInfo(true);
+		p->mFlags |= StructInfoLocked;
+		si->native_type = type_codes[i];
+		si->dllcall_type = type_dllcall[i];
+		si->is_unsigned = type_names[i][0] == 'U';
+		si->size = TypeSize(type_codes[i]);
+		auto tp = p->DefineTypedProperty(_T("__Value"));
+		tp->type = type_codes[i];
+		tp->class_object = nullptr;
+		tp->pointed_proto = nullptr;
+		tp->item_count = 0;
+		tp->data_offset = 0;
+		auto c = CreateClass(type_names[i], sStructClass, p, nullptr);
+		CreatePtrClass(type_names[i], c, si);
+	}
 
 	GuiControlType::DefineControlClasses();
 	DefineComPrototypeMembers();
@@ -4016,12 +4223,12 @@ Object *Func::sPrototype;
 Object *Object::sPrototype;
 
 Object *Object::sClassPrototype;
-Object *Object::sStructPrototype, *Object::sPtrPrototype;
+Object *Object::sStructPrototype, *Object::sPtrPrototype, *Object::sCArrayPrototype;
 Object *Array::sPrototype;
 Object *Map::sPrototype;
 
 Object *Object::sClass;
-Object *Object::sStructClass, *Object::sPtrClass;
+Object *Object::sStructClass, *Object::sPtrClass, *Object::sCArrayClass;
 
 Object *Closure::sPrototype;
 Object *BoundFunc::sPrototype;
