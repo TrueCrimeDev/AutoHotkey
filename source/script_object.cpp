@@ -2261,8 +2261,12 @@ void Object::GetOwnPropDesc(ResultToken &aResultToken, int aID, int aFlags, Expr
 	{
 		if (field->tprop->class_object)
 			desc->SetOwnProp(_T("Type"), field->tprop->class_object);
-		else if (field->tprop->type != MdType::Void)
+		else if (field->tprop->type != MdType::Void
+			&& (int)field->tprop->type <= (int)MdType::LastSupportedPropertyType
+			&& sPrimitiveClass[(int)field->tprop->type-1])
 			desc->SetOwnProp(_T("Type"), sPrimitiveClass[(int)field->tprop->type-1]);
+		else if (field->tprop->type != MdType::Void)
+			desc->SetOwnProp(_T("Type"), TypeName(field->tprop->type));
 		else
 			desc->SetOwnProp(_T("Type"), (__int64)field->tprop->item_count);
 		desc->SetOwnProp(_T("Offset"), field->tprop->data_offset);
