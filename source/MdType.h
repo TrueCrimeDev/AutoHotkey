@@ -96,7 +96,7 @@ template<MdType T> struct md_optout { typedef typename md_argtype<T>::t *t; };
 template<> struct md_optout<MdType::String> { typedef StrRet *t; };
 template<> struct md_optout<MdType::Variant> { typedef ResultToken *t; };
 
-template<MdType T> struct md_optional { typedef typename optl<typename md_argtype<T>::t> t; };
+template<MdType T> struct md_optional { typedef optl<typename md_argtype<T>::t> t; };
 template<> struct md_optional<MdType::Variant> { typedef ExprTokenType *t; };
 
 //template<MdType T> struct md_retval { typedef typename md_argtype<T>::t t; };
@@ -116,7 +116,8 @@ template<> struct md_retval<MdType::ResultType> { typedef ResultType t; };
 
 #include "map.h"
 
-#define md_cat(a, ...) a ## __VA_ARGS__
+#define md_cat_(a, ...) a ## __VA_ARGS__
+#define md_cat(a, ...) md_cat_(a, __VA_ARGS__)
 
 #define md_arg_decl_type_In(type) md_argtype<MdType::type>::t
 #define md_arg_decl_type_In_Opt(type) md_optional<MdType::type>::t

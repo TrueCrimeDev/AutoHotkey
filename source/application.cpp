@@ -1267,8 +1267,8 @@ bool MsgSleep(int aSleepDuration, MessageMode aMode)
 				ExprTokenType params[] =
 				{
 					input_hook->ScriptObject,
-					__int64(vk_type(msg.lParam)),
-					__int64(sc_type(msg.lParam >> 16)),
+					(__int64)(vk_type(msg.lParam)),
+					(__int64)(sc_type(msg.lParam >> 16)),
 				};
 				IObjectPtr onKey = msg.message == AHK_INPUT_KEYDOWN ? input_hook->ScriptObject->onKeyDown : input_hook->ScriptObject->onKeyUp;
 				onKey->ExecuteInNewThread(_T("InputHook"), params, _countof(params));

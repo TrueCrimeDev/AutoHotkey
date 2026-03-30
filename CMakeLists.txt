@@ -49,7 +49,6 @@ target_compile_definitions(pcre16 PRIVATE
 
 # AutoHotkey sources
 set(AHK_SOURCES
-    source/ahklib.cpp
     source/ahkversion.cpp
     source/application.cpp
     source/AutoHotkey.cpp
@@ -148,6 +147,8 @@ endif()
 
 # MinGW settings
 if(MINGW)
+    target_compile_options(${OUTPUT_NAME} PRIVATE -fpermissive)
+    target_compile_options(pcre16 PRIVATE -fpermissive)
     target_link_options(${OUTPUT_NAME} PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
 

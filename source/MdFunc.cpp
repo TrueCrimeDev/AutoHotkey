@@ -159,6 +159,7 @@ bool MdFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int aParam
 	int first_param_index = 0;
 
 	ResultType result = OK;
+	MdType retval_arg_type; int retval_index; int output_var_count; MdType *atp; bool aborted;
 
 	if (mPrototype) // This implies thiscall and an initial 'this' parameter, excluded from mArgType.
 	{
@@ -178,10 +179,10 @@ bool MdFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int aParam
 		first_param_index = 1;
 	}
 
-	MdType retval_arg_type = MdType::Void;
-	int retval_index = -1;
-	int output_var_count = 0;
-	auto atp = mArgType;
+	retval_arg_type = MdType::Void;
+	retval_index = -1;
+	output_var_count = 0;
+	atp = mArgType;
 	for (int ai = first_param_index, pi = ai; ai < mArgSlots; ++ai, ++atp)
 	{
 		bool opt = false;
@@ -404,7 +405,7 @@ bool MdFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int aParam
 	rup = DynaCall(mArgSlots, args, mMcFunc, mThisCall);
 
 	// Convert the return value
-	bool aborted = false;
+	aborted = false;
 	switch (mRetType)
 	{
 	// Unused return types are commented out or omitted to reduce code size, and disabled

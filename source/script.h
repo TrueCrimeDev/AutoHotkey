@@ -387,7 +387,7 @@ __int64 pow_ll(__int64 base, __int64 exp); // integer power function
 // via COM IDispatch or coupled with different scripting languages.
 #define _f_return(...)			_f__ret(aResultToken.Return(__VA_ARGS__))
 #define _f_throw(...)			_f__ret(aResultToken.Error(__VA_ARGS__))
-#define _f_throw_param(_prm_, ...)	return ((void)aResultToken.ParamError(_prm_, aParam[_prm_], __VA_ARGS__))
+#define _f_throw_param(_prm_, ...)	return ((void)aResultToken.ParamError(_prm_, aParam[_prm_], ##__VA_ARGS__))
 #define _f_throw_win32(...)		return ((void)aResultToken.Win32Error(__VA_ARGS__))
 #define _f_throw_value(...)		return ((void)aResultToken.ValueError(__VA_ARGS__))
 #define _f_throw_type(...)		return ((void)aResultToken.TypeError(__VA_ARGS__))
@@ -479,7 +479,7 @@ struct LoopFilesStruct : WIN32_FIND_DATA
 // obeys the same limit BUT ONLY within the RegEdit GUI.  RegEdit seems capable of importing subkeys whose names
 // (even without any value name appended) are longer than 259 characters (see comments higher above).
 #define MAX_REG_ITEM_SIZE 1024 // Needs to be greater than 260 (see comments above), but I couldn't find any documentation at MSDN or the web about the max length of a subkey name.  One example at MSDN RegEnumKeyEx() uses MAX_KEY_LENGTH=255 and MAX_VALUE_NAME=16383, but clearly MAX_KEY_LENGTH should be larger.
-#define REG_SUBKEY -2 // Custom type, not standard in Windows.
+#define REG_SUBKEY ((DWORD)-2) // Custom type, not standard in Windows.
 struct RegItemStruct
 {
 	HKEY root_key_type, root_key;  // root_key_type is always a local HKEY, whereas root_key can be a remote handle.
@@ -581,7 +581,7 @@ enum JoyControls {JOYCTRL_INVALID, JOYCTRL_XPOS, JOYCTRL_YPOS, JOYCTRL_ZPOS
 // in g_BIF) which are implemented using a single C++ function.  These IDs are passed to the
 // C++ function to tell it which function is being called.  Each group starts at ID 0 in case
 // it helps the compiler to reduce code size.
-enum BuiltInFunctionID {
+enum BuiltInFunctionID : int {
 	FID_Object_New = -1,
 	FID_GetMethod = 0, FID_HasMethod,
 	FID_DllCall = 0, FID_ComCall,
@@ -1851,7 +1851,7 @@ public:
 	bool mEnabled;
 	bool mRunOnlyOnce;
 	ScriptTimer *mNextTimer;  // Next items in linked list
-	void ScriptTimer::Disable();
+	void Disable();
 	ScriptTimer(IObject *aLabel)
 		#define DEFAULT_TIMER_PERIOD 250
 		: mCallback(aLabel), mPeriod(DEFAULT_TIMER_PERIOD), mPriority(0) // Default is always 0.
@@ -2275,6 +2275,7 @@ public:
 	bool mCheckMode; // true when invoked in syntax-check mode.
 	bool mTestMode; // true when invoked in single-script test mode.
 	bool mDiagJson; // true to emit structured JSON diagnostics.
+	bool mTrace; // true to print each executed line number to stderr.
 	bool mErrorStdOut; // true if load-time syntax errors should be sent to stdout vs. a MsgBox.
 	bool mErrorStdOutColor; // true if ANSI colors should be used in /ErrorStdOut output.
 	bool mHasPendingExitCode = false; // true if mPendingExitCode was explicitly set by script/runtime.

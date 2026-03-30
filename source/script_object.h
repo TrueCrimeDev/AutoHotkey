@@ -87,12 +87,12 @@ struct ObjectMember
 };
 
 #define Object_Member(name, impl, id, invokeType, ...) \
-	{ _T(#name), static_cast<ObjectMethod>(&impl), id, invokeType, __VA_ARGS__ }
+	{ _T(#name), static_cast<ObjectMethod>(&impl), id, invokeType, ##__VA_ARGS__ }
 #define Object_Method_(name, minP, maxP, impl, id) Object_Member(name, impl,   id,       IT_CALL, minP, maxP)
 #define Object_Method(name, minP, maxP)            Object_Member(name, Invoke, M_##name, IT_CALL, minP, maxP)
 #define Object_Method1(name, minP, maxP)           Object_Member(name, name,   0,        IT_CALL, minP, maxP)
-#define Object_Property_get(name, ...)             Object_Member(name, Invoke, P_##name, IT_GET, __VA_ARGS__)
-#define Object_Property_get_set(name, ...)         Object_Member(name, Invoke, P_##name, IT_SET, __VA_ARGS__)
+#define Object_Property_get(name, ...)             Object_Member(name, Invoke, P_##name, IT_GET, ##__VA_ARGS__)
+#define Object_Property_get_set(name, ...)         Object_Member(name, Invoke, P_##name, IT_SET, ##__VA_ARGS__)
 #define MAXP_VARIADIC 255
 
 
@@ -527,9 +527,9 @@ public:
 		return field->Assign(aValue);
 	}
 
-	bool SetOwnProp(name_t aName, __int64 aValue) { return SetOwnProp(aName, ExprTokenType(aValue)); }
-	bool SetOwnProp(name_t aName, IObject *aValue) { return SetOwnProp(aName, ExprTokenType(aValue)); }
-	bool SetOwnProp(name_t aName, LPCTSTR aValue) { return SetOwnProp(aName, ExprTokenType(const_cast<LPTSTR>(aValue))); }
+	bool SetOwnProp(name_t aName, __int64 aValue) { ExprTokenType t(aValue); return SetOwnProp(aName, t); }
+	bool SetOwnProp(name_t aName, IObject *aValue) { ExprTokenType t(aValue); return SetOwnProp(aName, t); }
+	bool SetOwnProp(name_t aName, LPCTSTR aValue) { ExprTokenType t(const_cast<LPTSTR>(aValue)); return SetOwnProp(aName, t); }
 
 	void DeleteOwnProp(name_t aName)
 	{
@@ -717,8 +717,8 @@ public:
 
 	bool Append(ExprTokenType &aValue);
 	bool Append(LPCTSTR aValue, size_t aValueLength = -1) { return Append(const_cast<LPTSTR>(aValue), aValueLength); }
-	bool Append(LPTSTR aValue, size_t aValueLength = -1) { return Append(ExprTokenType(aValue, aValueLength)); }
-	bool Append(__int64 aValue) { return Append(ExprTokenType(aValue)); }
+	bool Append(LPTSTR aValue, size_t aValueLength = -1) { ExprTokenType t(aValue, aValueLength); return Append(t); }
+	bool Append(__int64 aValue) { ExprTokenType t(aValue); return Append(t); }
 
 	Array *Clone();
 
@@ -826,7 +826,7 @@ public:
 
 	bool HasItem(ExprTokenType &aKey)
 	{
-		return GetItem(ExprTokenType(), aKey); // Conserves code size vs. calling FindItem() directly and is unlikely to perform worse.
+		ExprTokenType t; return GetItem(t, aKey); // Conserves code size vs. calling FindItem() directly and is unlikely to perform worse.
 	}
 
 	bool GetItem(ExprTokenType &aToken, ExprTokenType &aKey)
@@ -864,17 +864,17 @@ public:
 
 	bool SetItem(LPTSTR aKey, ExprTokenType &aValue)
 	{
-		return SetItem(ExprTokenType(aKey), aValue);
+		ExprTokenType k(aKey); return SetItem(k, aValue);
 	}
 
 	bool SetItem(LPTSTR aKey, __int64 aValue)
 	{
-		return SetItem(aKey, ExprTokenType(aValue));
+		ExprTokenType v(aValue); return SetItem(aKey, v);
 	}
 
 	bool SetItem(LPTSTR aKey, IObject *aValue)
 	{
-		return SetItem(aKey, ExprTokenType(aValue));
+		ExprTokenType v(aValue); return SetItem(aKey, v);
 	}
 
 	ResultType SetItems(ExprTokenType *aParam[], int aParamCount);

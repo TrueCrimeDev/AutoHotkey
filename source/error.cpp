@@ -188,7 +188,7 @@ BIF_DECL(BIF_Throw)
 
 ResultType Script::Win32Error(DWORD aError, ResultType aErrorType)
 {
-	TCHAR number_string[_MAX_ULTOSTR_BASE10_COUNT];
+	TCHAR number_string[12];
 	// Convert aError to string to pass it through RuntimeError, but it will ultimately
 	// be converted to the error number and proper message by OSError.Prototype.__New.
 	_ultot(aError, number_string, 10);
@@ -1402,7 +1402,8 @@ bif_impl FResult _ScriptGetLines(StrArg aFilename, int aLineNumber, optl<int> aR
 		obj->SetOwnProp(_T("File"), Line::sSourceFile[line->mFileIndex]);
 		obj->SetOwnProp(_T("Number"), line->mLineNumber);
 		obj->SetOwnProp(_T("Text"), buf);
-		if (!lines->Append(ExprTokenType(obj)))
+		ExprTokenType _et(obj);
+		if (!lines->Append(_et))
 		{
 			obj->Release();
 			lines->Release();

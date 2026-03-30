@@ -491,7 +491,8 @@ bool Object::Delete()
 
 		{
 			FuncResult rt;
-			CallMeta(_T("__Delete"), rt, ExprTokenType(this), nullptr, 0);
+			ExprTokenType _et(this);
+			CallMeta(_T("__Delete"), rt, _et, nullptr, 0);
 			rt.Free();
 		}
 
@@ -539,7 +540,8 @@ void Object::CallNestedDelete()
 			FuncResult rt;
 			++mRefCount;
 			++mNested[i]->mRefCount;
-			mNested[i]->CallMeta(_T("__Delete"), rt, ExprTokenType(mNested[i]), nullptr, 0);
+			ExprTokenType _et(mNested[i]);
+			mNested[i]->CallMeta(_T("__Delete"), rt, _et, nullptr, 0);
 			rt.Free();
 			if (mNested[i]->mNested && mNested[i]->mNested[0])
 				mNested[i]->CallNestedDelete();
@@ -915,7 +917,8 @@ ResultType Object::GetTypedValue(ResultToken &aResultToken, int aFlags, TypedPro
 			this->AddRef(); // Keep this alive while nested is referenced externally.
 		if (!(aFlags & IF_BYPASS___VALUE))
 		{
-			auto result = nested->Invoke(aResultToken, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), ExprTokenType(nested), nullptr, 0);
+			ExprTokenType _et(nested);
+			auto result = nested->Invoke(aResultToken, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), _et, nullptr, 0);
 			if (result != INVOKE_NOT_HANDLED)
 			{
 				nested->Release(); // This will recursively Release() if appropriate.
@@ -990,7 +993,8 @@ ResultType Object::SetTypedValue(ResultToken &aResultToken, int aFlags, name_t a
 		mRefCount++; // Must be done at least when nested->mRefCount == 0 (and then reversed when nested->mRefCount reaches 0 again).
 		nested->mRefCount++; // Avoid calling Delete() when the __value setter returns.
 		auto param = &aValue;
-		auto result = nested->Invoke(aResultToken, IT_SET | IF_BYPASS_METAFUNC | IF_NO_NEW_PROPS, _T("__Value"), ExprTokenType(nested), &param, 1);
+		ExprTokenType _et(nested);
+		auto result = nested->Invoke(aResultToken, IT_SET | IF_BYPASS_METAFUNC | IF_NO_NEW_PROPS, _T("__Value"), _et, &param, 1);
 		nested->mRefCount--;
 		mRefCount--;
 		if (result != INVOKE_NOT_HANDLED)
@@ -1267,7 +1271,8 @@ ResultType Object::CallMeta(LPTSTR aName, ResultToken &aResultToken, ExprTokenTy
 	IObject *method;
 	if (method = GetMethod(aName))
 	{
-		return CallAsMethod(ExprTokenType(method), aResultToken, aThisToken, aParam, aParamCount);
+		ExprTokenType _et(method);
+		return CallAsMethod(_et, aResultToken, aThisToken, aParam, aParamCount);
 	}
 	return INVOKE_NOT_HANDLED;
 }
@@ -1290,7 +1295,8 @@ ResultType Object::CallMetaVarg(int aFlags, LPTSTR aName, ResultToken &aResultTo
 	if (IS_INVOKE_SET)
 		param[param_count++] = aParam[aParamCount]; // value
 	// return %func%(this, name, args [, value])
-	ResultType aResult = func->Invoke(aResultToken, IT_CALL, nullptr, ExprTokenType(func), param, param_count);
+	ExprTokenType _et(func);
+	ResultType aResult = func->Invoke(aResultToken, IT_CALL, nullptr, _et, param, param_count);
 	vargs->Release();
 	return aResult;
 }
@@ -1449,7 +1455,8 @@ Object *Object::CreatePrototype(LPTSTR aClassName, Object *aBase)
 {
 	auto obj = new Object();
 	obj->mFlags |= ClassPrototype;
-	obj->SetOwnProp(_T("__Class"), ExprTokenType(aClassName), false);
+	ExprTokenType _et(aClassName);
+	obj->SetOwnProp(_T("__Class"), _et, false);
 	obj->SetBase(aBase);
 	return obj;
 }
@@ -1686,7 +1693,8 @@ void Object::CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClas
 	ap->Release();
 
 	// Cache it.
-	if (!map->SetItem(key, ExprTokenType(ac)))
+	ExprTokenType _et(ac);
+	if (!map->SetItem(key, _et))
 	{
 		ac->Release();
 		return (void)aResultToken.MemoryError();
@@ -2159,7 +2167,7 @@ ResultType FillPropertyFlags(IObject *aObj, bool aSetter, Property &aProp, Resul
 void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
 {
 	if (mFlags & CannotOwnProps)
-		_o_throw_type(_T("Object"), ExprTokenType(this));
+		{ ExprTokenType _et(this); _o_throw_type(_T("Object"), _et); }
 	auto name = ParamIndexToString(0, _f_number_buf);
 	if (!*name)
 		_o_throw_param(0 + aID);
@@ -2248,7 +2256,7 @@ void Object::GetOwnPropDesc(ResultToken &aResultToken, int aID, int aFlags, Expr
 		_o_throw_param(0);
 	auto field = FindField(name);
 	if (!field)
-		_o__ret(aResultToken.UnknownMemberError(ExprTokenType(this), IT_GET, name));
+		{ ExprTokenType _et(this); _o__ret(aResultToken.UnknownMemberError(_et, IT_GET, name)); }
 	auto desc = Object::Create();
 	desc->SetInternalCapacity(field->symbol == SYM_DYNAMIC ? 3 : 1);
 	if (field->symbol == SYM_DYNAMIC)
@@ -2327,7 +2335,8 @@ BIF_DECL(PropRef_Call)
 
 void PropRef::__Value(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
 {
-	if (mThat->Invoke(aResultToken, aFlags, mMember, ExprTokenType(mThat), aParam, aParamCount) == INVOKE_NOT_HANDLED)
+	ExprTokenType _et(mThat);
+	if (mThat->Invoke(aResultToken, aFlags, mMember, _et, aParam, aParamCount) == INVOKE_NOT_HANDLED)
 		_o_return_unset;
 }
 
@@ -4492,5 +4501,6 @@ BIF_DECL(Class_New)
 
 	// Don't call any inherited __Init, since that would reinitialize static variables and duplicate
 	// any typed properties defined by that one class.  This either releases or returns class_obj:
-	class_obj->ConstructNoInit(aResultToken, aParam, aParamCount, ExprTokenType(class_obj));
+	ExprTokenType _et(class_obj);
+	class_obj->ConstructNoInit(aResultToken, aParam, aParamCount, _et);
 }

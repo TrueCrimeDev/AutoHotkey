@@ -25,6 +25,7 @@ GNU General Public License for more details.
 #include "qmath.h" // for qmathLog()
 #include "script_func_impl.h"
 #include <ShellScalingApi.h>
+#include <algorithm>
 
 
 static inline void AddGuiToList(GuiType* gui)
@@ -5013,7 +5014,7 @@ ResultType GuiType::ParseOptions(LPCTSTR aOptions, bool &aSetLastFoundWindow, To
 			continue; // i.e. the string contains a + or - with a space or tab after it, which is intentionally ignored.
 		
 		// Make a null-terminated copy to simplify comparisons below.
-		tcslcpy(option, next_option, min((option_end - next_option) + 1, _countof(option)));
+		tcslcpy(option, next_option, (std::min)((size_t)(option_end - next_option) + 1, _countof(option)));
 		
 		// Attributes and option words:
 
@@ -5388,7 +5389,7 @@ ResultType GuiType::ControlParseOptions(LPCTSTR aOptions, GuiControlOptionsType 
 			continue; // i.e. the string contains a + or - with a space or tab after it, which is intentionally ignored.
 		
 		// Make a null-terminated copy to simplify comparisons below.
-		tcslcpy(option, next_option, min((option_end - next_option) + 1, _countof(option)));
+		tcslcpy(option, next_option, (std::min)((size_t)(option_end - next_option) + 1, _countof(option)));
 
 		// Attributes:
 		if (!_tcsicmp(option, _T("Section"))) // Adding and removing are treated the same in this case.
@@ -8212,7 +8213,7 @@ int GuiType::FindOrCreateFont(LPCTSTR aOptions, LPCTSTR aFontName, FontType *aFo
 		for (option_end = next_option; *option_end && !IS_SPACE_OR_TAB(*option_end); ++option_end);
 
 		// Make a copy to simplify comparisons below.
-		tcslcpy(option, next_option, min((option_end - next_option) + 1, _countof(option)));
+		tcslcpy(option, next_option, (std::min)((size_t)(option_end - next_option) + 1, _countof(option)));
 
 		if (!_tcsicmp(option, _T("Bold")))
 			font.lfWeight = FW_BOLD;

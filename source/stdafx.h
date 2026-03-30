@@ -1,4 +1,4 @@
-﻿/*
+/*
 AutoHotkey
 
 Copyright 2003-2009 Chris Mallett (support@autohotkey.com)
@@ -32,30 +32,32 @@ GNU General Public License for more details.
 #define _WIN32_WINNT _WIN32_WINNT_WIN10
 #define _WIN32_IE _WIN32_IE_IE70  // Added for TVN_ITEMCHANGED, which most likely requires Vista.
 
+#include "config.h" // compile-time configurations
 #ifdef _MSC_VER
-	#include "config.h" // compile-time configurations
 	#include "debug.h"
+#endif
 
-	// C RunTime Header Files
-	#include <stdio.h>
-	#include <stdlib.h>
-	#include <stdarg.h> // used by snprintfcat()
-	#include <limits.h> // for UINT_MAX, UCHAR_MAX, etc.
-	#include <malloc.h> // For _alloca()
-	//#include <memory.h>
+// C RunTime Header Files
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h> // used by snprintfcat()
+#include <limits.h> // for UINT_MAX, UCHAR_MAX, etc.
+#include <malloc.h> // For _alloca()
+//#include <memory.h>
 
-	#include <windows.h>
-	#include <tchar.h>
-	#include <commctrl.h> // for status bar functions. Must be included after <windows.h>.
-	#include <shellapi.h>  // for ShellExecute()
-	#include <shlobj.h>  // for SHGetMalloc()
-	#include <mmsystem.h> // for mciSendString() and waveOutSetVolume()
-	#include <commdlg.h> // for OPENFILENAME
+#include <windows.h>
+#include <tchar.h>
+#include <commctrl.h> // for status bar functions. Must be included after <windows.h>.
+#include <shellapi.h>  // for ShellExecute()
+#include <shlobj.h>  // for SHGetMalloc()
+#include <mmsystem.h> // for mciSendString() and waveOutSetVolume()
+#include <commdlg.h> // for OPENFILENAME
 
-	// ATL alternatives
-	#include "KuString.h"
-	#include "StringConv.h"
+// ATL alternatives
+#include "KuString.h"
+#include "StringConv.h"
 
+#ifdef _MSC_VER
 	// It's probably best not to do these, because I think they would then be included
 	// for everything, even modules that don't need it, which might result in undesired
 	// dependencies sneaking in, or subtle naming conflicts:

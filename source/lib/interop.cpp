@@ -17,6 +17,7 @@ GNU General Public License for more details.
 #include "stdafx.h"
 #include "script.h"
 #include "script_func_impl.h"
+#include <algorithm>
 
 
 
@@ -456,7 +457,7 @@ BIF_DECL(BIF_StrGetPut) // BIF_DECL(BIF_StrGet), BIF_DECL(BIF_StrPut)
 				if (source_length > INT_MAX)
 					_f_throw_param(0); // Avoid implicitly truncating the string.
 				int src_count = (int)source_length;
-				int buf_count = (int)min(length, (__int64)INT_MAX); // Use maximum allowable size rather than int truncation.
+				int buf_count = (int)(std::min)(length, (__int64)INT_MAX); // Use maximum allowable size rather than int truncation.
 				// UTF-8 does not support this flag.  Although the check further below would probably
 				// compensate for this, UTF-8 is probably common enough to leave this exception here.
 				DWORD flags = (encoding == CP_UTF8) ? 0 : WC_NO_BEST_FIT_CHARS;
@@ -529,7 +530,7 @@ BIF_DECL(BIF_StrGetPut) // BIF_DECL(BIF_StrGet), BIF_DECL(BIF_StrPut)
 			// In theory, capping at INT_MAX could let us operate up to the limit of MultiByteToWideChar,
 			// but in practice it will not return a truncated string, because MultiByteToWideChar sets
 			// ERROR_INVALID_PARAMETER whenever length >= INT_MAX/2 (found through testing, not documented).
-			int src_count = (int)min(length, INT_MAX);
+			int src_count = (int)(std::min)(length, (__int64)INT_MAX);
 			conv_length = MultiByteToWideChar(encoding, 0, (LPCSTR)address, src_count, NULL, 0);
 			if (!TokenSetResult(aResultToken, NULL, conv_length)) // DO NOT SUBTRACT 1, conv_length might not include a null-terminator.
 				return; // Out of memory.

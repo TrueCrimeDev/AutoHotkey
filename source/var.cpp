@@ -117,8 +117,9 @@ ResultType Var::AssignVirtual(ExprTokenType &aValue)
 void Var::AssignVirtualObj(IObject *aObj, ExprTokenType &aValue, ResultToken &aResultToken)
 {
 	auto *param = &aValue;
-	if (aObj->Invoke(aResultToken, IT_SET | IF_BYPASS_METAFUNC | IF_NO_NEW_PROPS, _T("__Value"), ExprTokenType(aObj), &param, 1) == INVOKE_NOT_HANDLED)
-		aResultToken.UnknownMemberError(ExprTokenType(aObj), IT_SET, _T("__Value"));
+	ExprTokenType _et(aObj);
+	if (aObj->Invoke(aResultToken, IT_SET | IF_BYPASS_METAFUNC | IF_NO_NEW_PROPS, _T("__Value"), _et, &param, 1) == INVOKE_NOT_HANDLED)
+		aResultToken.UnknownMemberError(_et, IT_SET, _T("__Value"));
 }
 
 
@@ -621,7 +622,7 @@ ResultType Var::AssignString(LPCTSTR aBuf, VarSizeType aLength, bool aExactSize)
 	if (VarTypeIsVirtual(mType))
 	{
 		if (do_assign)
-			return AssignVirtual(ExprTokenType(const_cast<LPTSTR>(aBuf), aLength));
+			{ ExprTokenType _et(const_cast<LPTSTR>(aBuf), aLength); return AssignVirtual(_et); }
 		// Since above didn't return, the caller wants to allocate some temporary memory for
 		// writing the value into, and should call Close() in order to commit the actual value.
 	}
@@ -842,7 +843,8 @@ ResultType Var::AssignSkipAddRef(IObject *aValueToAssign)
 
 	if (VarTypeIsVirtual(mType))
 	{
-		auto result = AssignVirtual(ExprTokenType(aValueToAssign));
+		ExprTokenType _et(aValueToAssign);
+		auto result = AssignVirtual(_et);
 		aValueToAssign->Release(); // Caller wanted us to take responsibility for this.
 		return result;
 	}
@@ -878,8 +880,9 @@ void Var::Get(ResultToken &aResultToken)
 	}
 	if (mType != VAR_VIRTUAL_OBJ)
 		return ToToken(aResultToken);
-	if (mObject->Invoke(aResultToken, IT_GET | IF_BYPASS_METAFUNC, _T("__Value"), ExprTokenType(mObject), nullptr, 0) == INVOKE_NOT_HANDLED)
-		aResultToken.UnknownMemberError(ExprTokenType(mObject), IT_GET, _T("__Value"));
+	ExprTokenType _et(mObject);
+	if (mObject->Invoke(aResultToken, IT_GET | IF_BYPASS_METAFUNC, _T("__Value"), _et, nullptr, 0) == INVOKE_NOT_HANDLED)
+		aResultToken.UnknownMemberError(_et, IT_GET, _T("__Value"));
 }
 
 

@@ -158,6 +158,16 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 			g_script.SetErrorStdOut(param[12] ? param + 13 : NULL, param[12] == ':');
 		else if (!_tcsicmp(param, _T("/Headless")) || !_tcsicmp(param, _T("--headless")))
 			g_script.SetHeadless();
+		else if (!_tcsicmp(param, _T("/Trace")) || !_tcsicmp(param, _T("--trace")))
+		{
+			g_script.mTrace = true;
+			g_script.SetHeadless();
+			if (AttachConsole(ATTACH_PARENT_PROCESS))
+			{
+				// Reopen stderr so WriteFile(GetStdHandle(STD_ERROR_HANDLE)) works
+				freopen("CONOUT$", "w", stderr);
+			}
+		}
 		else if ((!_tcsnicmp(param, _T("/Diag"), 5) && (param[5] == '\0' || param[5] == '='))
 			|| (!_tcsnicmp(param, _T("--diag"), 6) && (param[6] == '\0' || param[6] == '=')))
 		{
@@ -367,7 +377,7 @@ int MainExecuteScript(bool aMsgSleep)
 	// top part is something that's very involved and requires user interaction:
 	Hotkey::ManifestAllHotkeysHotstringsHooks(); // We want these active now in case auto-execute never returns (e.g. loop)
 
-#ifndef _DEBUG
+#if !defined(_DEBUG) && defined(_MSC_VER)
 	__try
 #endif
 	{
@@ -423,7 +433,7 @@ int MainExecuteScript(bool aMsgSleep)
 			g_script.ExitApp(exec_result == FAIL ? EXIT_ERROR : EXIT_EXIT);
 		}
 	}
-#ifndef _DEBUG
+#if !defined(_DEBUG) && defined(_MSC_VER)
 	__except (EXCEPTION_EXECUTE_HANDLER)
 	{
 		LPCTSTR msg;

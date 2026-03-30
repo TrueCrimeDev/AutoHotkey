@@ -22,6 +22,8 @@ GNU General Public License for more details.
 #include "window.h" // for a lot of things
 #include "application.h" // for MsgSleep()
 #include "TextIO.h"
+#include <utility>
+#include <algorithm>
 
 #define NA MAX_FUNCTION_PARAMS
 #define BIFn(name, minp, maxp, bif, ...) {_T(#name), bif, minp, maxp, FID_##name, __VA_ARGS__}
@@ -318,8 +320,8 @@ Script::Script()
 	, mFileSpec(_T("")), mFileDir(_T("")), mFileName(_T("")), mOurEXE(_T("")), mOurEXEDir(_T("")), mMainWindowTitle(_T(""))
 	, mScriptName(NULL)
 	, mIsReadyToExecute(false), mAutoExecSectionIsRunning(false)
-	, mIsRestart(false), mHeadless(false), mCheckMode(false), mTestMode(false), mDiagJson(false)
-	, mErrorStdOut(false), mErrorStdOutColor(false), mErrorStdOutCP(0)
+	, mIsRestart(false), mHeadless(false), mCheckMode(false), mTestMode(false), mDiagJson(false), mTrace(false)
+	, mErrorStdOut(true), mErrorStdOutColor(false), mErrorStdOutCP(0)
 #ifndef AUTOHOTKEYSC
 	, mValidateThenExit(false)
 	, mCmdLineInclude(NULL)
@@ -1849,6 +1851,7 @@ ResultType Script::LoadIncludedFile(TextStream *fp)
 	LPTSTR hotkey_flag, hotstring_start, hotstring_options;
 	bool hotstring_execute;
 	ResultType hotkey_validity;
+	TCHAR class_export_type;
 
 #ifdef AUTOHOTKEYSC
 	// -1 (MAX_UINT in this case) to compensate for the fact that there is a comment containing
@@ -2377,7 +2380,7 @@ process_completed_line:
 		}
 
 		// Handle this first so that GetLineContExpr() doesn't need to detect it for OTB exclusion:
-		TCHAR class_export_type = 0;
+		class_export_type = 0;
 		bool is_struct_class;
 		if (LPTSTR class_name = IsClassDefinition(buf, mClassObjectCount ? nullptr : &class_export_type, is_struct_class))
 		{
@@ -2550,7 +2553,7 @@ ResultType Script::ParseRemap(LPCTSTR aSource, vk_type remap_dest_vk, LPCTSTR aD
 	}
 	else
 		tcslcpy(remap_dest, aDestName, _countof(remap_dest));  // But exclude modifiers here; they're wanted separately.
-	tcslcpy(remap_dest_modifiers, aDestMods, min(_countof(remap_dest_modifiers), aDestName - aDestMods + 1));
+	tcslcpy(remap_dest_modifiers, aDestMods, (std::min)((size_t)_countof(remap_dest_modifiers), (size_t)(aDestName - aDestMods + 1)));
 
 	if (remap_dest_vk == VK_PAUSE
 		&& !*remap_dest_modifiers // If modifiers are present, it can't be a call to the Pause function.
@@ -4003,7 +4006,7 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 						return CONDITION_TRUE;
 					
 					for (end = cp; *end && !IS_SPACE_OR_TAB(*end); ++end);
-					tcslcpy(word, cp, min(_countof(word), end - cp + 1));
+					tcslcpy(word, cp, (std::min)((size_t)_countof(word), (size_t)(end - cp + 1)));
 
 					// Allow these words when appropriate: 32-bit, 64-bit
 					if (!_tcsicmp(word, _T(AHK_BIT)))
@@ -10037,6 +10040,12 @@ void Line::FreeDerefBufIfLarge()
 	sLogTick[sLogNext++] = GetTickCount(); \
 	if (sLogNext >= LINE_LOG_SIZE) \
 		sLogNext = 0; \
+	if (g_script.mTrace) { \
+		char _trace_buf[16]; \
+		int _trace_n = snprintf(_trace_buf, 16, "%u\n", (line)->mLineNumber); \
+		DWORD _trace_written; \
+		WriteFile(GetStdHandle(STD_ERROR_HANDLE), _trace_buf, _trace_n, &_trace_written, NULL); \
+	} \
 }
 
 

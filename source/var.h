@@ -833,7 +833,7 @@ public:
 		if (VarTypeIsVirtual(mType))
 		{
 			// Commit the value in our temporary buffer.
-			auto result = AssignVirtual(ExprTokenType(mCharContents, CharLength()));
+			ExprTokenType _t(mCharContents, CharLength()); auto result = AssignVirtual(_t);
 			Free(); // Free temporary memory and remove VAR_ATTRIB_VIRTUAL_OPEN.
 			return result;
 		}

@@ -1,4 +1,6 @@
 #pragma once
+#include <cstddef>
+
 
 #include "StrRet.h"
 
@@ -38,7 +40,7 @@ public:
 	optl(const T &&v) : _value {&v} {}
 	optl(const T &v) : _value {&v} {}
 	optl(T &v) : _value {&v} {}
-	optl(nullptr_t) : _value {nullptr} {}
+	optl(std::nullptr_t) : _value {nullptr} {}
 	bool has_value() { return _value != nullptr; }
 	T operator* () { return *_value; }
 	T value() { return *_value; }
@@ -65,7 +67,7 @@ template<> class optl<IObject *>
 	IObject *_value;
 public:
 	optl(IObject *v) : _value {v} {}
-	optl(nullptr_t) : _value {nullptr} {}
+	optl(std::nullptr_t) : _value {nullptr} {}
 	bool has_value() { return _value != nullptr; }
 	IObject *value() { return _value; }
 };

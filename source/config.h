@@ -6,7 +6,7 @@
 #define WIN32_PLATFORM
 #endif
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
 	#if defined(WIN32_PLATFORM) || defined(_WIN64)
 	#define ENABLE_DLLCALL
 	#define ENABLE_REGISTERCALLBACK

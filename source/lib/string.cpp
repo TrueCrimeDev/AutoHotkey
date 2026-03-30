@@ -757,7 +757,7 @@ int SortUDF(const void *a1, const void *a2)
 
 	LPTSTR aStr1 = *(LPTSTR *)a1;
 	LPTSTR aStr2 = *(LPTSTR *)a2;
-	ExprTokenType param[] = { aStr1, aStr2, __int64(aStr2 - aStr1) };
+	ExprTokenType param[] = { aStr1, aStr2, (__int64)(aStr2 - aStr1) };
 	__int64 i64;
 	g_SortFuncResult = CallMethod(g_SortFunc, g_SortFunc, nullptr, param, _countof(param), &i64);
 	// An alternative to g_SortFuncResult using 'throw' to abort qsort() produced slightly

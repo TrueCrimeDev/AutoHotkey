@@ -48,7 +48,7 @@ public:
 
 
 
-enum BuiltInFunctionID;
+enum BuiltInFunctionID : int;
 class WinGroup
 {
 private:

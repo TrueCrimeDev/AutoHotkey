@@ -853,8 +853,9 @@ has_valid_return_type:
 				{
 					aResultToken.symbol = SYM_STRING; // Set default for Invoke (New set aResultToken to obj without calling AddRef).
 					aResultToken.marker = _T("");
+					ExprTokenType _et(obj);
 					auto result = obj->Invoke(aResultToken, IT_SET | IF_BYPASS_METAFUNC | IF_NO_NEW_PROPS
-						, _T("__Value"), ExprTokenType(obj), aParam + i + 1, 1);
+						, _T("__Value"), _et, aParam + i + 1, 1);
 					if (result == INVOKE_NOT_HANDLED)
 					{
 						if (this_param.symbol == SYM_MISSING)
@@ -1190,7 +1191,8 @@ has_valid_return_type:
 			if (!obj) // It's null if the caller passed a struct of the right type.
 				break;
 			FuncResult result_token;
-			auto result = obj->Invoke(result_token, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), ExprTokenType(obj), nullptr, 0);
+			ExprTokenType _et(obj);
+			auto result = obj->Invoke(result_token, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), _et, nullptr, 0);
 			if (result_token.Exited())
 				return;
 			if (result == INVOKE_NOT_HANDLED)
@@ -1221,7 +1223,8 @@ has_valid_return_type:
 	{
 		aResultToken.symbol = SYM_STRING; // Set default for Invoke.
 		aResultToken.marker = _T("");
-		auto result = pObj[0]->Invoke(aResultToken, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), ExprTokenType(pObj[0]), nullptr, 0);
+		ExprTokenType _et(pObj[0]);
+		auto result = pObj[0]->Invoke(aResultToken, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), _et, nullptr, 0);
 		if (result == INVOKE_NOT_HANDLED)
 		{
 			aResultToken.SetValue(pObj[0]);

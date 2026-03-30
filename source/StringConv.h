@@ -82,8 +82,8 @@ public:
 #ifdef UNICODE
 #define CStringTCharFromWCharIfNeeded(s, ...) (s)
 #define CStringWCharFromTCharIfNeeded(s, ...) (s)
-#define CStringTCharFromCharIfNeeded(s, ...) CStringTCharFromChar((s), __VA_ARGS__)
-#define CStringCharFromTCharIfNeeded(s, ...) CStringCharFromTChar((s), __VA_ARGS__)
+#define CStringTCharFromCharIfNeeded(s, ...) CStringTCharFromChar((s), ##__VA_ARGS__)
+#define CStringCharFromTCharIfNeeded(s, ...) CStringCharFromTChar((s), ##__VA_ARGS__)
 
 class CStringTCharFromWChar : public CStringW
 {
@@ -104,8 +104,8 @@ typedef CStringCharFromWChar	CStringCharFromTChar;
 
 #else
 // ! _UNICODE
-#define CStringTCharFromWCharIfNeeded(s, ...) CStringTCharFromWChar((s), __VA_ARGS__)
-#define CStringWCharFromTCharIfNeeded(s, ...) CStringWCharFromTChar((s), __VA_ARGS__)
+#define CStringTCharFromWCharIfNeeded(s, ...) CStringTCharFromWChar((s), ##__VA_ARGS__)
+#define CStringWCharFromTCharIfNeeded(s, ...) CStringWCharFromTChar((s), ##__VA_ARGS__)
 #define CStringTCharFromCharIfNeeded(s, ...) (s)
 #define CStringCharFromTCharIfNeeded(s, ...) (s)
 

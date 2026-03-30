@@ -19,6 +19,7 @@ GNU General Public License for more details.
 #include <gdiplus.h> // Used by LoadPicture().
 #include "util.h"
 #include "globaldata.h"
+#include <algorithm>
 
 
 int GetYDay(int aMon, int aDay, bool aIsLeapYear)
@@ -109,7 +110,7 @@ DWORD YYYYMMDDToSystemTime2(LPCTSTR aYYYYMMDD, SYSTEMTIME *aSystemTime)
 		if (cp = _tcschr(aYYYYMMDD + 1, '-'))
 		{
 			// Temporarily terminate; otherwise, the dash and other chars would be considered invalid fields.
-			auto n = min(cp - aYYYYMMDD, _countof(temp) - 1);
+			auto n = (std::min)((size_t)(cp - aYYYYMMDD), _countof(temp) - 1);
 			tmemcpy(temp, aYYYYMMDD, n);
 			temp[n] = '\0';
 			first = temp;

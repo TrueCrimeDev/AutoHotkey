@@ -531,7 +531,8 @@ class AutoHotkeyScript : public ObjectBase
 				obj = Object::ValueBase(token);
 				aFlags |= IF_SUBSTITUTE_THIS;
 			}
-			return obj->Invoke(aResultToken, aFlags, nullptr, ExprTokenType(obj), aParam, aParamCount);
+			ExprTokenType _et(obj);
+			return obj->Invoke(aResultToken, aFlags, nullptr, _et, aParam, aParamCount);
 		}
 		if (IS_INVOKE_SET) // Script.Var := Value
 			return var->Assign(*aParam[0]);
@@ -679,7 +680,8 @@ bool LibNotifyProblem(LPCTSTR aMessage, LPCTSTR aExtra, Line *aLine, bool aWarn)
 		aLine = &sLine;
 	}
 	auto obj = aLine->CreateRuntimeException(aMessage, aExtra, aWarn ? Object::sPrototype : nullptr);
-	auto result = LibNotifyProblem(ExprTokenType(obj));
+	ExprTokenType _et(obj);
+	auto result = LibNotifyProblem(_et);
 	obj->Release();
 	return result;
 }

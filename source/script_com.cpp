@@ -6,6 +6,7 @@
 #include "script_func_impl.h"
 #include "script_gui.h"
 #include <DispEx.h>
+#include <algorithm>
 
 
 // IID__IObject -- .NET's System.Object:
@@ -1577,7 +1578,7 @@ ResultType ComArrayEnum::Next(Var *aVar1, Var *aVar2)
 		if (mIndexMode)
 		{
 			if (aVar1)
-				aVar1->Assign(mLBound + mOffset);
+				aVar1->Assign((__int64)(mLBound + mOffset));
 			aVar1 = aVar2;
 		}
 		if (aVar1)
@@ -1634,7 +1635,7 @@ STDMETHODIMP EnumComCompat::Next(ULONG celt, /*out*/ VARIANT *rgVar, /*out*/ ULO
 	if (!celt)
 		return E_INVALIDARG;
 
-	int pc = min(celt, 1U + mCheat);
+	int pc = (std::min)(celt, (ULONG)(1U + mCheat));
 	VarRef *var[2] = { new VarRef, pc > 1 ? new VarRef : nullptr };
 	ExprTokenType tparam[2], *param[] = { tparam, tparam + 1 };
 	tparam[0].SetValue(var[0]);

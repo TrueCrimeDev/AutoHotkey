@@ -1297,7 +1297,8 @@ int Debugger::WriteEnumItems(PropertyInfo &aProp)
 void Debugger::PropertyWriter::WriteEnumItems(IObject *aEnumerable, int aStart, int aEnd)
 {
 	IObject *enumerator;
-	auto result = GetEnumerator(enumerator, ExprTokenType(aEnumerable), 2, false);
+	ExprTokenType _et(aEnumerable);
+	auto result = GetEnumerator(enumerator, _et, 2, false);
 	if (result != OK)
 	{
 		// Just return no items, since setting an error would prevent any other properties

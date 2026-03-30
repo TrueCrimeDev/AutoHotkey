@@ -18,6 +18,7 @@ GNU General Public License for more details.
 #include "script.h"
 #include "script_gui.h"
 #include "script_func_impl.h"
+#include <algorithm>
 
 
 
@@ -117,7 +118,7 @@ FResult GuiControlType::TV_AddModify(bool add_mode, UINT_PTR aItemID, UINT_PTR a
 		// if ((option_end[-1] == '1' || option_end[-1] == '0') && )
 
 		// Make a copy to simplify comparisons below.
-		tcslcpy(option_word, next_option, min((option_end - next_option) + 1, _countof(option_word)));
+		tcslcpy(option_word, next_option, (std::min)((size_t)(option_end - next_option) + 1, _countof(option_word)));
 
 		if (!_tcsicmp(option_word, _T("Select"))) // Could further allow "ed" suffix by checking for that inside, but "Selected" is getting long so it doesn't seem something many would want to use.
 		{

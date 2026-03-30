@@ -1,5 +1,9 @@
 
 #include "stdafx.h"
+#ifndef _MSC_VER
+#include <windows.h>
+#include <tchar.h>
+#endif
 #include "ahkversion.h"
 
 LPSTR AHK_VERSION = RAW_AHK_VERSION;

@@ -1827,7 +1827,10 @@ ResultType GetObjectIntProperty(IObject *aObject, LPTSTR aPropName, __int64 &aVa
 			return aResultToken.Error(ERR_TYPE_MISMATCH, aPropName, ErrorPrototype::Type);
 		//aValue = 0; // Caller should set default value for these cases.
 		if (!aOptional)
-			return aResultToken.UnknownMemberError(ExprTokenType(aObject), IT_GET, aPropName);
+		{
+			ExprTokenType _et(aObject);
+			return aResultToken.UnknownMemberError(_et, IT_GET, aPropName);
+		}
 		return result; // Let caller know it wasn't found.
 	}
 
@@ -1846,7 +1849,10 @@ ResultType SetObjectIntProperty(IObject *aObject, LPTSTR aPropName, __int64 aVal
 	if (result == FAIL || result == EARLY_EXIT)
 		return aResultToken.SetExitResult(result);
 	if (result == INVOKE_NOT_HANDLED)
-		return aResultToken.UnknownMemberError(ExprTokenType(aObject), IT_GET, aPropName);
+	{
+		ExprTokenType _et(aObject);
+		return aResultToken.UnknownMemberError(_et, IT_GET, aPropName);
+	}
 	return OK;
 }
 
@@ -2088,6 +2094,7 @@ BIF_DECL(BIF_IsTypeish)
 	TCHAR *cp;
 
 	// The first set of checks are for isNumber(), isInteger() and isFloat(), which permit pure numeric values.
+	LPTSTR aValueStr; StringCaseSenseType string_case_sense;
 	switch (TypeOfToken(*aParam[0]))
 	{
 	case SYM_INTEGER:
@@ -2130,8 +2137,8 @@ BIF_DECL(BIF_IsTypeish)
 		}
 	}
 	// Since above did not return or goto, the value is a string.
-	LPTSTR aValueStr = ParamIndexToString(0);
-	auto string_case_sense = ParamIndexToCaseSense(1); // For IsAlpha, IsAlnum, IsUpper, IsLower.
+	aValueStr = ParamIndexToString(0);
+	string_case_sense = ParamIndexToCaseSense(1); // For IsAlpha, IsAlnum, IsUpper, IsLower.
 	switch (string_case_sense)
 	{
 	case SCS_INSENSITIVE: // This case also executes when the parameter is omitted, such as for functions which don't have this parameter.
@@ -3644,7 +3651,10 @@ ResultType ValidateFunctor(IObject *aFunc, int aParamCount, ResultToken &aResult
 	if (aUseMinParams) // CallbackCreate's signal to default to MinParams.
 	{
 		if (!has_minparams)
-			return aShowError ? aResultToken.UnknownMemberError(ExprTokenType(aFunc), IT_GET, _T("MinParams")) : CONDITION_FALSE;
+		{
+			if (aShowError) { ExprTokenType _et(aFunc); return aResultToken.UnknownMemberError(_et, IT_GET, _T("MinParams")); }
+			return CONDITION_FALSE;
+		}
 		*aUseMinParams = aParamCount = (int)min_params;
 	}
 	else if (has_minparams && aParamCount < (int)min_params)
@@ -3669,7 +3679,10 @@ ResultType ValidateFunctor(IObject *aFunc, int aParamCount, ResultToken &aResult
 	if (min_result == INVOKE_NOT_HANDLED && max_result == INVOKE_NOT_HANDLED)
 		if (Object *obj = dynamic_cast<Object *>(aFunc))
 			if (!obj->HasMethod(_T("Call")))
-				return aShowError ? aResultToken.UnknownMemberError(ExprTokenType(aFunc), IT_CALL, _T("Call")) : CONDITION_FALSE;
+			{
+				if (aShowError) { ExprTokenType _et(aFunc); return aResultToken.UnknownMemberError(_et, IT_CALL, _T("Call")); }
+				return CONDITION_FALSE;
+			}
 		// Otherwise: COM objects can be callable via DISPID_VALUE.  There's probably
 		// no way to determine whether the object supports that without invoking it.
 	return OK;

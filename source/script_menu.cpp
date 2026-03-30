@@ -21,6 +21,7 @@ GNU General Public License for more details.
 #include "window.h" // for SetForegroundWindowEx()
 #include "script_func_impl.h"
 #include "script_gui.h"
+#include <algorithm>
 
 
 
@@ -774,7 +775,7 @@ ResultType UserMenu::UpdateOptions(UserMenuItem *aMenuItem, LPCTSTR aOptions)
 		if (option_end == next_option)
 			continue;
 		
-		tcslcpy(option_word, next_option, min((option_end - next_option) + 1, _countof(option_word)));
+		tcslcpy(option_word, next_option, (std::min)((size_t)(option_end - next_option) + 1, _countof(option_word)));
 
 		// End generic option-parsing code; begin menu options.
 		if (!_tcsicmp(option_word, _T("Radio"))) if (adding) new_type |= MFT_RADIOCHECK; else new_type &= ~MFT_RADIOCHECK;

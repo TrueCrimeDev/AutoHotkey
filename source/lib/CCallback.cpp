@@ -191,7 +191,8 @@ UINT64 CALLBACK RegisterCallbackCStub(UINT_PTR *params, char *address) // Used b
 						aborted = true;
 						break;
 					}
-					auto result = obj->Invoke(result_token, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), ExprTokenType(obj), nullptr, 0);
+					ExprTokenType _et(obj);
+					auto result = obj->Invoke(result_token, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), _et, nullptr, 0);
 					if (result == FAIL || result == EARLY_EXIT)
 					{
 						aborted = true;
@@ -269,7 +270,8 @@ UINT64 CALLBACK RegisterCallbackCStub(UINT_PTR *params, char *address) // Used b
 						fr.symbol = SYM_STRING;
 						fr.marker = _T("");
 						// Invoke __Value as a "conversion operator".
-						result = obj->Invoke(fr, IT_SET | IF_BYPASS_METAFUNC | IF_NO_NEW_PROPS, _T("__Value"), ExprTokenType(obj), &prm, 1);
+						ExprTokenType _et(obj);
+						result = obj->Invoke(fr, IT_SET | IF_BYPASS_METAFUNC | IF_NO_NEW_PROPS, _T("__Value"), _et, &prm, 1);
 						fr.Free();
 						if (result == INVOKE_NOT_HANDLED) // Conversion not handled; report the error.
 						{

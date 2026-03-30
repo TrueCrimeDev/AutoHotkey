@@ -217,7 +217,7 @@ struct input_type
 	UCHAR KeyVK[VK_ARRAY_COUNT] {}; // A sparse array of key flags by VK.
 	UCHAR KeySC[SC_ARRAY_COUNT] {}; // A sparse array of key flags by SC.
 	
-	input_type::input_type() {}
+	input_type() {}
 	~input_type()
 	{
 		free(Buffer);

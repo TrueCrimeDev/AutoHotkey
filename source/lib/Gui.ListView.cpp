@@ -17,6 +17,7 @@ GNU General Public License for more details.
 #include "stdafx.h"
 #include "script.h"
 #include "script_gui.h"
+#include <algorithm>
 
 
 
@@ -564,7 +565,7 @@ FResult GuiControlType::LV_InsertModifyCol(optl<int> aColumn, optl<StrArg> aOpti
 			continue; // i.e. the string contains a + or - with a space or tab after it, which is intentionally ignored.
 
 		// Make a copy to simplify comparisons below.
-		tcslcpy(option_word, next_option, min((option_end - next_option) + 1, _countof(option_word)));
+		tcslcpy(option_word, next_option, (std::min)((size_t)(option_end - next_option) + 1, _countof(option_word)));
 
 		// For simplicity, the value of "adding" is ignored for this and the other number/alignment options.
 		if (!_tcsicmp(option_word, _T("Integer")))
