@@ -639,7 +639,7 @@ enum enum_act {
 // Keep ACT_BLOCK_BEGIN as the first "control flow" action, for range checks with ACT_FIRST_CONTROL_FLOW:
 , ACT_BLOCK_BEGIN, ACT_BLOCK_END
 , ACT_HOTKEY_IF // Must be before ACT_FIRST_COMMAND.
-, ACT_EXIT // Used with AddLine(), but excluded from the "named" range below so that the function is preferred.
+, ACT_END_MODULE // Used with AddLine(), but excluded from the "named" range below so that the function is preferred.
 , ACT_EXPORT
 // ================================================================================
 // Named actions recognized by ConvertActionType:

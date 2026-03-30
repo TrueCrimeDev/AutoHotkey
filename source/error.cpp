@@ -1215,10 +1215,10 @@ ResultType TypeError(LPCTSTR aExpectedType, ExprTokenType &aActualValue)
 ResultType TypeError(LPCTSTR aExpectedType, LPCTSTR aActualType, LPCTSTR aExtraInfo)
 {
 	auto an = [](LPCTSTR thing) {
-		return _tcschr(_T("aeiou"), ctolower(*thing)) ? _T("n") : _T("");
+		return *thing ? _tcschr(_T("aeiou"), ctolower(*thing)) ? _T("an ") : _T("a ") : _T("nothing");
 	};
 	TCHAR msg[512];
-	sntprintf(msg, _countof(msg), _T("Expected a%s %s but got a%s %s.")
+	sntprintf(msg, _countof(msg), _T("Expected %s%s but got %s%s.")
 		, an(aExpectedType), aExpectedType, an(aActualType), aActualType);
 	return g_script.RuntimeError(msg, aExtraInfo, FAIL_OR_OK, nullptr, ErrorPrototype::Type);
 }

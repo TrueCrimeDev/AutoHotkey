@@ -2407,7 +2407,6 @@ public:
 	ScriptModule *CreateModule(LPCTSTR aName);
 	ResultType ResolveImports(ScriptModule *aTerminator = nullptr);
 	ResultType ResolveImports(ScriptImport &aImport, ScriptModule *aDirectiveList);
-	Var *AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, bool aExport);
 	Var *FindImportedVar(LPCTSTR aVarName);
 
 	ResultType DerefInclude(LPTSTR &aOutput, LPCTSTR aBuf);
@@ -2653,8 +2652,9 @@ BIF_DECL(BIF_ObjPtr);
 BIF_DECL(BIF_ObjXXX);
 
 BIF_DECL(NewStruct);
-BIF_DECL(Struct_At);
-BIF_DECL(Struct_Item);
+BIF_DECL(StructClass_At);
+BIF_DECL(StructClass_Item);
+BIF_DECL(StructClass_Ptr);
 
 BIF_DECL(BIF_Base);
 BIF_DECL(BIF_HasBase);

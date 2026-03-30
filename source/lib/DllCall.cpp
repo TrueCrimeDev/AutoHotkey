@@ -378,14 +378,15 @@ bool Object::GetStructArgInfo(DYNAPARM &aType, Object *&aPointedClass)
 			aType.is_unsigned = si->is_unsigned;
 			aType.passed_by_address = si->pointed_class != nullptr;
 			aPointedClass = nullptr;
+			return true;
 		}
 		else if (si->size)
 		{
 			aType.type = DLL_ARG_STRUCT;
 			aType.struct_size = si->item_count ? -1 : (int)si->size;
 			aPointedClass = si->pointed_class;
+			return true;
 		}
-		return true;
 	}
 	return false;
 }

@@ -128,7 +128,7 @@ Object *Object::CreateStruct()
 	return obj;
 }
 
-Object *Object::CreateStructPtr(UINT_PTR aPtr, Object *aBase, ResultToken &aResultToken)
+Object *Object::CreateStructPtr(UINT_PTR aPtr, Object *aBase, ResultToken &aResultToken, bool aCopy)
 {
 	Object *obj = new Object();
 	obj->mFlags |= CannotOwnProps | NoCallDelete;
@@ -138,7 +138,18 @@ Object *Object::CreateStructPtr(UINT_PTR aPtr, Object *aBase, ResultToken &aResu
 		obj->Release();
 		return nullptr;
 	}
-	obj->SetDataPtr(aPtr);
+	if (aCopy)
+	{
+		auto size = obj->StructSize();
+		if (obj->AllocDataPtr(size) != OK)
+		{
+			obj->Release();
+			return nullptr;
+		}
+		memcpy((void*)obj->DataPtr(), (void*)aPtr, size);
+	}
+	else
+		obj->SetDataPtr(aPtr);
 	return obj;
 }
 
@@ -437,7 +448,7 @@ ResultType Array::ToStrings(LPTSTR *aStrings, int &aStringCount, int aStringsMax
 
 bool Object::Delete()
 {
-	if (mNested && mNested[0] && mRefCount)
+	if (mNested && mNested[0])
 	{
 		// Let "outer" be mNested[0] and "inner" be the current object.  The circular dependency
 		// is handled by counting inner's reference to outer only while there are external refs
@@ -446,10 +457,15 @@ bool Object::Delete()
 		// Outer's __delete may rely on the inner objects, and yet inner's __delete can't execute
 		// safely if its DataPtr() points to deleted data.  So outer is always destructed first,
 		// and it becomes responsible for recursively destructing inner.
-		mRefCount--; // To reflect that this object doesn't have a counted ref to outer during outer's __delete.
-		bool deleted = mNested[0]->Release() == 0;
-		mRefCount++;
-		return deleted; // Caller will --mRefCount.
+		if (mRefCount)
+		{
+			mRefCount--; // To reflect that this object doesn't have a counted ref to outer during outer's __delete.
+			if (mNested[0]->Release() == 0)
+				return true; // this was deleted, so don't do mRefCount++.
+			mRefCount++; // Caller will --mRefCount.
+			return false;
+		}
+		mRefCount++; // Must be non-zero during __Delete.
 	}
 
 	// __Delete shouldn't be called for Prototype objects.  Although it would be more efficient to
@@ -556,8 +572,13 @@ Object::~Object()
 		if (mFlags & DataIsStructInfo)
 		{
 			auto &si = *(StructInfo*)mData;
-			if (si.pointed_class)
-				si.pointed_class->Release();
+			// The pointer class holds a counted reference to the pointed class only while
+			// external references to the pointer class exist.  At this stage all external
+			// references to both have been released and pointed_class has been deleted.
+			if (si.pointer_class)
+				si.pointer_class->Delete();
+			//if (si.pointed_class)
+			//	si.pointed_class->Release();
 			if (si.array_class_map)
 				si.array_class_map->Release();
 		}
@@ -1545,8 +1566,41 @@ Object *Object::CreateClass(LPTSTR aClassName, Object *aBase, Object *aPrototype
 	return class_obj;
 }
 
-void Object::CreatePtrClass(LPTSTR aClassName, Object *aClass, StructInfo *aNative)
+void Object::CreatePtrClass(ResultToken &aResultToken, ExprTokenType &aToClass, StructInfo *aNative)
 {
+	auto sc_ = TokenToObject(aToClass);
+	auto sc = sc_->IsOfType(Object::sPrototype) ? (Object*)sc_ : nullptr;
+	auto sp = sc ? sc->ClassGetPrototype() : nullptr;
+	auto spsi = sp ? sp->GetStructInfo() : nullptr;
+	if (spsi && spsi->pointer_class)
+	{
+		// Return the previously created class.
+		if (++spsi->pointer_class->mRefCount == 1)
+			++sc->mRefCount; // Must AddRef() the pointed class whenever the pointer class becomes ref-counted. 
+		_f_return(spsi->pointer_class);
+	}
+	if (!spsi || !sp->IsDerivedFrom(Object::sStructPrototype))
+		return (void)aResultToken.TypeError(_T("Struct class"), aToClass);
+
+	auto ptr_cls = CreatePtrClass(sc, sp, spsi);
+	//ptr_cls->AddRef(); // mRefCount remains at 1 because we want the corresponding Release() to call Delete().
+	_f_return(ptr_cls);
+}
+
+Object *Object::CreatePtrClass(Object *sc, Object *sp, StructInfo *spsi)
+{
+	ASSERT(sc && sp && spsi && !spsi->pointer_class);
+
+	auto bsp = sp->Base();
+	auto bsi = bsp->GetStructInfo();
+	auto bpc = bsi->pointer_class;
+	if (!bpc)
+		bpc = CreatePtrClass(sc->Base(), bsp, bsi);
+	else if (bpc->mRefCount == 0) // About to become 1.
+		bpc->mNested[0]->mRefCount++; // Must AddRef() the pointed class whenever the pointer class becomes ref-counted. 
+	ASSERT(bpc);
+
+	LPTSTR aClassName = sp->GetOwnPropString(_T("__Class"));
 	auto len = _tcslen(aClassName);
 	auto buf = len ? (LPTSTR)_malloca((len + _countof(STRUCT_PTR_CLASS_SUFFIX)) * sizeof(TCHAR)) : nullptr;
 	LPTSTR class_name;
@@ -1558,32 +1612,45 @@ void Object::CreatePtrClass(LPTSTR aClassName, Object *aClass, StructInfo *aNati
 	}
 	else
 		class_name = STRUCT_PTR_CLASS_NAME;
-	auto ptr_pro = CreatePrototype(class_name, Object::sPtrPrototype);
-	auto ptr_cls = CreateClass(ptr_pro, Object::sPtrClass);
-	aClass->DefineClass(STRUCT_PTR_CLASS_NAME, ptr_cls, true);
-	auto tp = ptr_pro->DefineTypedProperty(_T("Value"));
-	tp->type = MdType::IntPtr;
-	tp->class_object = nullptr;
-	tp->pointed_proto = nullptr;
-	tp->item_count = 0;
-	tp->data_offset = 0;
+
+	auto ptr_pro = CreatePrototype(class_name, bpc->ClassGetPrototype());
+	auto ptr_cls = CreateClass(ptr_pro, bpc);
+	ptr_cls->mFlags |= StructInfoLocked; // nested_count must remain 0.
+	ptr_cls->mNested = new Object * [1]; // Can't use &si->pointed_class because delete will be called.
+	ptr_cls->mNested[0] = sc;
+	spsi->pointer_class = ptr_cls;
 	auto si = ptr_pro->GetStructInfo(true);
 	si->align = si->size = sizeof(void*);
 	si->nested_count = 1;
-	si->pointed_class = aClass;
-	if (aClass)
-		aClass->AddRef();
-	if (aNative)
+	si->pointed_class = sc;
+	if (sc)
+		sc->AddRef();
+	if (!spsi->pointed_class && spsi->dllcall_type)
 	{
-		si->dllcall_type = aNative->dllcall_type;
-		si->is_unsigned = aNative->is_unsigned;
+		si->dllcall_type = spsi->dllcall_type;
+		si->is_unsigned = spsi->is_unsigned;
 	}
 	ObjectMember members[]{
 		Object_Member(__Value, StructPtrInvoke, 0, IT_SET)
 	};
 	DefineMembers(ptr_pro, class_name, members, _countof(members));
 	ptr_pro->mFlags &= ~NativeClassPrototype;
+	ptr_pro->Release();
 	_freea(buf);
+
+	return ptr_cls;
+}
+
+BIF_DECL(StructClass_Ptr)
+{
+	Object::CreatePtrClass(aResultToken, *aParam[0]);
+	if (_f_callee_id && aResultToken.symbol == SYM_OBJECT)
+	{
+		auto cls = (Object*)aResultToken.object;
+		aResultToken.SetValue(_T(""));
+		cls->Invoke(aResultToken, IT_CALL, nullptr, ExprTokenType{ cls }, aParam + 1, aParamCount - 1);
+		cls->Release();
+	}
 }
 
 void Object::CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClass, size_t aCount)
@@ -1601,7 +1668,13 @@ void Object::CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClas
 	}
 	ExprTokenType key = (__int64)aCount;
 	if (map->GetItem(aResultToken, key))
+	{
+		ASSERT(aResultToken.symbol == SYM_OBJECT);
+		auto ac = (Object*)aResultToken.object;
+		if (++ac->mRefCount == 1)
+			++sc->mRefCount; // Must AddRef() the element class whenever the array class becomes ref-counted. 
 		return;
+	}
 
 	TCHAR class_name[MAX_CLASS_NAME_LENGTH + 1];
 	sntprintf(class_name, _countof(class_name), _T("%s[%zi]"), sp->GetOwnPropString(_T("__Class")), aCount);
@@ -1618,6 +1691,11 @@ void Object::CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClas
 		ac->Release();
 		return (void)aResultToken.MemoryError();
 	}
+	ac->mFlags |= StructInfoLocked; // nested_count must remain 0.
+	ac->mNested = new Object * [1];
+	ac->mNested[0] = sc;
+	ac->mRefCount--;
+	ASSERT(ac->mRefCount == 1); // Only the reference to be returned below is counted.
 
 	sc->AddRef();
 	if (!spsi->item_count)
@@ -1633,7 +1711,7 @@ void Object::CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClas
 	aResultToken.SetValue(ac);
 }
 
-BIF_DECL(Struct_Item)
+BIF_DECL(StructClass_Item)
 {
 	if (!ParamIndexIsNumeric(1))
 		return (void)aResultToken.ParamError(0, aParam[1], _T("Integer"));
@@ -1910,7 +1988,7 @@ TypedProperty *Object::DefineTypedProperty(name_t aName)
 	return field->tprop;
 }
 
-FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, size_t aCount, size_t aPack)
+FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, size_t aCount, size_t aPack, size_t aOffset)
 {
 	size_t psize = 0, palign = 0;
 	StructInfo *psi = nullptr;
@@ -1959,15 +2037,20 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 		aClass->AddRef();
 	}
 	tprop->pointed_proto = psi && psi->pointed_class && !psi->item_count ? psi->pointed_class->ClassGetPrototype() : nullptr;
+	if (tprop->pointed_proto)
+		tprop->pointed_proto->AddRef();
 	tprop->item_count = aCount;
 	if (aPack && palign > aPack)
 		palign = aPack;
 	if (palign > si->align)
 		si->align = palign;
 	ASSERT(palign && ((palign & (palign - 1)) == 0)); // Must be a power of 2.
-	si->size = (si->size + palign - 1) & ~(palign - 1);
-	tprop->data_offset = si->size;
-	si->size += psize; // size may be unaligned until the struct definition is closed (if palign < si-align).
+	if (aOffset == -1)
+		aOffset = (si->size + palign - 1) & ~(palign - 1);
+	tprop->data_offset = aOffset;
+	aOffset += psize;
+	if (si->size < aOffset)
+		si->size = aOffset; // size may be unaligned until the struct definition is closed (if palign < si-align).
 	return OK;
 }
 
@@ -2002,6 +2085,7 @@ Object::StructInfo *Object::GetStructInfo(bool aDefine)
 			si.align = bsi.align;
 			si.nested_count = bsi.nested_count;
 			si.item_count = bsi.item_count;
+			si.pointer_class = nullptr; // Each subclass should get its own (dynamically).
 			si.pointed_class = bsi.pointed_class;
 			si.array_class_map = nullptr; // Each subclass must create its own map.
 			si.native_type = MdType::Void; // Revert to a normal struct if extending a numeric type.
@@ -2016,6 +2100,7 @@ Object::StructInfo *Object::GetStructInfo(bool aDefine)
 			si.is_unsigned = false;
 			si.nested_count = 0;
 			si.item_count = 0;
+			si.pointer_class = nullptr;
 			si.pointed_class = nullptr;
 			si.array_class_map = nullptr;
 		}
@@ -2090,13 +2175,29 @@ void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 		MdType ptype = pclass ? MdType::Void : TypeCode(TokenToString(value));
 		size_t pcount = (ptype == MdType::Void) ? (size_t)TokenToInt64(value) : 0;
 		size_t pack = desc->GetOwnProp(value, _T("Pack")) ? (size_t)TokenToInt64(value) : 0;
-		switch (DefineTypedProperty(name, ptype, pclass, pcount, pack))
+		size_t offset = -1;
+		if (desc->GetOwnProp(value, _T("Offset")))
+		{
+			if (value.symbol == SYM_STRING)
+			{
+				auto f = FindField(value.marker);
+				if (f && f->symbol == SYM_TYPED_FIELD)
+					offset = f->tprop->data_offset;
+			}
+			else if (value.symbol == SYM_INTEGER && value.value_int64 >= 0)
+			{
+				offset = (size_t)value.value_int64;
+			}
+			if (offset == -1)
+				_o_throw_value(aID ? ERR_PARAM3_INVALID : ERR_PARAM2_INVALID);
+		}
+		switch (DefineTypedProperty(name, ptype, pclass, pcount, pack, offset))
 		{
 		case OK:
 			AddRef();
 			_o_return(this);
 		case FR_E_ARGS:
-			_o_throw_param(1 + aID);
+			_o_throw_value(aID ? ERR_PARAM3_INVALID : ERR_PARAM2_INVALID);
 		case FR_E_OUTOFMEM:
 			_o_throw_oom;
 		default:
@@ -2161,7 +2262,7 @@ void Object::GetOwnPropDesc(ResultToken &aResultToken, int aID, int aFlags, Expr
 		if (field->tprop->class_object)
 			desc->SetOwnProp(_T("Type"), field->tprop->class_object);
 		else if (field->tprop->type != MdType::Void)
-			desc->SetOwnProp(_T("Type"), TypeName(field->tprop->type));
+			desc->SetOwnProp(_T("Type"), sPrimitiveClass[(int)field->tprop->type-1]);
 		else
 			desc->SetOwnProp(_T("Type"), (__int64)field->tprop->item_count);
 		desc->SetOwnProp(_T("Offset"), field->tprop->data_offset);
@@ -2693,6 +2794,8 @@ TypedProperty::~TypedProperty()
 {
 	if (class_object)
 		class_object->Release();
+	if (pointed_proto)
+		pointed_proto->Release();
 }
 
 
@@ -4174,20 +4277,39 @@ void Object::CreateRootPrototypes()
 	});
 
 	sStructClass = (Object*)g_script.FindGlobalVar(_T("Struct"), 6)->Object();
-	sStructClass->DefineMethod(_T("At"), new BuiltInFunc {_T("Struct.At"), Struct_At, 2, 2});
-	auto struct_item = sStructClass->DefineProperty(_T("__Item"));
-	struct_item->SetGetter(new BuiltInFunc{ _T("Struct.__Item"), Struct_Item, 2, 2 });
-	struct_item->NoEnumGet = true;
+	sStructClass->DefineMethod(_T("At"), new BuiltInFunc {_T("Struct.At"), StructClass_At, 2, 2});
+	prop = sStructClass->DefineProperty(_T("__Item"));
+	prop->SetGetter(new BuiltInFunc{ _T("Struct.__Item"), StructClass_Item, 2, 2 });
+	prop->NoEnumGet = true;
+	prop = sStructClass->DefineProperty(_T("Ptr"));
+	prop->SetMethod(new BuiltInFunc{ _T("Struct.Ptr"), StructClass_Ptr, 1, 1, true, (void*)1 });
+	prop->SetGetter(new BuiltInFunc{ _T("Struct.Ptr"), StructClass_Ptr, 1, 1, false, (void*)0 });
+	prop->NoEnumGet = true;
+	prop->NoParamGet = true;
+
 	sPtrPrototype = CreatePrototype(_T("Struct") STRUCT_PTR_CLASS_SUFFIX, sStructPrototype);
 	sPtrClass = CreateClass(sPtrPrototype, sStructClass);
+	{
+		auto &tp = *sPtrPrototype->DefineTypedProperty(_T("Value"));
+		tp.type = MdType::IntPtr;
+		tp.class_object = nullptr;
+		tp.pointed_proto = nullptr;
+		tp.item_count = 0;
+		tp.data_offset = 0;
+		auto &psi = *sPtrPrototype->GetStructInfo(true);
+		psi.align = psi.size = sizeof(void*);
+		psi.pointed_class = sStructClass; // This is not a counted reference.
+		auto &ssi = *sStructPrototype->GetStructInfo(true);
+		ssi.pointer_class = sPtrClass;
+	}
+
 	sCArrayPrototype = CreatePrototype(_T("Struct.Array"), sStructPrototype);
 	sCArrayClass = CreateClass(sCArrayPrototype, sStructClass);
 	DefineMembers(sCArrayPrototype, _T("Struct.Array"), sCArrayMembers, _countof(sCArrayMembers));
 	sCArrayPrototype->mFlags &= ~NativeClassPrototype;
-	sStructClass->DefineClass(STRUCT_PTR_CLASS_NAME, sPtrClass, true);
 	sStructClass->DefineClass(_T("Array"), sCArrayClass, true);
 
-	LPTSTR const type_names[]{ _T("Float32"), _T("Float64"), _T("Int16"), _T("Int32"), _T("Int64"), _T("Int8"), _T("IntPtr"), _T("UInt16"), _T("UInt32"), _T("UInt8")};
+	LPTSTR const type_names[]{ _T("Float32"), _T("Float64"), _T("Int16"), _T("Int32"), _T("Int64"), _T("Int8"), _T("IntPtr"), _T("UInt16"), _T("UInt32"), _T("UInt8") };
 	MdType const type_codes[]{ MdType::Float32, MdType::Float64, MdType::Int16, MdType::Int32, MdType::Int64, MdType::Int8, MdType::IntPtr, MdType::UInt16, MdType::UInt32, MdType::UInt8 };
 	UCHAR const type_dllcall[]{ DLL_ARG_FLOAT, DLL_ARG_DOUBLE, DLL_ARG_SHORT, DLL_ARG_INT, DLL_ARG_INT64, DLL_ARG_CHAR, Exp32or64(DLL_ARG_INT,DLL_ARG_INT64), DLL_ARG_SHORT, DLL_ARG_INT, DLL_ARG_CHAR};
 	for (int i = 0; i < _countof(type_names); ++i)
@@ -4206,7 +4328,8 @@ void Object::CreateRootPrototypes()
 		tp->item_count = 0;
 		tp->data_offset = 0;
 		auto c = CreateClass(type_names[i], sStructClass, p, nullptr);
-		CreatePtrClass(type_names[i], c, si);
+		CreatePtrClass(c, p, si);
+		sPrimitiveClass[(int)type_codes[i] - 1] = c;
 	}
 
 	GuiControlType::DefineControlClasses();
@@ -4229,6 +4352,7 @@ Object *Map::sPrototype;
 
 Object *Object::sClass;
 Object *Object::sStructClass, *Object::sPtrClass, *Object::sCArrayClass;
+Object *Object::sPrimitiveClass[(int)MdType::LastSupportedPropertyType];
 
 Object *Closure::sPrototype;
 Object *BoundFunc::sPrototype;
@@ -4361,9 +4485,6 @@ BIF_DECL(Class_New)
 	auto proto = Object::CreatePrototype(name, base_proto);
 	auto class_obj = Object::CreateClass(proto, base_class);
 	proto->Release();
-
-	if (class_obj->IsDerivedFrom(Object::sStructClass))
-		Object::CreatePtrClass(name, class_obj);
 
 	// Don't call any inherited __Init, since that would reinitialize static variables and duplicate
 	// any typed properties defined by that one class.  This either releases or returns class_obj:

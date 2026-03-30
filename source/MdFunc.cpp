@@ -420,8 +420,14 @@ bool MdFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int aParam
 			aborted = (res == FR_ABORTED);
 		break;
 	case MdType::ResultType: aResultToken.SetResult((ResultType)rup); break;
+#ifndef _WIN64
+	case MdType::IntPtr:
+#endif
 	case MdType::Int32: aResultToken.SetValue(ri32); break;
 	case MdType::UInt64:
+#ifdef _WIN64
+	case MdType::IntPtr:
+#endif
 	case MdType::Int64: aResultToken.SetValue(ri64); break;
 	case MdType::UInt32: aResultToken.SetValue((UINT)rup); break;
 	//case MdType::Float64: aResultToken.SetValue(GetDoubleRetval()); break;
@@ -555,8 +561,14 @@ void TypedPtrToToken(MdType aType, void *aPtr, ExprTokenType &aToken)
 	switch (aType)
 	{
 	case MdType::Bool32:
+#ifndef _WIN64
+	case MdType::IntPtr:
+#endif
 	case MdType::Int32: aToken.SetValue(*(int*)aPtr); break;
 	case MdType::UInt32: aToken.SetValue(*(UINT*)aPtr); break;
+#ifdef _WIN64
+	case MdType::IntPtr:
+#endif
 	case MdType::UInt64:
 	case MdType::Int64: aToken.SetValue(*(__int64*)aPtr); break;
 	case MdType::Float64: aToken.SetValue(*(double*)aPtr); break;
@@ -586,8 +598,14 @@ ResultType SetValueOfTypeAtPtr(MdType aType, void *aPtr, ExprTokenType &aValue, 
 	switch (aType)
 	{
 	//case MdType::Bool32:
+#ifndef _WIN64
+	case MdType::IntPtr:
+#endif
 	case MdType::Int32:
 	case MdType::UInt32: *(UINT*)aPtr = (UINT)nt.value_int64; break;
+#ifdef _WIN64
+	case MdType::IntPtr:
+#endif
 	case MdType::UInt64:
 	case MdType::Int64: *(__int64*)aPtr = nt.value_int64; break;
 	case MdType::Float64: *(double*)aPtr = nt.symbol == SYM_FLOAT ? nt.value_double : (double)nt.value_int64; break;
@@ -618,6 +636,7 @@ size_t TypeSize(MdType aType)
 	case MdType::Float64:
 	case MdType::Int64:
 	case MdType::UInt64: return 8;
+	case MdType::IntPtr: return sizeof(void*);
 	default: return 0;
 	}
 }
@@ -631,8 +650,6 @@ MdType TypeCode(LPCTSTR aName)
 	for (int i = 1; i < _countof(sTypeNames); ++i)
 		if (!_tcsicmp(sTypeNames[i], aName))
 			return (MdType)i;
-	if (!_tcsicmp(_T("iptr"), aName))
-		return MdType::IntPtr;
 	if (!_tcsicmp(_T("uptr"), aName))
 		return MdType::UIntPtr;
 	return MdType::Void;

@@ -37,7 +37,7 @@ public:
 
 	ULONG STDMETHODCALLTYPE Release()
 	{
-		if (mRefCount == 1)
+		if (mRefCount <= 1) // mRefCount == 0 is a special case used to handle circular references; see Object::Delete().
 		{
 			// If an object is implemented by script, it may need to run cleanup code before the object
 			// is deleted.  This introduces the possibility that before it is deleted, the object ref
@@ -330,6 +330,7 @@ protected:
 		size_t nested_count;
 		size_t item_count; // Separate from nested_count for simplicity maintainability (since arrays of numbers have no nested objects).
 		Object *pointed_class;
+		Object *pointer_class;
 		Map *array_class_map;
 		MdType native_type;
 		UCHAR dllcall_type;
@@ -420,7 +421,7 @@ public:
 	static Object *Create();
 	static Object *Create(ExprTokenType *aParam[], int aParamCount, ResultToken *apResultToken = nullptr);
 	static Object *CreateStruct();
-	static Object *CreateStructPtr(UINT_PTR aPtr, Object *aBase, ResultToken &aResultToken);
+	static Object *CreateStructPtr(UINT_PTR aPtr, Object *aBase, ResultToken &aResultToken, bool aCopy = false);
 	
 	static ResultType ApplyParams(ResultToken &aThisResultToken, int aFlags, ExprTokenType *aParam[], int aParamCount);
 
@@ -539,11 +540,12 @@ public:
 	
 	Property *DefineProperty(name_t aName, bool aEnumerable = true);
 	TypedProperty *DefineTypedProperty(name_t aName);
-	FResult DefineTypedProperty(name_t aName, MdType aType, Object *aClass, size_t aCount, size_t aPack);
+	FResult DefineTypedProperty(name_t aName, MdType aType, Object *aClass, size_t aCount, size_t aPack, size_t aOffset);
 	bool DefineMethod(name_t aName, IObject *aFunc);
 	void DefineClass(name_t aName, Object *aClass, bool aIsStructPtrClass = false);
 	
-	static void CreatePtrClass(LPTSTR aClassName, Object *aClass, StructInfo *aNative = nullptr);
+	static void CreatePtrClass(ResultToken &aResultToken, ExprTokenType &aToClass, StructInfo *aNative = nullptr);
+	static Object *CreatePtrClass(Object *sc, Object *sp, StructInfo *spsi);
 	static void CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClass, size_t aCount);
 
 	bool CanSetBase(Object *aNewBase);
@@ -585,6 +587,7 @@ public:
 	
 	static ObjectMember sStructMembers[], sCArrayMembers[];
 	static Object *sStructClass, *sStructPrototype, *sPtrClass, *sPtrPrototype, *sCArrayClass, *sCArrayPrototype;
+	static Object *sPrimitiveClass[(int)MdType::LastSupportedPropertyType];
 
 	static void CreateRootPrototypes();
 	static Object *CreateClass(Object *aPrototype, Object *aBase = Object::sClassPrototype);
@@ -614,6 +617,7 @@ public:
 	UINT_PTR LockStructSize() { auto si = GetStructInfo(); return si ? si->size : 0; }
 	
 	bool GetStructArgInfo(DYNAPARM &aType, Object *&aPointedClass);
+	MdType GetStructMdType() { return (mFlags & DataIsStructInfo) && !((StructInfo*)mData)->item_count ? ((StructInfo*)mData)->native_type : MdType::Void; }
 
 	// Methods and functions:
 	void DeleteProp(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);

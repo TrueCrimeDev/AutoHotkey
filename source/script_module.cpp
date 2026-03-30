@@ -54,15 +54,16 @@ ResultType Script::ParseModuleDirective(LPCTSTR aName)
 			return FAIL;
 
 		mod = CreateModule(SimpleHeap::Alloc(aName));
-		mod->mOuterFileIndex = mCurrFileIndex;
+		mod->mDirectiveFileIndex = mCurrFileIndex;
 		mod->mDirectiveLineNumber = mCombinedLineNumber;
+		mod->mOuterFileIndex = mCurrentModule->IsFileModule() ? mCurrentModule->mSelfFileIndex : mCurrentModule->mOuterFileIndex;
 
 		// Let any previous #Warn settings carry over from the previous module, by default.
 		mod->Warn_LocalSameAsGlobal = mCurrentModule->Warn_LocalSameAsGlobal;
 		mod->Warn_Unreachable = mCurrentModule->Warn_Unreachable;
 		mod->Warn_VarUnset = mCurrentModule->Warn_VarUnset;
 	}
-	else if (mCombinedLineNumber == mod->mDirectiveLineNumber && mCurrFileIndex == mod->mOuterFileIndex)
+	else if (mCombinedLineNumber == mod->mDirectiveLineNumber && mCurrFileIndex == mod->mDirectiveFileIndex)
 	{
 		return ScriptError(_T("#Module in duplicate #Include."));
 	}
@@ -162,17 +163,30 @@ ResultType Script::ParseImportDirective(LPTSTR aBuf)
 
 Var *Script::FindImportedVar(LPCTSTR aVarName)
 {
-	for (auto imp = CurrentModule()->mImports; imp; imp = imp->next)
+	return CurrentModule()->FindImportedVar(aVarName);
+}
+
+
+Var *ScriptModule::FindImportedVar(LPCTSTR aVarName)
+{
+	for (auto imp = mImports; imp; imp = imp->next)
 	{
 		if (imp->wildcard && imp->mod) // mod can be null during DerefInclude().
 		{
 			auto var = imp->mod->mVars.Find(aVarName);
+			if (!var && imp->mod->mHasWildcardExports)
+			{
+				bool hwe = mHasWildcardExports;
+				mHasWildcardExports = false; // Prevent infinite recursion.
+				var = imp->mod->FindImportedVar(aVarName);
+				mHasWildcardExports = hwe;
+			}
 			if (var && var->IsExported())
 			{
 				if (imp->mod->mExecuted)
 					return var;
 				// AddNewImportVar must be used to support executing the module on first reference.
-				return AddNewImportVar(var->mName, var, imp->mod, false);
+				return AddNewImportVar(var->mName, var, imp->mod, imp->is_export);
 			}
 		}
 	}
@@ -184,11 +198,11 @@ Var *Script::FindImportedVar(LPCTSTR aVarName)
 // Raises an error if a conflicting declaration exists.
 // May use an existing Var if not previously marked as declared, such as if created by Export.
 // Caller provides persistent memory for aVarName.
-Var *Script::AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, bool aExport)
+Var *ScriptModule::AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, bool aExport)
 {
 	ASSERT(aVarName && aModule);
 	int at;
-	auto var = mCurrentModule->mVars.Find(aVarName, &at);
+	auto var = mVars.Find(aVarName, &at);
 	if (var)
 	{
 		// mVars should contain only declared or exported variables at this point.
@@ -196,7 +210,7 @@ Var *Script::AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, 
 		{
 			if (aAliasFor ? var->IsAlias() && var->GetAliasFor() == aAliasFor : var->ToObject() == aModule)
 				return var; // Already imported.
-			ConflictingDeclarationError(_T("import"), var);
+			g_script.ConflictingDeclarationError(_T("import"), var);
 			return nullptr;
 		}
 		ASSERT(!var->IsAssignedSomewhere());
@@ -204,7 +218,7 @@ Var *Script::AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, 
 	}
 	else
 		var = new Var(aVarName, VAR_DECLARE_GLOBAL);
-	if (!mCurrentModule->mVars.Insert(var, at))
+	if (!mVars.Insert(var, at))
 	{
 		delete var;
 		MemoryError();
@@ -314,7 +328,7 @@ ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveLis
 	{
 		// Do not reuse mSelf or a previous Var created by an import even if mod_name == var_name,
 		// since the exported status of the Var (VAR_EXPORTED) shouldn't propagate between modules.
-		auto var = AddNewImportVar(imp.var_name, imp.mod->mSelf, imp.mod, imp.is_export);
+		auto var = mCurrentModule->AddNewImportVar(imp.var_name, imp.mod->mSelf, imp.mod, imp.is_export);
 		if (!var)
 			return FAIL;
 	}
@@ -326,8 +340,14 @@ ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveLis
 			TCHAR c;
 			if (*cp == '*')
 			{
-				imp.wildcard = true;
-				c = *(cp = omit_leading_whitespace(cp + 1));
+				if (imp.mod != mCurrentModule)
+				{
+					imp.wildcard = true;
+					if (imp.is_export)
+						mCurrentModule->mHasWildcardExports = true;
+					cp = omit_leading_whitespace(cp + 1);
+				}
+				c = *cp;
 			}
 			else
 			{
@@ -356,7 +376,7 @@ ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveLis
 					*cp = '\0';
 					while (IS_SPACE_OR_TAB(c)) c = *++cp; // Find next non-whitespace.
 				}
-				auto imported = AddNewImportVar(var_name, exported, imp.mod, imp.is_export);
+				auto imported = mCurrentModule->AddNewImportVar(var_name, exported, imp.mod, imp.is_export);
 				if (!imported)
 					return FAIL;
 			}
@@ -369,9 +389,6 @@ ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveLis
 			}
 		}
 	}
-
-	if (imp.is_export && imp.wildcard)
-		return ScriptError(_T("Cannot export *"));
 
 	return OK;
 }

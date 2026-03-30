@@ -267,7 +267,7 @@ BIF_DECL(BIF_GetMethod)
 }
 
 
-BIF_DECL(Struct_At)
+BIF_DECL(StructClass_At)
 {
 	auto class_ = ParamIndexToObject(0);
 	auto proto = class_ && class_->IsOfType(Object::sPrototype) ? ((Object*)class_)->ClassGetPrototype() : nullptr;

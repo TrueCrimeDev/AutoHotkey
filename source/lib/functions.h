@@ -10,7 +10,7 @@ md_func(_ScriptGetLines, (In, String, Filename), (In, Int32, LineNumber), (In_Op
 md_func_x(BlockInput, ScriptBlockInput, FResult, (In, String, Mode))
 
 #ifdef ENABLE_REGISTERCALLBACK
-md_func(CallbackCreate, (In, Object, Function), (In_Opt, String, Options), (In_Opt, Int32, ParamCount), (Ret, UIntPtr, RetVal))
+md_func(CallbackCreate, (In, Object, Function), (In_Opt, String, Options), (In_Opt, Variant, Params), (Ret, UIntPtr, RetVal))
 md_func(CallbackFree, (In, UIntPtr, Callback))
 #endif
 

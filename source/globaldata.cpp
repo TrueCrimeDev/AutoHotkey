@@ -247,7 +247,7 @@ Action g_act[] =
 	, {_T("}"), 0, 0}
 
 	, {_T("#HotIf"), 0, 1}
-	, {_T(";end"), 0, 0} // ACT_EXIT
+	, {_T(";end"), 0, 0} // ACT_END_MODULE
 
 	, {_T("Export"), 1, 1} // ACT_EXPORT - used only at load time.
 	, {_T("Static"), 1, 1} // ACT_STATIC - executes once and then the Line is removed.

@@ -6323,9 +6323,6 @@ ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport, bool aStruct)
 			return FAIL;
 	}
 
-	if (aStruct)
-		Object::CreatePtrClass(mClassName, class_object);
-	
 	// This line enables a class without any static methods to be freed at program exit,
 	// or sooner if it's a nested class and the script removes it from the outer class.
 	// Classes with static methods are never freed, since the method itself retains a
@@ -7734,7 +7731,7 @@ ResultType Script::PreparseCommands(ScriptModule *aModule)
 		mCombinedLineNumber = aModule->mLastLine->mLineNumber + 1; // +1 to distinguish it from the last executable line when debugging.
 		mCurrFileIndex = aModule->mLastLine->mFileIndex;
 	}
-	if (!AddLine(ACT_EXIT))
+	if (!AddLine(ACT_END_MODULE))
 		return FAIL;
 
 	for (Line *line = aModule->mFirstLine; line; line = line->mNextLine)
@@ -7908,9 +7905,6 @@ ResultType Script::PreparseCommands(ScriptModule *aModule)
 		case ACT_BREAK:
 		case ACT_CONTINUE:
 		case ACT_GOTO:
-		// v2: ACT_EXIT is always from AddLine(ACT_EXIT), since a script calling Exit would produce ACT_EXPRESSION.
-		//case ACT_EXIT:
-		//case ACT_EXITAPP: // Excluded since it's just a function in v2, and there can't be any expectation that the code following it will execute anyway.
 			Line *next_line = line->mNextLine;
 			if (!next_line // line is the script's last line.
 				|| next_line->mParentLine != line->mParentLine) // line is the one-line action of if/else/loop/etc.
@@ -7919,7 +7913,7 @@ ResultType Script::PreparseCommands(ScriptModule *aModule)
 				next_line = next_line->mRelatedLine; // Skip function body.
 			switch (next_line->mActionType)
 			{
-			case ACT_EXIT: // v2: It's from an automatic AddLine(), so should be excluded.
+			case ACT_END_MODULE: // v2: It's from an automatic AddLine(), so should be excluded.
 			case ACT_BLOCK_END: // There's nothing following this line in the same block.
 			case ACT_CASE:
 				continue;
@@ -10244,7 +10238,7 @@ ResultType Line::ExecUntil(ExecUntilMode aMode, ResultToken *aResultToken, Line 
 						// Now line is the ELSE's "I'm finished" jump-point, which is where
 						// we want to be.  If line is now NULL, it will be caught when this
 						// loop iteration is ended by the "continue" stmt below.  UPDATE:
-						// it can't be NULL since all scripts now end in ACT_EXIT.
+						// it can't be NULL since all scripts now end in ACT_END_MODULE.
 					// else the IF had NO else, so we're already at the IF's "I'm finished" jump-point.
 				}
 			}
@@ -10284,7 +10278,7 @@ ResultType Line::ExecUntil(ExecUntilMode aMode, ResultToken *aResultToken, Line 
 						// Now line is the ELSE's "I'm finished" jump-point, which is where
 						// we want to be.  If line is now NULL, it will be caught when this
 						// loop iteration is ended by the "continue" stmt below.  UPDATE:
-						// it can't be NULL since all scripts now end in ACT_EXIT.
+						// it can't be NULL since all scripts now end in ACT_END_MODULE.
 				}
 				else if (aMode == ONLY_ONE_LINE)
 					// Since this IF statement has no ELSE, and since it was executed
@@ -10960,7 +10954,7 @@ ResultType Line::ExecUntil(ExecUntilMode aMode, ResultToken *aResultToken, Line 
 				line = line->mRelatedLine;
 				// Now line is the line after the end of this block.  Can be NULL (end of script).
 				// UPDATE: It can't be NULL (not that it matters in this case) since the loader
-				// has ensured that all scripts now end in an ACT_EXIT.
+				// has ensured that all scripts now end in an ACT_END_MODULE.
 			continue;  // Resume looping starting at the above line.  "continue" is actually slightly faster than "break" in these cases.
 
 		case ACT_BLOCK_END:
@@ -11015,7 +11009,7 @@ ResultType Line::ExecUntil(ExecUntilMode aMode, ResultToken *aResultToken, Line 
 			line = line->mNextLine;
 			continue;
 
-		case ACT_EXIT: // In this context it's the ACT_EXIT added automatically by LoadFromFile().
+		case ACT_END_MODULE: // It was added automatically by LoadFromFile().
 			// Exit at the end of the auto-execute section has historically been equivalent to Return,
 			// but with v2.1 we need this to be distinct from Exit() as it is added to the end of each
 			// module.  Modules aren't given their own initialization thread since they might want to
