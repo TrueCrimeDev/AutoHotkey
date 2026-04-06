@@ -8,15 +8,24 @@ Object *ScriptModule::sPrototype;
 
 ResultType ScriptModule::Invoke(IObject_Invoke_PARAMS_DECL)
 {
-	auto var = aName ? mVars.Find(aName) : nullptr;
-	if (!var && mIsBuiltinModule)
-		// This is a slight hack to support built-in vars which haven't been referenced directly.
-		var = g_script.FindOrAddBuiltInVar(aName, true, nullptr);
+	Var *var = aName ? FindImportableVar(aName) : nullptr;
 	if (!var)
 		return ObjectBase::Invoke(IObject_Invoke_PARAMS);
 
 	if (IS_INVOKE_SET && aParamCount == 1)
 		return var->Assign(*aParam[0]);
+
+	if (var->IsUninitialized())
+	{
+		if (var->CanSelfInitialize()) // Uninitialized class or import.
+		{
+			auto result = var->SelfInitialize();
+			if (result == FAIL || result == EARLY_EXIT)
+				return result;
+		}
+		if (var->IsUninitialized())
+			return g_script.VarUnsetError(var);
+	}
 
 	var->Get(aResultToken);
 	if (aResultToken.Exited() || aParamCount == 0 && IS_INVOKE_GET)
@@ -194,6 +203,29 @@ Var *ScriptModule::FindImportedVar(LPCTSTR aVarName)
 }
 
 
+Var *ScriptModule::FindImportableVar(LPCTSTR aVarName, bool aAllowCreate)
+{
+	int at;
+	auto var = mVars.Find(aVarName, &at);
+	if (var)
+		return var;
+	if (!var && mIsBuiltinModule)
+		var = g_script.FindOrAddBuiltInVar(aVarName, true, nullptr);
+	if (!var)
+		var = FindImportedVar(aVarName);
+	if (!var && aAllowCreate)
+	{
+		// Since ResolveImports() does everything in one stage, imported names for some
+		// modules don't exist yet.  Undeclared (but assigned) global variables also do
+		// not exist at this stage.  The following allows both to be imported.
+		var = new Var(const_cast<LPTSTR>(aVarName), VAR_GLOBAL);
+		if (!var || !mVars.Insert(var, at))
+			return nullptr;
+	}
+	return var;
+}
+
+
 // Add a new Var to the current module.
 // Raises an error if a conflicting declaration exists.
 // May use an existing Var if not previously marked as declared, such as if created by Export.
@@ -249,6 +281,25 @@ ResultType Script::ResolveImports(ScriptModule *aTerminator)
 			directive_list = nullptr;
 	}
 	return OK;
+}
+
+
+void Script::ResolveIndirectImports()
+{
+	// Check any variables which have been added by other modules explicitly importing them
+	// from this module, to see if they should be imported from some other module via wildcard.
+	// This must be done after modules are resolved and assignments are parsed, since only an
+	// unassigned var should implicitly import via wildcard.
+	for (int i = 0; i < mCurrentModule->mVars.mCount; ++i)
+	{
+		auto var = mCurrentModule->mVars.mItem[i];
+		if (!var->IsDeclared() && !var->IsAssignedSomewhere())
+		{
+			ASSERT(!var->IsAlias() && !var->IsDirectConstant());
+			auto alias = mCurrentModule->FindImportedVar(var->mName);
+			ASSERT(alias == var);
+		}
+	}
 }
 
 
@@ -355,19 +406,6 @@ ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveLis
 				c = *(cp = find_identifier_end(cp));
 				*cp = '\0';
 				while (IS_SPACE_OR_TAB(c)) c = *++cp; // Find next non-whitespace.
-				int at;
-				auto exported = imp.mod->mVars.Find(mod_name, &at);
-				if (!exported && imp.mod->mIsBuiltinModule)
-					exported = g_script.FindOrAddBuiltInVar(mod_name, true, nullptr);
-				if (!exported)
-				{
-					// Since ResolveImports() does everything in one stage, imported names for some
-					// modules don't exist yet.  Undeclared (but assigned) global variables also do
-					// not exist at this stage.  The following allows both to be imported.
-					exported = new Var(mod_name, VAR_GLOBAL);
-					if (!exported || !imp.mod->mVars.Insert(exported, at))
-						return MemoryError();
-				}
 				if (!_tcsnicmp(cp, _T("as"), 2) && IS_SPACE_OR_TAB(cp[2]))
 				{
 					var_name = omit_leading_whitespace(cp + 3);
@@ -376,6 +414,9 @@ ResultType Script::ResolveImports(ScriptImport &imp, ScriptModule *aDirectiveLis
 					*cp = '\0';
 					while (IS_SPACE_OR_TAB(c)) c = *++cp; // Find next non-whitespace.
 				}
+				auto exported = imp.mod->FindImportableVar(mod_name, true);
+				if (!exported)
+					return MemoryError();
 				auto imported = mCurrentModule->AddNewImportVar(var_name, exported, imp.mod, imp.is_export);
 				if (!imported)
 					return FAIL;

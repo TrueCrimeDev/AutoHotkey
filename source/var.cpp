@@ -1419,6 +1419,7 @@ LPTSTR ResultToken::Malloc(LPTSTR aValue, size_t aLength)
 ResultType Var::SelfInitialize()
 {
 	ASSERT(CanSelfInitialize());
+	Line *caller_line = g_script.mCurrLine;
 	ScriptModule *mod = nullptr;
 	ResultType result;
 	Var *cur = this;
@@ -1444,6 +1445,8 @@ ResultType Var::SelfInitialize()
 		result = g_script.ExecuteModule(mod);
 		if (result != OK && result != EARLY_RETURN)
 			return result;
+
+		g_script.mCurrLine = caller_line; // Restore this for any subsequent error reports.
 
 		if (!cur->CanSelfInitialize())
 			// cur is either the module itself or an import which doesn't need initialization.

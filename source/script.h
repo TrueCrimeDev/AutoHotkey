@@ -2407,6 +2407,7 @@ public:
 	void ReopenModule(ScriptModule *aMod);
 	ScriptModule *CreateModule(LPCTSTR aName);
 	ResultType ResolveImports(ScriptModule *aTerminator = nullptr);
+	void ResolveIndirectImports();
 	ResultType ResolveImports(ScriptImport &aImport, ScriptModule *aDirectiveList);
 	Var *FindImportedVar(LPCTSTR aVarName);
 

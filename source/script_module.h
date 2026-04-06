@@ -53,6 +53,7 @@ public:
 
 	IObject *FindGlobalObject(LPCTSTR aName);
 	Var *FindImportedVar(LPCTSTR aName);
+	Var *FindImportableVar(LPCTSTR aName, bool aAllowCreate = false);
 	Var *AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, bool aExport);
 
 	ScriptModule() {}

@@ -11297,5 +11297,5 @@ int GuiType::GetSystemMetrics(int nIndex)
 {
 	static auto metricForDpi = (decltype(&GetSystemMetricsForDpi))GetProcAddress(GetModuleHandle(_T("user32.dll")), "GetSystemMetricsForDpi");
 	// Get the correct metric for this GUI's DPI, if possible; otherwise revert to the DPI-unaware metric.
-	return metricForDpi ? metricForDpi(nIndex, mDPI) : GetSystemMetrics(nIndex);
+	return metricForDpi ? metricForDpi(nIndex, mDPI) : ::GetSystemMetrics(nIndex);
 }

@@ -585,7 +585,7 @@ public:
 	static Object *sPrototype, *sClass, *sClassPrototype;
 	static IObject *sObjectCall;
 	
-	static ObjectMember sStructMembers[], sCArrayMembers[];
+	static ObjectMember sStructMembers[], sPtrMembers[], sCArrayMembers[];
 	static Object *sStructClass, *sStructPrototype, *sPtrClass, *sPtrPrototype, *sCArrayClass, *sCArrayPrototype;
 	static Object *sPrimitiveClass[(int)MdType::LastSupportedPropertyType];
 

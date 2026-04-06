@@ -653,7 +653,7 @@ BIF_DECL(BIF_DllCall)
 		{
 			ConvertDllArgType(return_type_string, return_attrib);
 		}
-		if (return_attrib.type == DLL_ARG_INVALID)
+		if (return_attrib.type == DLL_ARG_INVALID || return_struct_size == -1)
 			_f_throw_value(ERR_INVALID_RETURN_TYPE);
 
 has_valid_return_type:

@@ -1117,7 +1117,7 @@ ResultType ResultToken::Error(LPCTSTR aErrorText, LPCTSTR aExtraInfo, Object *aP
 	// isn't expecting a value, or they might be freed twice (if the callee already freed it).
 	//ASSERT(!mem_to_free); // At least one caller frees it after calling this function.
 	ASSERT(symbol != SYM_OBJECT);
-	return Fail(g_script.RuntimeError(aErrorText, aExtraInfo, FAIL_OR_OK, nullptr, aPrototype));
+	return Fail(g_script.RuntimeError(aErrorText, aExtraInfo, FAIL_OR_OK, g_script.mCurrLine, aPrototype));
 }
 
 __declspec(noinline)
