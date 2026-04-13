@@ -72,8 +72,8 @@ IObject *Line::CreateRuntimeException(LPCTSTR aErrorText, LPCTSTR aExtraInfo, Ob
 	FuncResult rt;
 	g_script.mCurrLine = this;
 	g_script.mNewRuntimeException = obj;
-	if (!obj->Construct(rt, aParam, aParamCount))
-		obj = nullptr; // Construct released it.
+	if (!obj->CallInitNew(rt, aParam, aParamCount))
+		obj = nullptr; // CallInitNew released it.
 	g_script.mNewRuntimeException = nullptr;
 	return obj;
 }

@@ -131,7 +131,7 @@ HWND SetForegroundWindowEx(HWND aTargetWindow, bool aBackgroundActivation)
 
 	// This causes more trouble than it's worth.  In fact, the AutoIt author said that
 	// he didn't think it even helped with the IE 5.5 related issue it was originally
-	// intended for, so it seems a good idea to NOT to this, especially since I'm 80%
+	// intended for, so it seems a good idea to NOT do this, especially since I'm 80%
 	// sure it messes up the Z-order in certain circumstances, causing an unexpected
 	// window to pop to the foreground immediately after a modal dialog is dismissed:
 	//BringWindowToTop(aTargetWindow); // AutoIt3: IE 5.5 related hack.
@@ -248,7 +248,7 @@ HWND SetForegroundWindowEx(HWND aTargetWindow, bool aBackgroundActivation)
 		// perhaps due to menu weirdness triggered by the alt key."
 		// AutoIt3: OK, this is not funny - bring out the extreme measures (usually for 2000/XP).
 		// Simulate two single ALT keystrokes.  UPDATE: This hardly ever succeeds.  Usually when
-		// it fails, the foreground window is NULL (none).  I'm going to try an Win-tab instead,
+		// it fails, the foreground window is NULL (none).  I'm going to try a Win-tab instead,
 		// which selects a task bar button.  This seems less invasive than doing an alt-tab
 		// because not only doesn't it activate some other window first, it also doesn't appear
 		// to change the Z-order, which is good because we don't want the alt-tab order
@@ -286,7 +286,7 @@ HWND SetForegroundWindowEx(HWND aTargetWindow, bool aBackgroundActivation)
 	// having the input focus and being the foreground window, but not actually
 	// being visible (even though IsVisible() and IsIconic() say it is)!  It may
 	// help with other conditions under which this function would otherwise fail.
-	// Here's the way the repeat the failure to test how the absence of this line
+	// Here's the way to repeat the failure to test how the absence of this line
 	// affects things, at least on my XP SP1 system:
 	// y::MsgBox, test
 	// #e::(some hotkey that activates Windows Explorer)
@@ -331,7 +331,7 @@ HWND WinClose(global_struct &aSettings, LPCTSTR aTitle, LPCTSTR aText, int aTime
 		// split-second timing issues.
 	else if (*aTitle || *aText || *aExcludeTitle || *aExcludeText)
 	{
-		// Since EnumWindows() is *not* guaranteed to start proceed in z-order from topmost to
+		// Since EnumWindows() is *not* guaranteed to proceed in z-order from topmost to
 		// bottommost (though it almost certainly does), do it this way to ensure that the
 		// topmost window is closed in preference to any other windows with the same <aTitle>
 		// and <aText>:
@@ -375,7 +375,7 @@ HWND WinClose(HWND aWnd, int aTimeToWaitForClose, bool aKillIfHung)
 		// as minimizing to the tray.  Such apps might shut down entirely if they received
 		// a true WM_CLOSE, which is probably not what the user would want.
 		// Update: Switched back to using WM_CLOSE so that instances of AutoHotkey
-		// can be terminated via another instances use of the WinClose command:
+		// can be terminated via another instance's use of the WinClose command:
 		//PostMessage(aWnd, WM_SYSCOMMAND, SC_CLOSE, 0);
 		PostMessage(aWnd, WM_CLOSE, 0, 0);
 
@@ -405,7 +405,7 @@ HWND WinClose(HWND aWnd, int aTimeToWaitForClose, bool aKillIfHung)
 
 	// Remember that once the first call to MsgSleep() is done, a new hotkey subroutine
 	// may fire and suspend what we're doing here.  Such a subroutine might also overwrite
-	// the values our params, some of which may be in the deref buffer.  So be sure not
+	// the values of our params, some of which may be in the deref buffer.  So be sure not
 	// to refer to those strings once MsgSleep() has been done, below:
 
 	// This is the same basic code used for WinWaitClose and such:
@@ -967,7 +967,7 @@ int MsgBox(LPCTSTR aText, UINT uType, LPCTSTR aTitle, double aTimeout, HWND aOwn
 	uType |= MB_SETFOREGROUND;  // Always do these so that caller doesn't have to specify.
 
 	// In the below, make the MsgBox owned by the topmost window rather than our main
-	// window, in case there's another modal dialog already displayed.  The forces the
+	// window, in case there's another modal dialog already displayed.  This forces the
 	// user to deal with the modal dialogs starting with the most recent one, which
 	// is what we want.  Otherwise, if a middle dialog was dismissed, it probably
 	// won't be able to return which button was pressed to its original caller.

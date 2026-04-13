@@ -1769,7 +1769,7 @@ bool BuiltInFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int a
 	if (!NativeFunc::Call(aResultToken, aParam, aParamCount))
 		return false;
 
-	aResultToken.func = this; // Inform function of which built-in function called it (allows code sharing/reduction).
+	aResultToken.callee_id = BuiltInFunc::mData; // Inform function of which built-in function called it (allows code sharing/reduction).
 
 		// Push an entry onto the debugger's stack.  This has two purposes:
 		//  1) Allow CreateRuntimeException() to know which function is throwing an exception.

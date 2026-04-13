@@ -147,8 +147,6 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lPar
 	else if (g_MsgMonitor.Count() && MsgMonitor(hWnd, iMsg, wParam, lParam, NULL, msg_reply))
 		return msg_reply; // MsgMonitor has returned "true", indicating that this message should be omitted from further processing.
 
-	TRANSLATE_AHK_MSG(iMsg, wParam)
-	
 	switch (iMsg)
 	{
 	case WM_COMMAND:
@@ -346,18 +344,23 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lPar
 	case WM_CLOSE:
 		if (hWnd == g_hWnd) // i.e. not anything other than the main window.
 		{
-			// Receiving this msg is fairly unusual since SC_CLOSE is intercepted and redefined above.
-			// However, it does happen if an external app is asking us to close, such as another
-			// instance of this same script during the Reload command.  So treat it in a way similar
-			// to the user having chosen Exit from the menu.
+			// This message isn't received as a result of the user clicking the window's close button,
+			// since SC_CLOSE is intercepted and redefined above.  The original reason it was made to
+			// have the same effect as "the user having chosen Exit from the menu" was never properly
+			// explained, but now it's enough that scripts rely on WinClose(g_hWnd) exiting the script.
+			// v2.1: Since it always has that effect, we now rely on it for Reload and #SingleInstance,
+			// making use of the normally unused wParam to pass the exit reason.  The chance of wParam
+			// accidentally coinciding with either of these special values is infinitesimal, and the
+			// worst that can happen is that an OnExit callback's ExitReason is incorrect.
 			//
 			// Leave it up to ExitApp() to decide whether to terminate based upon whether
 			// there is an OnExit function, whether that function is already running at
 			// the time a new WM_CLOSE is received, etc.  It's also its responsibility to call
-			// DestroyWindow() upon termination so that the WM_DESTROY message winds up being
-			// received and process in this function (which is probably necessary for a clean
-			// termination of the app and all its windows):
-			g_script.ExitApp(EXIT_CLOSE);
+			// DestroyWindow() upon termination, although that doesn't actually matter since all
+			// of our windows will be destroyed when the process terminates.
+			g_script.ExitApp(wParam == AHK_EXIT_BY_RELOAD ? EXIT_RELOAD
+				: wParam == AHK_EXIT_BY_SINGLEINSTANCE ? EXIT_SINGLEINSTANCE
+				: EXIT_CLOSE);
 			return 0;  // Verified correct.
 		}
 		// Otherwise, some window of ours other than our main window was destroyed.
@@ -369,14 +372,6 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lPar
 			g_script.ExitApp((lParam & ENDSESSION_LOGOFF) ? EXIT_LOGOFF : EXIT_SHUTDOWN);
 		//else a prior WM_QUERYENDSESSION was aborted; i.e. the session really isn't ending.
 		return 0;  // Verified correct.
-
-	case AHK_EXIT_BY_RELOAD:
-		g_script.ExitApp(EXIT_RELOAD);
-		return 0; // Whether ExitApp() terminates depends on whether there's an OnExit function and what it does.
-
-	case AHK_EXIT_BY_SINGLEINSTANCE:
-		g_script.ExitApp(EXIT_SINGLEINSTANCE);
-		return 0; // Whether ExitApp() terminates depends on whether there's an OnExit function and what it does.
 
 	case WM_DESTROY:
 		if (hWnd == g_hWnd) // i.e. not anything other than the main window.

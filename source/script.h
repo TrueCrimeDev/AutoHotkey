@@ -410,7 +410,7 @@ __int64 pow_ll(__int64 base, __int64 exp); // integer power function
 #define _f_retval_buf			(aResultToken.buf)
 #define _f_retval_buf_size		MAX_NUMBER_SIZE
 #define _f_number_buf			_f_retval_buf  // An alias to show intended usage, and in case the buffer size is changed.
-#define _f_callee_id			(aResultToken.func->mFID)
+#define _f_callee_id			((BuiltInFunctionID)(UINT_PTR)aResultToken.callee_id)
 // The _o_ macros originally needed different implementations due to differences between the
 // function signature for methods and that for built-in functions.  Currently they're similar
 // enough that most of these macros can just be aliases (kept for maintainability).
@@ -1977,8 +1977,21 @@ public:
 	// Don't overload new and delete operators in this case since we want to use real dynamic memory
 	// (since menus can be read in from a file, destroyed and recreated, over and over).
 
-	UserMenu(MenuTypeType aMenuType);
-	static UserMenu *Create() { return new UserMenu(MENU_TYPE_POPUP); }
+	static UserMenu *Create()
+	{
+		auto p = new UserMenu(MENU_TYPE_POPUP);
+		p->SetBase(sPrototype);
+		return p;
+	}
+
+	static Object *NewMenuBar(size_t aSuffixSize, void *&aSuffix)
+	{
+		auto p = new (aSuffixSize) UserMenu(MENU_TYPE_BAR);
+		aSuffix = p + 1;
+		return p;
+	}
+
+	UserMenu(MenuTypeType aMenuType = MENU_TYPE_POPUP);
 	void Dispose();
 	~UserMenu();
 	
@@ -2032,17 +2045,6 @@ public:
 	ResultType SetItemIcon(UserMenuItem *aMenuItem, LPCTSTR aFilename, int aIconNumber, int aWidth);
 	void ApplyItemIcon(UserMenuItem *aMenuItem);
 	void RemoveItemIcon(UserMenuItem *aMenuItem);
-};
-
-class UserMenu::Bar : public UserMenu
-{
-	Bar(const Bar &) = delete; // Never instantiated.
-
-public:
-	static UserMenu *Create()
-	{
-		return new UserMenu(MENU_TYPE_BAR);
-	}
 };
 
 

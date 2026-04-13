@@ -58,12 +58,6 @@ InputObject::InputObject()
 }
 
 
-Object *InputObject::Create()
-{
-	return new InputObject();
-}
-
-
 FResult InputObject::__New(optl<StrArg> aOptions, optl<StrArg> aEndKeys, optl<StrArg> aMatchList)
 {
 	return input.Setup(aOptions.value_or_empty(), aEndKeys.value_or_empty(), aMatchList.value_or_empty()) ? OK : FR_FAIL;

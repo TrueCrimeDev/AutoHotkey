@@ -69,7 +69,7 @@ HWND HotCriterionAllowsFiring(HotkeyCriterion *aCriterion, LPTSTR aHotkeyName)
 BIF_DECL(HotIf_Win)
 {
 	HWND found_hwnd;
-	auto hc = (HotkeyCriterion*)aResultToken.func->mData;
+	auto hc = (HotkeyCriterion*)aResultToken.callee_id;
 	if (hc->Type >= HOT_IF_EXIST)
 	{
 		found_hwnd = WinExist(*g, hc->WinTitle, hc->WinText, _T(""), _T(""), false, true);

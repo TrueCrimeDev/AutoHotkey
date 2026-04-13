@@ -108,19 +108,28 @@ struct ObjectMemberListType
 {
 	ObjectMember *duck = nullptr; // Duck-typed members.
 	ObjectMemberMd *meta = nullptr; // Metadata-based members.
+	int count = 0;
 	ObjectMemberListType() {}
-	ObjectMemberListType(ObjectMember *aList) : duck(aList) {}
-	ObjectMemberListType(ObjectMemberMd *aList) : meta(aList) {}
+	ObjectMemberListType(ObjectMember* aList, int N) : duck(aList), count(N) {}
+	ObjectMemberListType(ObjectMemberMd* aList, int N) : meta(aList), count(N) {}
+	template<size_t N>
+	ObjectMemberListType(ObjectMember(&aList)[N]) : duck(aList), count(N) {}
+	template<size_t N>
+	ObjectMemberListType(ObjectMemberMd(&aList)[N]) : meta(aList), count(N) {}
 };
 
 
 // Helper for predefined classes
+typedef Object* (*NewObjectProc)(size_t, void*&);
 struct ClassFactoryDef
 {
-	BuiltInFunctionType call;
+	void *call;
 	UCHAR min_params, max_params, is_variadic;
-	ClassFactoryDef(BuiltInFunctionType aCall, int aMin, int aMax, bool aVariadic = false) : call(aCall), min_params(aMin), max_params(aMax), is_variadic(aVariadic) {}
+	bool is_bif;
+	ClassFactoryDef(BuiltInFunctionType aCall, int aMin, int aMax, bool aVariadic = false) : call(aCall), min_params(aMin), max_params(aMax), is_variadic(aVariadic), is_bif(true) {}
 	ClassFactoryDef(BuiltInFunctionType aCall = nullptr) : ClassFactoryDef(aCall, 1, 1, true) {}
+	ClassFactoryDef(nullptr_t) : ClassFactoryDef((BuiltInFunctionType)nullptr) {}
+	ClassFactoryDef(NewObjectProc aCall, int aMin = 1, int aMax = 1, bool aVariadic = true) : call(aCall), min_params(aMin), max_params(aMax), is_variadic(aVariadic), is_bif(false) {}
 };
 
 
@@ -337,12 +346,6 @@ protected:
 		bool is_unsigned;
 	};
 
-	enum EnumeratorType
-	{
-		Enum_Properties,
-		Enum_Methods
-	};
-
 	ResultType GetEnumProp(UINT &aIndex, Var *aName, Var *aVal, int aVarCount);
 
 #ifndef _WIN64
@@ -354,8 +357,8 @@ protected:
 		ClassPrototype = 0x01,
 		NativeClassPrototype = 0x02,
 		DataIsSetFlag = 0x04,
-		DataIsAllocatedFlag = 0x08,
-		DataIsStructInfo = 0x10,
+		//unused = 0x08,
+		StructInfoInitialized = 0x10,
 		StructInfoLocked = 0x20,
 		NoCallDelete = 0x40,
 		CannotOwnProps = 0x80,
@@ -363,7 +366,7 @@ protected:
 	};
 
 	Object *CloneTo(Object &aTo);
-	Object() { mFlags = 0; }
+	Object(UINT aFlags) { mFlags = aFlags; }
 	~Object();
 	bool Delete() override;
 
@@ -389,7 +392,8 @@ private:
 		return SetInternalCapacity(mFields.Capacity() ? mFields.Capacity() * 2 : 4);
 	}
 	
-	StructInfo *GetStructInfo(bool aDefine = false);
+	StructInfo *GetStructInfo();
+	StructInfo *GetStructInfo(bool aLock);
 
 protected:
 	ResultType GetProperty(ResultToken &aResultToken, int aFlags, name_t aName, ExprTokenType &aThisToken, ExprTokenType *aParam[], int aParamCount);
@@ -418,17 +422,26 @@ protected:
 
 public:
 
+	void *operator new(size_t aObjectSize);
+	void *operator new(size_t aObjectSize, size_t aAdditional);
+	void operator delete(void *p);
+	void operator delete(void *p, size_t);
+
+	Object() { mFlags = 0; }
 	static Object *Create();
 	static Object *Create(ExprTokenType *aParam[], int aParamCount, ResultToken *apResultToken = nullptr);
-	static Object *CreateStruct();
-	static Object *CreateStructPtr(UINT_PTR aPtr, Object *aBase, ResultToken &aResultToken, bool aCopy = false);
-	
+	static Object *CreateStruct(Object *aBase, UINT_PTR aPtr = NULL, UINT aFlags = CannotOwnProps, bool aCopy = false);
+	static Object *CreateStructCopyNoDelete(Object *aBase, UINT_PTR aPtr) { return CreateStruct(aBase, aPtr, CannotOwnProps | NoCallDelete, true); }
+	static Object *CreateStructPtr(Object *aBase, UINT_PTR aPtr) { return CreateStruct(aBase, aPtr, CannotOwnProps | NoCallDelete); }
+	static Object *CreateInstance(NewObjectProc aCreate, Object *aBase);
+	static ResultType CreateStruct(ResultToken &aResultToken, Object *aBase, ExprTokenType *aParam[] = nullptr, int aParamCount = 0);
+
 	static ResultType ApplyParams(ResultToken &aThisResultToken, int aFlags, ExprTokenType *aParam[], int aParamCount);
 
-	ResultType New(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, Object *aOuter = nullptr);
-	ResultType Construct(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
-	ResultType ConstructNoInit(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, ExprTokenType &aThisToken);
-	
+	ResultType Initialize(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, Object *aOuter = nullptr);
+	ResultType CallInitNew(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
+	ResultType CallNew(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, ExprTokenType &aThisToken);
+
 	class PropEnum;
 
 	bool HasProp(name_t aName);
@@ -544,7 +557,7 @@ public:
 	bool DefineMethod(name_t aName, IObject *aFunc);
 	void DefineClass(name_t aName, Object *aClass, bool aIsStructPtrClass = false);
 	
-	static void CreatePtrClass(ResultToken &aResultToken, ExprTokenType &aToClass, StructInfo *aNative = nullptr);
+	static void CreatePtrClass(ResultToken &aResultToken, ExprTokenType &aToClass);
 	static Object *CreatePtrClass(Object *sc, Object *sp, StructInfo *spsi);
 	static void CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClass, size_t aCount);
 
@@ -594,7 +607,7 @@ public:
 	static Object *CreatePrototype(LPTSTR aClassName, Object *aBase = nullptr);
 	static Object *CreatePrototype(LPTSTR aClassName, Object *aBase, ObjectMember aMember[], int aMemberCount);
 	static Object *CreatePrototype(LPTSTR aClassName, Object *aBase, ObjectMemberMd aMember[], int aMemberCount);
-	static Object *CreatePrototype(LPTSTR aClassName, Object *aBase, ObjectMemberListType aMember, int aMemberCount);
+	static Object *CreatePrototype(LPTSTR aClassName, Object *aBase, ObjectMemberListType aMember);
 	static Object *DefineMembers(Object *aObject, LPTSTR aClassName, ObjectMember aMember[], int aMemberCount);
 	static Object *DefineMetadataMembers(Object *obj, LPCTSTR aClassName, ObjectMemberMd aMember[], int aMemberCount);
 	static Object *CreateClass(LPTSTR aClassName, Object *aBase, Object *aPrototype, ClassFactoryDef aFactory);
@@ -607,17 +620,12 @@ public:
 	void PropCount(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 	void SetDataPtr(UINT_PTR aPtr);
 	FResult GetDataPtr(UINT_PTR &aPtr);
-	FResult AllocDataPtr(UINT_PTR aSize);
-#ifdef ENABLE_OBJALLOCDATA
-	FResult FreeDataPtr();
-#endif
-	UINT_PTR DataPtr() { return (UINT_PTR)mData + ((mFlags & DataIsAllocatedFlag) ? sizeof(UINT_PTR) : 0); }
-	UINT_PTR DataSize() { return (mFlags & DataIsAllocatedFlag) ? *(UINT_PTR*)mData : 0; }
-	UINT_PTR StructSize() { return (mFlags & DataIsStructInfo) ? ((StructInfo*)mData)->size : mBase ? mBase->StructSize() : 0; }
+	UINT_PTR DataPtr() { return (UINT_PTR)mData; }
+	UINT_PTR StructSize();
 	UINT_PTR LockStructSize() { auto si = GetStructInfo(); return si ? si->size : 0; }
 	
 	bool GetStructArgInfo(DYNAPARM &aType, Object *&aPointedClass);
-	MdType GetStructMdType() { return (mFlags & DataIsStructInfo) && !((StructInfo*)mData)->item_count ? ((StructInfo*)mData)->native_type : MdType::Void; }
+	MdType GetStructMdType();
 
 	// Methods and functions:
 	void DeleteProp(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
@@ -697,8 +705,6 @@ private:
 
 	index_t ParamToZeroIndex(ExprTokenType &aParam);
 
-	Array() {}
-	
 public:
 	enum : index_t
 	{
@@ -725,6 +731,7 @@ public:
 	bool ItemToToken(index_t aIndex, ExprTokenType &aToken);
 	ResultType GetEnumItem(UINT &aIndex, Var *, Var *, int);
 
+	Array() {}
 	~Array();
 	static Array *Create(ExprTokenType *aValue[] = nullptr, index_t aCount = 0);
 	static Array *FromArgV(LPTSTR *aArgV, int aArgC);
@@ -792,7 +799,6 @@ class Map : public Object
 	static const index_t mKeyOffsetInt = 0;
 	index_t mKeyOffsetObject = 0, mKeyOffsetString = 0;
 
-	Map() {}
 	void Clear();
 	~Map()
 	{
@@ -822,6 +828,7 @@ class Map : public Object
 	ResultType GetEnumItem(UINT &aIndex, Var *, Var *, int);
 
 public:
+	Map() {}
 	static Map *Create(ExprTokenType *aParam[] = NULL, int aParamCount = 0);
 
 	bool HasItem(ExprTokenType &aKey)
@@ -968,13 +975,13 @@ private:
 protected:
 	void *mData;
 	size_t mSize;
-	BufferObject(void *aData = nullptr, size_t aSize = 0) : mData(aData), mSize(aSize) {}
 
 public:
 	void *Data() { return mData; }
 	size_t Size() { return mSize; }
 	ResultType Resize(size_t aNewSize);
 
+	BufferObject(void *aData = nullptr, size_t aSize = 0) : mData(aData), mSize(aSize) {}
 	~BufferObject() { free(mData); }
 
 	enum MemberID
@@ -999,13 +1006,10 @@ public:
 
 class ClipboardAll : public BufferObject
 {
-private:
-	ClipboardAll() : BufferObject() {}
-
 public:
+	ClipboardAll() : BufferObject() {}
 	static ObjectMember sMembers[];
 	static Object *sPrototype;
-	static Object *Create();
 	void __New(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 };
 

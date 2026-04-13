@@ -679,7 +679,7 @@ ResultType Script::CreateWindows()
 
 	// Now that all static initializers (such as for Object::sPrototype)
 	// are guaranteed to have been executed, construct the Tray menu.
-	mTrayMenu = new UserMenu(MENU_TYPE_POPUP);
+	mTrayMenu = UserMenu::Create();
 	mTrayMenu->AppendStandardItems();
 
 	// Stdin scripts leave the menu items enabled, to make it easier to imitate a standard script
@@ -746,6 +746,8 @@ ResultType Script::CreateWindows()
 		// or something.  In other words, it is expected to fail under certain circumstances and
 		// we want to tolerate that:
 		CreateTrayIcon();
+
+	SetWindowsHookEx(WH_MSGFILTER, DialogMessageHookProc, NULL, g_MainThreadID);
 
 	return OK;
 }
@@ -815,7 +817,7 @@ void Script::CreateTrayIcon()
 	// for compatibility with VC++ 6.x.  This is also what AutoIt3 uses:
 	mNIC.cbSize = sizeof(NOTIFYICONDATA);  // NOTIFYICONDATA_V1_SIZE
 	mNIC.hWnd = g_hWnd;
-	mNIC.uID = AHK_NOTIFYICON; // This is also used for the ID, see TRANSLATE_AHK_MSG for details.
+	mNIC.uID = AHK_NOTIFYICON; // This is also used for the ID.
 	mNIC.uFlags = NIF_MESSAGE | NIF_TIP | NIF_ICON;
 	mNIC.uCallbackMessage = AHK_NOTIFYICON;
 	mNIC.hIcon = mCustomIconSmall ? mCustomIconSmall : g_IconSmall;
@@ -9594,11 +9596,11 @@ standard_pop_into_postfix: // Use of a goto slightly reduces code size.
 			}
 			if (IS_CPAREN_LIKE(infix_symbol) || infix_symbol == SYM_COMMA)
 			{
-				if (stack_symbol == SYM_FUNC && this_postfix < chain_end)
+				if (stack_symbol == SYM_FUNC)
 				{
 					if ((**stk).callsite->func == sIsSetFunc)
 						(**stk).callsite->flags |= EIF_ISSET_UNSET;
-					else
+					else if (this_postfix < chain_end)
 						return LineError(_T("This unset expression requires a final \"?\" or \"??\"."), FAIL, this_postfix->error_reporting_marker);
 				}
 			}

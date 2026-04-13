@@ -1460,8 +1460,8 @@ ResultType Var::SelfInitialize()
 	var.mAttrib &= ~VAR_ATTRIB_UNINITIALIZED; // Only make one attempt; prevents infinite recursion.
 	FuncResult result_token;
 	auto cls = (::Object*)var.mObject;
-	cls->AddRef(); // Necessary because Construct() calls Release() on failure.
-	result = cls->Construct(result_token, nullptr, 0);
+	cls->AddRef(); // Necessary because CallInitNew() calls Release() on failure.
+	result = cls->CallInitNew(result_token, nullptr, 0);
 	if (result == OK)
 		cls->Release();
 	return result;

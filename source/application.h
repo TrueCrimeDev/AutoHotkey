@@ -77,6 +77,9 @@ bool CheckScriptTimers();
 void PollJoysticks();
 #define POLL_JOYSTICK_IF_NEEDED if (Hotkey::sJoyHotkeyCount) PollJoysticks();
 
+LRESULT CALLBACK DialogMessageHookProc(int nCode, WPARAM wParam, LPARAM lParam);
+bool TranslateInputMessage(MSG &aMsg);
+
 bool MsgMonitor(HWND aWnd, UINT aMsg, WPARAM awParam, LPARAM alParam, MSG *apMsg, LRESULT &aMsgReply);
 
 void InitNewThread(int aPriority, bool aSkipUninterruptible, bool aIncrementThreadCountAndUpdateTrayIcon

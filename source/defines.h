@@ -613,7 +613,7 @@ struct ResultToken : public ExprTokenType
 	ResultType ParamError(int aIndex, ExprTokenType *aParam, LPCTSTR aExpectedType);
 	ResultType ParamError(int aIndex, ExprTokenType *aParam, LPCTSTR aExpectedType, LPCTSTR aFunction);
 	
-	BuiltInFunc *func; // For maintainability, this is separate from the ExprTokenType union.  Its main uses are func->mID and func->mOutputVars.
+	void *callee_id; // For maintainability, this is separate from the ExprTokenType union.
 
 private:
 	// Currently can't be included in the value union because meta-functions

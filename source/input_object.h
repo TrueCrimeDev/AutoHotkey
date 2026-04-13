@@ -27,8 +27,6 @@ public:
 			onKeyUp->Release();
 	}
 
-	static Object *Create();
-	
 	FResult __New(optl<StrArg> aOptions, optl<StrArg> aEndKeys, optl<StrArg> aMatchList);
 	
 	FResult Start();
