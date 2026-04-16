@@ -1,0 +1,137 @@
+/*
+DarkMode.ahk — Dark mode GUI framework for AutoHotkey v2.1-alpha.26+
+
+Usage:
+    #Include DarkMode.ahk
+    myGui := Dark.Gui("+Resize", "My App")
+    myGui.Add("Button", "w200 +Accent", "OK")
+    myGui.Add("Edit", "w300", "text")
+    myGui.Show()
+*/
+#Requires AutoHotkey v2.1-alpha.26
+
+; ═══════════════════════════════════════════════════
+; Win32 Structures
+; ═══════════════════════════════════════════════════
+
+Struct RECT {
+    left: i32, top: i32, right: i32, bottom: i32
+}
+
+Struct POINT {
+    x: i32, y: i32
+}
+
+Struct SIZE {
+    cx: i32, cy: i32
+}
+
+Struct NMHDR {
+    hwndFrom: uptr, idFrom: uptr, code: i32
+}
+
+Struct NMCUSTOMDRAW {
+    hdr: NMHDR
+    dwDrawStage: u32
+    hdc: uptr
+    rc: RECT
+    dwItemSpec: uptr
+    uItemState: u32
+    lItemlParam: iptr
+}
+
+Struct PAINTSTRUCT {
+    hdc: uptr
+    fErase: i32
+    rcPaint: RECT
+    fRestore: i32
+    fIncUpdate: i32
+    rgbReserved: UInt8[32]
+}
+
+Struct SCROLLINFO {
+    cbSize: u32, fMask: u32, nMin: i32, nMax: i32
+    nPage: u32, nPos: i32, nTrackPos: i32
+}
+
+Struct TRACKMOUSEEVENT {
+    cbSize: u32, dwFlags: u32, hwndTrack: uptr, dwHoverTime: u32
+}
+
+Struct COMBOBOXINFO {
+    cbSize: u32
+    rcItem: RECT
+    rcButton: RECT
+    stateButton: u32
+    hwndCombo: uptr
+    hwndItem: uptr
+    hwndList: uptr
+}
+
+Struct TEXTMETRICW {
+    tmHeight: i32, tmAscent: i32, tmDescent: i32
+    tmInternalLeading: i32, tmExternalLeading: i32
+    tmAveCharWidth: i32, tmMaxCharWidth: i32
+    tmWeight: i32, tmOverhang: i32
+    tmDigitizedAspectX: i32, tmDigitizedAspectY: i32
+    tmFirstChar: u16, tmLastChar: u16
+    tmDefaultChar: u16, tmBreakChar: u16
+    tmItalic: u8, tmUnderlined: u8, tmStruckOut: u8
+    tmPitchAndFamily: u8, tmCharSet: u8
+}
+
+Struct TCITEMW {
+    mask: u32, dwState: u32, dwStateMask: u32
+    pszText: uptr, cchTextMax: i32
+    iImage: i32, lParam: iptr
+}
+
+Struct HDITEMW {
+    mask: u32, cxy: i32, pszText: uptr, hbm: uptr
+    cchTextMax: i32, fmt: i32, lParam: iptr
+    iImage: i32, iOrder: i32, type: u32
+    pvFilter: uptr, state: u32
+}
+
+Struct MENUINFO {
+    cbSize: u32, fMask: u32, dwStyle: u32, cyMax: u32
+    hbrBack: uptr, dwContextHelpID: u32, dwMenuData: uptr
+}
+
+Struct GdiplusStartupInput {
+    GdiplusVersion: u32
+    DebugEventCallback: uptr
+    SuppressBackgroundThread: i32
+    SuppressExternalCodecs: i32
+}
+
+; ═══════════════════════════════════════════════════
+; Palette
+; ═══════════════════════════════════════════════════
+
+Struct Palette {
+    Background: u32, Surface: u32, Header: u32, Elevated: u32
+    Border: u32, BorderSubtle: u32, BorderHover: u32
+    Accent: u32, AccentHover: u32, AccentPressed: u32
+    Success: u32, Warning: u32, Error: u32, Info: u32
+    TextPrimary: u32, TextSecondary: u32, TextMuted: u32, TextDisabled: u32
+    Control: u32, ControlHover: u32, ControlActive: u32, Selection: u32
+    ScrollTrack: u32, ScrollThumb: u32, ScrollThumbHover: u32
+}
+
+_InitPalette() {
+    p := Palette()
+    p.Background := 0x0F0F0F, p.Surface := 0x121212
+    p.Header := 0x141414, p.Elevated := 0x1A1A1A
+    p.Border := 0x303030, p.BorderSubtle := 0x232323, p.BorderHover := 0x505050
+    p.Accent := 0x5B9FEF, p.AccentHover := 0x7AB3F5, p.AccentPressed := 0x4A8AD4
+    p.Success := 0x7BC96F, p.Warning := 0xF59E42
+    p.Error := 0xDC3545, p.Info := 0x22D3EE
+    p.TextPrimary := 0xFFFFFF, p.TextSecondary := 0xA0A0A0
+    p.TextMuted := 0x606060, p.TextDisabled := 0x4A4A4A
+    p.Control := 0x202020, p.ControlHover := 0x2A2A2A
+    p.ControlActive := 0x333333, p.Selection := 0x264F78
+    p.ScrollTrack := 0x1A1A1A, p.ScrollThumb := 0x404040
+    p.ScrollThumbHover := 0x555555
+    return p
+}
