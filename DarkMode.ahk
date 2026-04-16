@@ -611,3 +611,74 @@ class RadioPainter extends Painter {
         ctrl.SetFont("c" Format("{:X}", Dark.palette.TextPrimary))
     }
 }
+
+; ═══════════════════════════════════════════════════
+; Tier 3 Painters — Complex Custom Draw
+; ═══════════════════════════════════════════════════
+
+class ListViewPainter extends Painter {
+    static _cbs := Map(), _oldProcs := Map()
+
+    static Apply(ctrl, opts := {}) {
+        hwnd := ctrl.Hwnd
+        p := Dark.palette
+        DllCall("uxtheme\SetWindowTheme", "Ptr", hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
+        SendMessage(0x1001, 0, GDI.ToBGR(p.Surface), ctrl)
+        SendMessage(0x1026, 0, GDI.ToBGR(p.Surface), ctrl)
+        SendMessage(0x1024, 0, GDI.ToBGR(p.TextPrimary), ctrl)
+        SendMessage(0x1051, 0, GDI.ToBGR(p.BorderSubtle), ctrl)
+        GDI.RemoveBorder(hwnd)
+        hHeader := DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x101F, "Ptr", 0, "Ptr", 0, "Ptr")
+        if hHeader
+            DllCall("uxtheme\SetWindowTheme", "Ptr", hHeader, "Str", "DarkMode_Explorer", "Ptr", 0)
+        ctrl.OnNotify(-12, ObjBindMethod(this, "_OnCustomDraw", hwnd))
+        Subclass.Install(hwnd, ObjBindMethod(this, "_Proc", hwnd), this._cbs, this._oldProcs)
+    }
+
+    static Remove(hwnd) {
+        Subclass.Uninstall(hwnd, this._cbs, this._oldProcs)
+    }
+
+    static _OnCustomDraw(lvHwnd, ctrl, lParam) {
+        nmcd := NMCUSTOMDRAW.At(lParam)
+        p := Dark.palette
+        switch nmcd.dwDrawStage {
+            case 0x00000001:
+                return 0x20
+            case 0x00010001:
+                if nmcd.uItemState & 1 {
+                    DllCall("SetTextColor", "Ptr", nmcd.hdc, "UInt", GDI.ToBGR(p.TextPrimary))
+                    DllCall("SetBkColor", "Ptr", nmcd.hdc, "UInt", GDI.ToBGR(p.Selection))
+                } else {
+                    DllCall("SetTextColor", "Ptr", nmcd.hdc, "UInt", GDI.ToBGR(p.TextPrimary))
+                    DllCall("SetBkColor", "Ptr", nmcd.hdc, "UInt", GDI.ToBGR(p.Surface))
+                }
+                return 0x02
+        }
+        return 0
+    }
+
+    static _Proc(target, hwnd, msg, wParam, lParam) {
+        if msg = 0x0085 || msg = 0x0014 || msg = 0x000F {
+            result := Subclass.Forward(this._oldProcs[target], hwnd, msg, wParam, lParam)
+            this._HideArrows(target)
+            return result
+        }
+        return Subclass.Forward(this._oldProcs[target], hwnd, msg, wParam, lParam)
+    }
+
+    static _HideArrows(hwnd) {
+        rc := RECT()
+        DllCall("GetWindowRect", "Ptr", hwnd, "Ptr", rc)
+        scrollW := DllCall("GetSystemMetrics", "Int", 2)
+        hdc := DllCall("GetWindowDC", "Ptr", hwnd, "Ptr")
+        w := rc.right - rc.left, h := rc.bottom - rc.top
+        topRc := RECT()
+        topRc.left := w - scrollW, topRc.top := 0, topRc.right := w, topRc.bottom := scrollW
+        GDI.FillRect(hdc, topRc, Dark.palette.ScrollTrack)
+        botRc := RECT()
+        botRc.left := w - scrollW, botRc.top := h - scrollW, botRc.right := w, botRc.bottom := h
+        GDI.FillRect(hdc, botRc, Dark.palette.ScrollTrack)
+        DllCall("ReleaseDC", "Ptr", hwnd, "Ptr", hdc)
+    }
+}
