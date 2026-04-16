@@ -273,3 +273,87 @@ class Painter {
     static Remove(hwnd) {
     }
 }
+
+; ═══════════════════════════════════════════════════
+; Tier 1 Painters — Theme Only
+; ═══════════════════════════════════════════════════
+
+class EditPainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        super.Apply(ctrl, opts)
+        GDI.RemoveBorder(ctrl.Hwnd)
+    }
+}
+
+class CheckBoxPainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        super.Apply(ctrl, opts)
+        ctrl.SetFont("c" Format("{:X}", Dark.palette.TextPrimary))
+    }
+}
+
+class TreeViewPainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        super.Apply(ctrl, opts)
+        SendMessage(0x111D, 0, GDI.ToBGR(Dark.palette.Surface), ctrl)     ; TVM_SETBKCOLOR
+        SendMessage(0x111E, 0, GDI.ToBGR(Dark.palette.TextPrimary), ctrl) ; TVM_SETTEXTCOLOR
+        SendMessage(0x1128, 0, GDI.ToBGR(Dark.palette.Border), ctrl)      ; TVM_SETLINECOLOR
+        GDI.RemoveBorder(ctrl.Hwnd)
+    }
+}
+
+class ProgressPainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        SendMessage(0x2001, 0, GDI.ToBGR(Dark.palette.Surface), ctrl)  ; PBM_SETBKCOLOR
+        ctrl.Opt("c" Format("{:X}", Dark.palette.Accent))
+    }
+}
+
+class ListBoxPainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        super.Apply(ctrl, opts)
+        GDI.RemoveBorder(ctrl.Hwnd)
+    }
+}
+
+class HotkeyPainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        super.Apply(ctrl, opts)
+        GDI.RemoveBorder(ctrl.Hwnd)
+    }
+}
+
+class UpDownPainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        super.Apply(ctrl, opts)
+    }
+}
+
+class LinkPainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        ctrl.SetFont("c" Format("{:X}", Dark.palette.Accent))
+    }
+}
+
+class DateTimePainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        super.Apply(ctrl, opts)
+    }
+}
+
+class MonthCalPainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        super.Apply(ctrl, opts)
+        SendMessage(0x100A, 1, GDI.ToBGR(Dark.palette.Surface), ctrl)     ; MCM_SETCOLOR MCSC_BACKGROUND
+        SendMessage(0x100A, 4, GDI.ToBGR(Dark.palette.TextPrimary), ctrl) ; MCM_SETCOLOR MCSC_TEXT
+        SendMessage(0x100A, 0, GDI.ToBGR(Dark.palette.Surface), ctrl)     ; MCM_SETCOLOR MCSC_MONTHBK
+    }
+}
+
+class StatusBarPainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        SendMessage(0x2001, 0, GDI.ToBGR(Dark.palette.Header), ctrl)  ; SB_SETBKCOLOR via CCM_SETBKCOLOR
+        ctrl.SetFont("c" Format("{:X}", Dark.palette.TextPrimary))
+        DllCall("uxtheme\SetWindowTheme", "Ptr", ctrl.Hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
+    }
+}
