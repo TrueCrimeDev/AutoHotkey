@@ -909,3 +909,118 @@ class MenuPainter {
         DllCall("SetMenuInfo", "Ptr", hMenu, "Ptr", mi)
     }
 }
+
+
+; ═══════════════════════════════════════════════════
+; Dark — Main API
+; ═══════════════════════════════════════════════════
+
+class Dark {
+    static palette := _InitPalette()
+
+    static painters := Map(
+        "Button", ButtonPainter,
+        "Edit", EditPainter,
+        "CheckBox", CheckBoxPainter,
+        "Radio", RadioPainter,
+        "TreeView", TreeViewPainter,
+        "ListView", ListViewPainter,
+        "ComboBox", ComboBoxPainter,
+        "Slider", SliderPainter,
+        "Progress", ProgressPainter,
+        "ListBox", ListBoxPainter,
+        "GroupBox", GroupBoxPainter,
+        "Tab3", TabPainter,
+        "StatusBar", StatusBarPainter,
+        "DateTime", DateTimePainter,
+        "MonthCal", MonthCalPainter,
+        "Hotkey", HotkeyPainter,
+        "UpDown", UpDownPainter,
+        "Link", LinkPainter
+    )
+
+    static Scale(v) => Round(v * (A_ScreenDPI / 96))
+
+    class Gui extends Gui {
+        _darkHwnds := Map()
+
+        __New(options := "", title := A_ScriptName) {
+            super.__New(options, title)
+            p := Dark.palette
+            this.BackColor := Format("{:06X}", p.Background)
+            this.SetFont("s9 c" Format("{:X}", p.TextPrimary), "Segoe UI")
+
+            if VerCompare(A_OSVersion, "10.0.17763") >= 0 {
+                attr := VerCompare(A_OSVersion, "10.0.18985") >= 0 ? 20 : 19
+                DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", this.Hwnd, "Int", attr, "Int*", true, "Int", 4)
+            }
+
+            MenuPainter.ApplyPopups()
+
+            this._winProc := ObjBindMethod(this, "_WndProc")
+            this._winProcCb := CallbackCreate(this._winProc, , 4)
+            setWL := A_PtrSize = 8 ? "SetWindowLongPtr" : "SetWindowLong"
+            this._oldWndProc := DllCall(setWL, "Ptr", this.Hwnd, "Int", -4, "Ptr", this._winProcCb, "Ptr")
+        }
+
+        __Delete() {
+            for hwnd, ctrlType in this._darkHwnds {
+                if Dark.painters.Has(ctrlType)
+                    Dark.painters[ctrlType].Remove(hwnd)
+            }
+            this._darkHwnds.Clear()
+            if this.HasOwnProp("_oldWndProc") {
+                setWL := A_PtrSize = 8 ? "SetWindowLongPtr" : "SetWindowLong"
+                try DllCall(setWL, "Ptr", this.Hwnd, "Int", -4, "Ptr", this._oldWndProc, "Ptr")
+                CallbackFree(this._winProcCb)
+            }
+        }
+
+        Add(controlType, options := "", content?) {
+            accent := InStr(options, "+Accent")
+            if accent
+                options := StrReplace(options, "+Accent", "")
+
+            if controlType = "Text" && !RegExMatch(options, "i)\bc[0-9A-Fa-f]+\b")
+                options .= " c" Format("{:X}", Dark.palette.TextPrimary)
+
+            ctrl := super.Add(controlType, options, content?)
+
+            if Dark.painters.Has(controlType) {
+                Dark.painters[controlType].Apply(ctrl, { accent: !!accent })
+                this._darkHwnds[ctrl.Hwnd] := controlType
+            }
+
+            return ctrl
+        }
+
+        _WndProc(hwnd, msg, wParam, lParam) {
+            p := Dark.palette
+            if msg = 0x0133 {
+                DllCall("SetTextColor", "Ptr", wParam, "UInt", GDI.ToBGR(p.TextPrimary))
+                DllCall("SetBkColor", "Ptr", wParam, "UInt", GDI.ToBGR(p.Control))
+                return GDI.Brush(p.Control)
+            }
+            if msg = 0x0134 {
+                DllCall("SetTextColor", "Ptr", wParam, "UInt", GDI.ToBGR(p.TextPrimary))
+                DllCall("SetBkColor", "Ptr", wParam, "UInt", GDI.ToBGR(p.Surface))
+                return GDI.Brush(p.Surface)
+            }
+            if msg = 0x0135 {
+                DllCall("SetBkColor", "Ptr", wParam, "UInt", GDI.ToBGR(p.Background))
+                return GDI.Brush(p.Background)
+            }
+            if msg = 0x0136 {
+                return GDI.Brush(p.Background)
+            }
+            if msg = 0x0138 {
+                DllCall("SetTextColor", "Ptr", wParam, "UInt", GDI.ToBGR(p.TextPrimary))
+                DllCall("SetBkMode", "Ptr", wParam, "Int", 1)
+                return GDI.Brush(p.Background)
+            }
+            return DllCall("CallWindowProc", "Ptr", this._oldWndProc, "Ptr", hwnd, "UInt", msg, "Ptr", wParam, "Ptr", lParam, "Ptr")
+        }
+    }
+}
+
+OnExit((*) => (GDI.Destroy(), SliderPainter._ShutdownGdip()))
