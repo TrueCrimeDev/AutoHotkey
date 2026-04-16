@@ -135,3 +135,99 @@ _InitPalette() {
     p.ScrollThumbHover := 0x555555
     return p
 }
+
+; ═══════════════════════════════════════════════════
+; GDI Helper
+; ═══════════════════════════════════════════════════
+
+class GDI {
+    static _brushCache := Map()
+
+    static ToBGR(rgb) => ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF)
+
+    static Brush(rgb) {
+        bgr := this.ToBGR(rgb)
+        if !this._brushCache.Has(bgr)
+            this._brushCache[bgr] := DllCall("CreateSolidBrush", "UInt", bgr, "Ptr")
+        return this._brushCache[bgr]
+    }
+
+    static FillRect(hdc, rc, color) {
+        DllCall("FillRect", "Ptr", hdc, "Ptr", rc, "Ptr", this.Brush(color))
+    }
+
+    static RoundRect(hdc, rc, color, radius) {
+        brush := DllCall("CreateSolidBrush", "UInt", this.ToBGR(color), "Ptr")
+        pen := DllCall("CreatePen", "Int", 0, "Int", 1, "UInt", this.ToBGR(color), "Ptr")
+        oldBrush := DllCall("SelectObject", "Ptr", hdc, "Ptr", brush, "Ptr")
+        oldPen := DllCall("SelectObject", "Ptr", hdc, "Ptr", pen, "Ptr")
+        DllCall("RoundRect", "Ptr", hdc, "Int", rc.left, "Int", rc.top,
+            "Int", rc.right, "Int", rc.bottom, "Int", radius, "Int", radius)
+        DllCall("SelectObject", "Ptr", hdc, "Ptr", oldBrush)
+        DllCall("SelectObject", "Ptr", hdc, "Ptr", oldPen)
+        DllCall("DeleteObject", "Ptr", brush)
+        DllCall("DeleteObject", "Ptr", pen)
+    }
+
+    static FrameRect(hdc, rc, color) {
+        brush := DllCall("CreateSolidBrush", "UInt", this.ToBGR(color), "Ptr")
+        DllCall("FrameRect", "Ptr", hdc, "Ptr", rc, "Ptr", brush)
+        DllCall("DeleteObject", "Ptr", brush)
+    }
+
+    static DrawText(hdc, text, rc, color, flags := 0x25) {
+        ; Default flags: DT_CENTER(1) | DT_VCENTER(4) | DT_SINGLELINE(0x20)
+        DllCall("SetBkMode", "Ptr", hdc, "Int", 1)  ; TRANSPARENT
+        DllCall("SetTextColor", "Ptr", hdc, "UInt", this.ToBGR(color))
+        DllCall("DrawText", "Ptr", hdc, "Str", text, "Int", -1, "Ptr", rc, "UInt", flags)
+    }
+
+    static SelectFont(hdc, hwnd) {
+        hFont := DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x31, "Ptr", 0, "Ptr", 0, "Ptr")
+        return hFont ? DllCall("SelectObject", "Ptr", hdc, "Ptr", hFont, "Ptr") : 0
+    }
+
+    static RestoreFont(hdc, oldFont) {
+        if oldFont
+            DllCall("SelectObject", "Ptr", hdc, "Ptr", oldFont)
+    }
+
+    static BeginBuffered(hwnd) {
+        ps := PAINTSTRUCT()
+        hdc := DllCall("BeginPaint", "Ptr", hwnd, "Ptr", ps, "Ptr")
+        rc := RECT()
+        DllCall("GetClientRect", "Ptr", hwnd, "Ptr", rc)
+        memDC := DllCall("CreateCompatibleDC", "Ptr", hdc, "Ptr")
+        bmp := DllCall("CreateCompatibleBitmap", "Ptr", hdc, "Int", rc.right, "Int", rc.bottom, "Ptr")
+        DllCall("SelectObject", "Ptr", memDC, "Ptr", bmp)
+        return { hdc: hdc, memDC: memDC, bmp: bmp, rc: rc, ps: ps, hwnd: hwnd }
+    }
+
+    static EndBuffered(ctx) {
+        DllCall("BitBlt", "Ptr", ctx.hdc, "Int", 0, "Int", 0,
+            "Int", ctx.rc.right, "Int", ctx.rc.bottom, "Ptr", ctx.memDC,
+            "Int", 0, "Int", 0, "UInt", 0x00CC0020)  ; SRCCOPY
+        DllCall("DeleteDC", "Ptr", ctx.memDC)
+        DllCall("DeleteObject", "Ptr", ctx.bmp)
+        DllCall("EndPaint", "Ptr", ctx.hwnd, "Ptr", ctx.ps)
+    }
+
+    static RemoveBorder(hwnd) {
+        static GWL_STYLE := -16, GWL_EXSTYLE := -20
+        static WS_BORDER := 0x800000, WS_EX_CLIENTEDGE := 0x200, WS_EX_STATICEDGE := 0x20000
+        SetWinLong := A_PtrSize = 8 ? "SetWindowLongPtr" : "SetWindowLong"
+        GetWinLong := A_PtrSize = 8 ? "GetWindowLongPtr" : "GetWindowLong"
+        style := DllCall(GetWinLong, "Ptr", hwnd, "Int", GWL_STYLE, "Ptr")
+        DllCall(SetWinLong, "Ptr", hwnd, "Int", GWL_STYLE, "Ptr", style & ~WS_BORDER)
+        exStyle := DllCall(GetWinLong, "Ptr", hwnd, "Int", GWL_EXSTYLE, "Ptr")
+        DllCall(SetWinLong, "Ptr", hwnd, "Int", GWL_EXSTYLE, "Ptr", exStyle & ~(WS_EX_CLIENTEDGE | WS_EX_STATICEDGE))
+        DllCall("SetWindowPos", "Ptr", hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0,
+            "UInt", 0x27)  ; SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER
+    }
+
+    static Destroy() {
+        for _, brush in this._brushCache
+            DllCall("DeleteObject", "Ptr", brush)
+        this._brushCache.Clear()
+    }
+}
