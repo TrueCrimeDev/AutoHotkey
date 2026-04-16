@@ -829,3 +829,83 @@ class SliderPainter extends Painter {
         GDI.EndBuffered(ctx)
     }
 }
+
+; ═══════════════════════════════════════════════════
+; Tier 4 Painters — Composite
+; ═══════════════════════════════════════════════════
+
+class ScrollbarPainter {
+    lv := 0, ctrl := 0, gui := 0
+    isDragging := false, dragStartY := 0, dragStartPos := 0
+    isHovering := false, syncTimer := 0
+    w := 14, h := 0
+
+    __New(guiObj, lv) {
+        this.gui := guiObj, this.lv := lv
+        this.w := Dark.Scale(14)
+        rc := RECT()
+        DllCall("GetWindowRect", "Ptr", lv.Hwnd, "Ptr", rc)
+        pt := POINT()
+        pt.x := rc.right, pt.y := rc.top
+        DllCall("ScreenToClient", "Ptr", guiObj.Hwnd, "Ptr", pt)
+        scrollW := DllCall("GetSystemMetrics", "Int", 2)
+        this.h := rc.bottom - rc.top
+        this.ctrl := guiObj.Add("Text",
+            Format("x{} y{} w{} h{} +0xE", pt.x - scrollW, pt.y, this.w, this.h), "")
+        this.syncTimer := ObjBindMethod(this, "Sync")
+        SetTimer(this.syncTimer, 100)
+    }
+
+    Sync() {
+        if !this.ctrl || !DllCall("IsWindow", "Ptr", this.lv.Hwnd)
+            return
+        DllCall("InvalidateRect", "Ptr", this.ctrl.Hwnd, "Ptr", 0, "Int", 1)
+    }
+
+    Paint(hdc) {
+        rc := RECT()
+        DllCall("GetClientRect", "Ptr", this.ctrl.Hwnd, "Ptr", rc)
+        p := Dark.palette
+        GDI.FillRect(hdc, rc, p.ScrollTrack)
+        si := SCROLLINFO()
+        si.cbSize := ObjGetDataSize(si)
+        si.fMask := 0x17
+        DllCall("GetScrollInfo", "Ptr", this.lv.Hwnd, "Int", 1, "Ptr", si)
+        if si.nMax <= si.nMin
+            return
+        range := si.nMax - si.nMin + 1
+        thumbH := Max(Dark.Scale(30), (si.nPage * this.h) // range)
+        scrollRange := this.h - thumbH
+        thumbY := scrollRange > 0 ? ((si.nPos - si.nMin) * scrollRange) // (range - si.nPage) : 0
+        thumbRc := RECT()
+        thumbRc.left := Dark.Scale(2), thumbRc.top := thumbY
+        thumbRc.right := rc.right - Dark.Scale(2), thumbRc.bottom := thumbY + thumbH
+        color := this.isHovering || this.isDragging ? p.ScrollThumbHover : p.ScrollThumb
+        GDI.RoundRect(hdc, thumbRc, color, Dark.Scale(4))
+    }
+
+    Destroy() {
+        if this.syncTimer
+            SetTimer(this.syncTimer, 0)
+    }
+}
+
+class MenuPainter {
+    static ApplyPopups() {
+        uxtheme := DllCall("GetModuleHandle", "Str", "uxtheme", "Ptr")
+        SetPreferredAppMode := DllCall("GetProcAddress", "Ptr", uxtheme, "Ptr", 135, "Ptr")
+        FlushMenuThemes := DllCall("GetProcAddress", "Ptr", uxtheme, "Ptr", 136, "Ptr")
+        if SetPreferredAppMode
+            DllCall(SetPreferredAppMode, "Int", 2)
+        if FlushMenuThemes
+            DllCall(FlushMenuThemes)
+    }
+
+    static ApplyToMenu(hMenu) {
+        mi := MENUINFO()
+        mi.cbSize := ObjGetDataSize(mi)
+        mi.fMask := 0x10
+        mi.hbrBack := GDI.Brush(Dark.palette.Surface)
+        DllCall("SetMenuInfo", "Ptr", hMenu, "Ptr", mi)
+    }
+}
