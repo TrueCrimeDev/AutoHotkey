@@ -682,3 +682,150 @@ class ListViewPainter extends Painter {
         DllCall("ReleaseDC", "Ptr", hwnd, "Ptr", hdc)
     }
 }
+
+class TabPainter extends Painter {
+    static _cbs := Map(), _oldProcs := Map()
+
+    static Apply(ctrl, opts := {}) {
+        hwnd := ctrl.Hwnd
+        uxtheme := DllCall("GetModuleHandle", "Str", "uxtheme", "Ptr")
+        fn := DllCall("GetProcAddress", "Ptr", uxtheme, "Ptr", 133, "Ptr")
+        if fn
+            DllCall(fn, "Ptr", hwnd, "Int", 1)
+        DllCall("uxtheme\SetWindowTheme", "Ptr", hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
+        Subclass.Install(hwnd, ObjBindMethod(this, "_Proc", hwnd), this._cbs, this._oldProcs)
+    }
+
+    static Remove(hwnd) {
+        Subclass.Uninstall(hwnd, this._cbs, this._oldProcs)
+    }
+
+    static _Proc(target, hwnd, msg, wParam, lParam) {
+        if msg = 0x000F {
+            this._Paint(target)
+            return 0
+        }
+        if msg = 0x0014
+            return 1
+        return Subclass.Forward(this._oldProcs[target], hwnd, msg, wParam, lParam)
+    }
+
+    static _Paint(hwnd) {
+        ctx := GDI.BeginBuffered(hwnd)
+        hdc := ctx.memDC, rc := ctx.rc
+        p := Dark.palette
+        GDI.FillRect(hdc, rc, p.Background)
+        tabCount := DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x1304, "Ptr", 0, "Ptr", 0, "Int")
+        selIdx := DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x130B, "Ptr", 0, "Ptr", 0, "Int")
+        oldFont := GDI.SelectFont(hdc, hwnd)
+        loop tabCount {
+            i := A_Index - 1
+            tabRc := RECT()
+            DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x130A, "Ptr", i, "Ptr", tabRc)
+            isSelected := (i = selIdx)
+            if isSelected
+                GDI.RoundRect(hdc, tabRc, p.ControlActive, Dark.Scale(6))
+            textBuf := Buffer(512, 0)
+            item := TCITEMW()
+            item.mask := 0x1
+            item.pszText := textBuf.Ptr
+            item.cchTextMax := 255
+            DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x133C, "Ptr", i, "Ptr", item)
+            text := StrGet(textBuf, "UTF-16")
+            GDI.DrawText(hdc, text, tabRc, isSelected ? p.TextPrimary : p.TextSecondary)
+        }
+        sepRc := RECT()
+        DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x130A, "Ptr", 0, "Ptr", sepRc)
+        lineRc := RECT()
+        lineRc.left := 0, lineRc.top := sepRc.bottom
+        lineRc.right := rc.right, lineRc.bottom := sepRc.bottom + 1
+        GDI.FillRect(hdc, lineRc, p.Border)
+        GDI.RestoreFont(hdc, oldFont)
+        GDI.EndBuffered(ctx)
+    }
+}
+
+class SliderPainter extends Painter {
+    static _cbs := Map(), _oldProcs := Map()
+    static _gdipToken := 0, _gdipReady := false
+
+    static _InitGdip() {
+        if this._gdipReady
+            return
+        si := GdiplusStartupInput()
+        si.GdiplusVersion := 1
+        token := 0
+        DllCall("gdiplus\GdiplusStartup", "Ptr*", &token, "Ptr", si, "Ptr", 0)
+        this._gdipToken := token
+        this._gdipReady := true
+    }
+
+    static _ShutdownGdip() {
+        if this._gdipReady {
+            DllCall("gdiplus\GdiplusShutdown", "Ptr", this._gdipToken)
+            this._gdipReady := false
+        }
+    }
+
+    static Apply(ctrl, opts := {}) {
+        this._InitGdip()
+        hwnd := ctrl.Hwnd
+        DllCall("uxtheme\SetWindowTheme", "Ptr", hwnd, "Str", " ", "Str", " ")
+        Subclass.Install(hwnd, ObjBindMethod(this, "_Proc", hwnd), this._cbs, this._oldProcs)
+    }
+
+    static Remove(hwnd) {
+        Subclass.Uninstall(hwnd, this._cbs, this._oldProcs)
+    }
+
+    static _Proc(target, hwnd, msg, wParam, lParam) {
+        if msg = 0x000F {
+            this._Paint(target)
+            return 0
+        }
+        if msg = 0x0014
+            return 1
+        return Subclass.Forward(this._oldProcs[target], hwnd, msg, wParam, lParam)
+    }
+
+    static _Paint(hwnd) {
+        ctx := GDI.BeginBuffered(hwnd)
+        hdc := ctx.memDC, rc := ctx.rc
+        p := Dark.palette
+        w := rc.right, h := rc.bottom
+        GDI.FillRect(hdc, rc, p.Background)
+        channelH := Dark.Scale(4)
+        channelY := h // 2 - channelH // 2
+        channelRc := RECT()
+        channelRc.left := Dark.Scale(10), channelRc.top := channelY
+        channelRc.right := w - Dark.Scale(10), channelRc.bottom := channelY + channelH
+        GDI.RoundRect(hdc, channelRc, p.ControlActive, Dark.Scale(2))
+        thumbRc := RECT()
+        DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x0419, "Ptr", 0, "Ptr", thumbRc)
+        thumbW := thumbRc.right - thumbRc.left
+        thumbH := thumbRc.bottom - thumbRc.top
+        diameter := Min(thumbW, thumbH) + Dark.Scale(6)
+        centerX := thumbRc.left + thumbW // 2
+        centerY := thumbRc.top + thumbH // 2 - Dark.Scale(2)
+        pGraphics := 0
+        DllCall("gdiplus\GdipCreateFromHDC", "Ptr", hdc, "Ptr*", &pGraphics)
+        DllCall("gdiplus\GdipSetSmoothingMode", "Ptr", pGraphics, "Int", 4)
+        pBrush := 0
+        DllCall("gdiplus\GdipCreateSolidFill", "UInt", 0xFFFFFFFF, "Ptr*", &pBrush)
+        DllCall("gdiplus\GdipFillEllipse", "Ptr", pGraphics, "Ptr", pBrush,
+            "Float", centerX - diameter / 2, "Float", centerY - diameter / 2,
+            "Float", diameter * 1.0, "Float", diameter * 1.0)
+        DllCall("gdiplus\GdipDeleteBrush", "Ptr", pBrush)
+        accentARGB := 0xFF000000 | p.Accent
+        pPen := 0
+        borderW := Dark.Scale(4) * 1.0
+        DllCall("gdiplus\GdipCreatePen1", "UInt", accentARGB, "Float", borderW, "Int", 2, "Ptr*", &pPen)
+        DllCall("gdiplus\GdipDrawEllipse", "Ptr", pGraphics, "Ptr", pPen,
+            "Float", centerX - diameter / 2 + borderW / 2,
+            "Float", centerY - diameter / 2 + borderW / 2,
+            "Float", diameter - borderW, "Float", diameter - borderW)
+        DllCall("gdiplus\GdipDeletePen", "Ptr", pPen)
+        DllCall("gdiplus\GdipDeleteGraphics", "Ptr", pGraphics)
+        GDI.EndBuffered(ctx)
+    }
+}
