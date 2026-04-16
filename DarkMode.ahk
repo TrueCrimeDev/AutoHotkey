@@ -454,3 +454,160 @@ class ButtonPainter extends Painter {
         DllCall("EndPaint", "Ptr", hwnd, "Ptr", ps)
     }
 }
+
+class ComboBoxPainter extends Painter {
+    static _cbs := Map(), _oldProcs := Map()
+
+    static Apply(ctrl, opts := {}) {
+        hwnd := ctrl.Hwnd
+        ctrl.SetFont("c" Format("{:X}", Dark.palette.TextPrimary))
+        GDI.RemoveBorder(hwnd)
+        ; Get and style the dropdown list
+        cbi := COMBOBOXINFO()
+        cbi.cbSize := ObjGetDataSize(cbi)
+        DllCall("GetComboBoxInfo", "Ptr", hwnd, "Ptr", cbi)
+        if cbi.hwndList
+            DllCall("uxtheme\SetWindowTheme", "Ptr", cbi.hwndList, "Str", "DarkMode_CFD", "Ptr", 0)
+        Subclass.Install(hwnd, ObjBindMethod(this, "_Proc", hwnd), this._cbs, this._oldProcs)
+    }
+
+    static Remove(hwnd) {
+        Subclass.Uninstall(hwnd, this._cbs, this._oldProcs)
+    }
+
+    static _Proc(target, hwnd, msg, wParam, lParam) {
+        if msg = 0x000F {  ; WM_PAINT
+            this._Paint(target)
+            return 0
+        }
+        if msg = 0x0014  ; WM_ERASEBKGND
+            return 1
+        return Subclass.Forward(this._oldProcs[target], hwnd, msg, wParam, lParam)
+    }
+
+    static _Paint(hwnd) {
+        ps := PAINTSTRUCT()
+        hdc := DllCall("BeginPaint", "Ptr", hwnd, "Ptr", ps, "Ptr")
+        rc := RECT()
+        DllCall("GetClientRect", "Ptr", hwnd, "Ptr", rc)
+        w := rc.right, h := rc.bottom
+        p := Dark.palette
+
+        ; Background
+        GDI.FillRect(hdc, rc, p.Background)
+        GDI.RoundRect(hdc, rc, p.Control, Dark.Scale(6))
+
+        ; Dropdown arrow
+        arrowX := w - Dark.Scale(12)
+        arrowY := h // 2
+        halfW := Dark.Scale(4), arrowH := Dark.Scale(3)
+        pen := DllCall("CreatePen", "Int", 0, "Int", Dark.Scale(2), "UInt", GDI.ToBGR(p.TextSecondary), "Ptr")
+        oldPen := DllCall("SelectObject", "Ptr", hdc, "Ptr", pen, "Ptr")
+        DllCall("MoveToEx", "Ptr", hdc, "Int", arrowX - halfW, "Int", arrowY - arrowH, "Ptr", 0)
+        DllCall("LineTo", "Ptr", hdc, "Int", arrowX, "Int", arrowY + arrowH)
+        DllCall("LineTo", "Ptr", hdc, "Int", arrowX + halfW, "Int", arrowY - arrowH)
+        DllCall("SelectObject", "Ptr", hdc, "Ptr", oldPen)
+        DllCall("DeleteObject", "Ptr", pen)
+
+        ; Text
+        textLen := DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x000E, "Ptr", 0, "Ptr", 0, "Int")
+        if textLen > 0 {
+            textBuf := Buffer((textLen + 1) * 2, 0)
+            DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x000D, "Ptr", textLen + 1, "Ptr", textBuf)
+            textRc := RECT()
+            textRc.left := Dark.Scale(6), textRc.top := 0
+            textRc.right := w - Dark.Scale(24), textRc.bottom := h
+            oldFont := GDI.SelectFont(hdc, hwnd)
+            GDI.DrawText(hdc, StrGet(textBuf, "UTF-16"), textRc, p.TextPrimary, 0x24)  ; DT_VCENTER | DT_SINGLELINE
+            GDI.RestoreFont(hdc, oldFont)
+        }
+
+        DllCall("EndPaint", "Ptr", hwnd, "Ptr", ps)
+    }
+}
+
+class GroupBoxPainter extends Painter {
+    static _cbs := Map(), _oldProcs := Map()
+
+    static Apply(ctrl, opts := {}) {
+        Subclass.Install(ctrl.Hwnd, ObjBindMethod(this, "_Proc", ctrl.Hwnd), this._cbs, this._oldProcs)
+    }
+
+    static Remove(hwnd) {
+        Subclass.Uninstall(hwnd, this._cbs, this._oldProcs)
+    }
+
+    static _Proc(target, hwnd, msg, wParam, lParam) {
+        if msg = 0x000F {  ; WM_PAINT
+            this._Paint(target)
+            return 0
+        }
+        if msg = 0x0014  ; WM_ERASEBKGND
+            return 1
+        return Subclass.Forward(this._oldProcs[target], hwnd, msg, wParam, lParam)
+    }
+
+    static _Paint(hwnd) {
+        ps := PAINTSTRUCT()
+        hdc := DllCall("BeginPaint", "Ptr", hwnd, "Ptr", ps, "Ptr")
+        rc := RECT()
+        DllCall("GetClientRect", "Ptr", hwnd, "Ptr", rc)
+        p := Dark.palette
+
+        GDI.FillRect(hdc, rc, p.Background)
+
+        ; Get text and font metrics
+        oldFont := GDI.SelectFont(hdc, hwnd)
+        textLen := DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x000E, "Ptr", 0, "Ptr", 0, "Int")
+        text := ""
+        if textLen > 0 {
+            textBuf := Buffer((textLen + 1) * 2, 0)
+            DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x000D, "Ptr", textLen + 1, "Ptr", textBuf)
+            text := StrGet(textBuf, "UTF-16")
+        }
+
+        tm := TEXTMETRICW()
+        DllCall("GetTextMetrics", "Ptr", hdc, "Ptr", tm)
+        tmH := tm.tmHeight
+
+        ; Border
+        borderY := tmH // 2
+        borderRc := RECT()
+        borderRc.left := 0, borderRc.top := borderY
+        borderRc.right := rc.right, borderRc.bottom := rc.bottom
+        pen := DllCall("CreatePen", "Int", 0, "Int", 1, "UInt", GDI.ToBGR(p.Border), "Ptr")
+        nullBrush := DllCall("GetStockObject", "Int", 5, "Ptr")  ; HOLLOW_BRUSH
+        oldPen2 := DllCall("SelectObject", "Ptr", hdc, "Ptr", pen, "Ptr")
+        oldBrush2 := DllCall("SelectObject", "Ptr", hdc, "Ptr", nullBrush, "Ptr")
+        DllCall("RoundRect", "Ptr", hdc, "Int", borderRc.left, "Int", borderRc.top,
+            "Int", borderRc.right, "Int", borderRc.bottom, "Int", Dark.Scale(6), "Int", Dark.Scale(6))
+        DllCall("SelectObject", "Ptr", hdc, "Ptr", oldPen2)
+        DllCall("SelectObject", "Ptr", hdc, "Ptr", oldBrush2)
+        DllCall("DeleteObject", "Ptr", pen)
+
+        ; Title gap + text
+        if text {
+            textX := Dark.Scale(9)
+            sz := SIZE()
+            DllCall("GetTextExtentPoint32", "Ptr", hdc, "Str", text, "Int", StrLen(text), "Ptr", sz)
+            gapRc := RECT()
+            gapRc.left := textX - 2, gapRc.top := borderY - 1
+            gapRc.right := textX + sz.cx + 2, gapRc.bottom := borderY + 1
+            GDI.FillRect(hdc, gapRc, p.Background)
+            textRc := RECT()
+            textRc.left := textX, textRc.top := 0
+            textRc.right := textX + sz.cx, textRc.bottom := tmH
+            GDI.DrawText(hdc, text, textRc, p.TextPrimary, 0)  ; DT_LEFT
+        }
+
+        GDI.RestoreFont(hdc, oldFont)
+        DllCall("EndPaint", "Ptr", hwnd, "Ptr", ps)
+    }
+}
+
+class RadioPainter extends Painter {
+    static Apply(ctrl, opts := {}) {
+        DllCall("uxtheme\SetWindowTheme", "Ptr", ctrl.Hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
+        ctrl.SetFont("c" Format("{:X}", Dark.palette.TextPrimary))
+    }
+}
