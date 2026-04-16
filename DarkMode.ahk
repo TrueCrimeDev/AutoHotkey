@@ -231,3 +231,45 @@ class GDI {
         this._brushCache.Clear()
     }
 }
+
+; ═══════════════════════════════════════════════════
+; Subclass Utility
+; ═══════════════════════════════════════════════════
+
+class Subclass {
+    static _setWinLong := A_PtrSize = 8 ? "SetWindowLongPtr" : "SetWindowLong"
+
+    static Install(hwnd, procMethod, callbacks, oldProcs) {
+        if oldProcs.Has(hwnd)
+            return false
+        cb := CallbackCreate(procMethod, , 4)
+        callbacks[hwnd] := cb
+        oldProcs[hwnd] := DllCall(this._setWinLong, "Ptr", hwnd, "Int", -4, "Ptr", cb, "Ptr")
+        return true
+    }
+
+    static Uninstall(hwnd, callbacks, oldProcs) {
+        if !oldProcs.Has(hwnd)
+            return
+        DllCall(this._setWinLong, "Ptr", hwnd, "Int", -4, "Ptr", oldProcs[hwnd], "Ptr")
+        CallbackFree(callbacks[hwnd])
+        callbacks.Delete(hwnd), oldProcs.Delete(hwnd)
+    }
+
+    static Forward(oldProc, hwnd, msg, wParam, lParam) {
+        return DllCall("CallWindowProc", "Ptr", oldProc, "Ptr", hwnd, "UInt", msg, "Ptr", wParam, "Ptr", lParam, "Ptr")
+    }
+}
+
+; ═══════════════════════════════════════════════════
+; Painter Base
+; ═══════════════════════════════════════════════════
+
+class Painter {
+    static Apply(ctrl, opts := {}) {
+        DllCall("uxtheme\SetWindowTheme", "Ptr", ctrl.Hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
+        ctrl.SetFont("c" Format("{:X}", Dark.palette.TextPrimary))
+    }
+    static Remove(hwnd) {
+    }
+}
