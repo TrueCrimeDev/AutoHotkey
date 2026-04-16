@@ -357,3 +357,100 @@ class StatusBarPainter extends Painter {
         DllCall("uxtheme\SetWindowTheme", "Ptr", ctrl.Hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
     }
 }
+
+; ═══════════════════════════════════════════════════
+; Tier 2 Painters — Subclassed
+; ═══════════════════════════════════════════════════
+
+class ButtonPainter extends Painter {
+    static _cbs := Map(), _oldProcs := Map(), _state := Map()
+
+    static Apply(ctrl, opts := {}) {
+        hwnd := ctrl.Hwnd
+        this._state[hwnd] := { text: ctrl.Text, hover: false, pressed: false, accent: opts.HasOwnProp("accent") && opts.accent }
+        Subclass.Install(hwnd, ObjBindMethod(this, "_Proc", hwnd), this._cbs, this._oldProcs)
+        DllCall("InvalidateRect", "Ptr", hwnd, "Ptr", 0, "Int", 1)
+    }
+
+    static Remove(hwnd) {
+        Subclass.Uninstall(hwnd, this._cbs, this._oldProcs)
+        this._state.Delete(hwnd)
+    }
+
+    static _Proc(target, hwnd, msg, wParam, lParam) {
+        if msg = 0x0014  ; WM_ERASEBKGND
+            return 1
+        if msg = 0x000F {  ; WM_PAINT
+            this._Paint(target)
+            return 0
+        }
+        if msg = 0x0200 {  ; WM_MOUSEMOVE
+            s := this._state[target]
+            if !s.hover {
+                s.hover := true
+                tme := TRACKMOUSEEVENT()
+                tme.cbSize := ObjGetDataSize(tme)
+                tme.dwFlags := 0x2  ; TME_LEAVE
+                tme.hwndTrack := target
+                DllCall("TrackMouseEvent", "Ptr", tme)
+                DllCall("InvalidateRect", "Ptr", target, "Ptr", 0, "Int", 1)
+            }
+            return 0
+        }
+        if msg = 0x02A3 {  ; WM_MOUSELEAVE
+            this._state[target].hover := false
+            DllCall("InvalidateRect", "Ptr", target, "Ptr", 0, "Int", 1)
+            return 0
+        }
+        if msg = 0x0201 {  ; WM_LBUTTONDOWN
+            this._state[target].pressed := true
+            DllCall("SetCapture", "Ptr", target)
+            DllCall("InvalidateRect", "Ptr", target, "Ptr", 0, "Int", 1)
+            return 0
+        }
+        if msg = 0x0202 {  ; WM_LBUTTONUP
+            s := this._state[target]
+            wasPressed := s.pressed
+            s.pressed := false
+            DllCall("ReleaseCapture")
+            DllCall("InvalidateRect", "Ptr", target, "Ptr", 0, "Int", 1)
+            if wasPressed {
+                rc := RECT()
+                DllCall("GetClientRect", "Ptr", target, "Ptr", rc)
+                pt := POINT()
+                DllCall("GetCursorPos", "Ptr", pt)
+                DllCall("ScreenToClient", "Ptr", target, "Ptr", pt)
+                if (pt.x >= 0 && pt.x < rc.right && pt.y >= 0 && pt.y < rc.bottom) {
+                    parent := DllCall("GetParent", "Ptr", target, "Ptr")
+                    ctrlId := DllCall("GetDlgCtrlID", "Ptr", target, "Int")
+                    DllCall("SendMessage", "Ptr", parent, "UInt", 0x0111, "Ptr", ctrlId, "Ptr", target)
+                }
+            }
+            return 0
+        }
+        return Subclass.Forward(this._oldProcs[target], hwnd, msg, wParam, lParam)
+    }
+
+    static _Paint(hwnd) {
+        ps := PAINTSTRUCT()
+        hdc := DllCall("BeginPaint", "Ptr", hwnd, "Ptr", ps, "Ptr")
+        rc := RECT()
+        DllCall("GetClientRect", "Ptr", hwnd, "Ptr", rc)
+
+        s := this._state[hwnd]
+        p := Dark.palette
+
+        if s.accent
+            bg := s.pressed ? p.AccentPressed : s.hover ? p.AccentHover : p.Accent
+        else
+            bg := s.pressed ? p.ControlActive : s.hover ? p.ControlHover : p.Control
+
+        GDI.FillRect(hdc, rc, p.Background)
+        GDI.RoundRect(hdc, rc, bg, Dark.Scale(8))
+        oldFont := GDI.SelectFont(hdc, hwnd)
+        GDI.DrawText(hdc, s.text, rc, p.TextPrimary)
+        GDI.RestoreFont(hdc, oldFont)
+
+        DllCall("EndPaint", "Ptr", hwnd, "Ptr", ps)
+    }
+}
