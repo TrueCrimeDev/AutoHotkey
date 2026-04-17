@@ -9,6 +9,7 @@ Usage:
     myGui.Show()
 */
 #Requires AutoHotkey v2.1-alpha.26
+#Warn LocalSameAsGlobal, Off  ; Painters forward-reference Dark (defined later)
 
 ; ═══════════════════════════════════════════════════
 ; Win32 Structures
