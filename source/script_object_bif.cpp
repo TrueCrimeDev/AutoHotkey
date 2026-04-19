@@ -286,14 +286,17 @@ bif_impl FResult ObjSetDataPtr(IObject *aObj, UINT_PTR aPtr)
 {
 	if (!aObj->IsOfType(Object::sPrototype))
 		return FR_E_ARG(0);
-	((Object*)aObj)->SetDataPtr(aPtr);
-	return OK;
+	return ((Object*)aObj)->SetDataPtr(aPtr);
 }
 
-void Object::SetDataPtr(UINT_PTR aPtr)
+FResult Object::SetDataPtr(UINT_PTR aPtr)
 {
-	mData = (void*)aPtr;
-	mFlags |= DataIsSetFlag;
+	if (mFlags & DataIsSuffixPtr)
+	{
+		auto si = mBase->GetStructInfo();
+		*(UINT_PTR*)((char*)this + si->object_size + si->nested_object_size) = aPtr;
+	}
+	return FR_E_FAILED;
 }
 
 
@@ -306,10 +309,23 @@ bif_impl FResult ObjGetDataPtr(IObject *aObj, UINT_PTR &aPtr)
 
 FResult Object::GetDataPtr(UINT_PTR &aPtr)
 {
-	if (!(mFlags & DataIsSetFlag))
+	if (!(mFlags & (DataIsSuffixPtr | DataIsSuffix)))
 		return FR_E_FAILED;
 	aPtr = DataPtr();
 	return OK;
+}
+
+UINT_PTR Object::DataPtr()
+{
+	UINT_PTR ptr = 0;
+	if (mFlags & (DataIsSuffix | DataIsSuffixPtr))
+	{
+		auto si = mBase->GetStructInfo();
+		ptr = (UINT_PTR)this + si->object_size + si->nested_object_size;
+	}
+	if (mFlags & DataIsSuffixPtr)
+		ptr = *(UINT_PTR*)ptr;
+	return ptr;
 }
 
 

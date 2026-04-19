@@ -260,14 +260,15 @@ UINT64 CALLBACK RegisterCallbackCStub(UINT_PTR *params, char *address) // Used b
 				else
 				{
 					FuncResult fr;
-					obj = Object::CreateStruct(ret.proto);
-					auto result = obj->Initialize(fr, nullptr, 0);
+					auto result = Object::CreateStruct(fr, ret.proto);
 					if (result == OK)
 					{
-						ExprTokenType *prm = &result_token;
+						ASSERT(fr.symbol == SYM_OBJECT && dynamic_cast<Object*>(fr.object));
 						// New has set fr.object=obj but has not called AddRef, so don't call Free.
+						obj = (Object*)fr.object;
 						fr.symbol = SYM_STRING;
 						fr.marker = _T("");
+						ExprTokenType *prm = &result_token;
 						// Invoke __Value as a "conversion operator".
 						ExprTokenType _et(obj);
 						result = obj->Invoke(fr, IT_SET | IF_BYPASS_METAFUNC | IF_NO_NEW_PROPS, _T("__Value"), _et, &prm, 1);

@@ -1984,11 +1984,9 @@ public:
 		return p;
 	}
 
-	static Object *NewMenuBar(size_t aSuffixSize, void *&aSuffix)
+	static UserMenu *NewMenuBar(size_t aSuffixSize)
 	{
-		auto p = new (aSuffixSize) UserMenu(MENU_TYPE_BAR);
-		aSuffix = p + 1;
-		return p;
+		return new (aSuffixSize) UserMenu(MENU_TYPE_BAR);
 	}
 
 	UserMenu(MenuTypeType aMenuType = MENU_TYPE_POPUP);
