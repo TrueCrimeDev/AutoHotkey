@@ -1131,7 +1131,7 @@ FResult GuiType::set_MenuBar(ExprTokenType &aParam)
 {
 	GUI_MUST_HAVE_HWND;
 	UserMenu *menu = NULL;
-	if (!TokenIsEmptyString(aParam))
+	if (!TokenIsBlank(aParam))
 	{
 		menu = dynamic_cast<UserMenu *>(TokenToObject(aParam));
 		if (!menu || menu->mMenuType != MENU_TYPE_BAR)
@@ -1857,7 +1857,7 @@ void GuiType::ControlGetComboBox(ResultToken &aResultToken, GuiControlType &aCon
 		return; // It already displayed the error.
 	length = SendMessage(aControl.hwnd, CB_GETLBTEXT, (WPARAM)index, (LPARAM)aResultToken.marker);
 	if (length == CB_ERR) // Given the way it was called, this should be impossible based on MSDN docs.
-		_o_return_p(_T(""), 0); // Must use this vs _o_return_empty to override TokenSetResult.
+		_o_return_empty; // Override the values set by TokenSetResult.
 	_o_return_retval;
 }
 
@@ -1933,10 +1933,7 @@ void GuiType::ControlGetListBox(ResultToken &aResultToken, GuiControlType &aCont
 			return;  // It already displayed the error.
 		length = SendMessage(aControl.hwnd, LB_GETTEXT, (WPARAM)index, (LPARAM)aResultToken.marker);
 		if (length == LB_ERR) // Given the way it was called, this should be impossible based on MSDN docs.
-		{
-			*aResultToken.marker = 0; // Clear the buffer returned by TokenSetResult.
-			aResultToken.marker_length = 0;
-		}
+			_o_return_empty; // Override the values set by TokenSetResult.
 	}
 	_o_return_retval;
 }

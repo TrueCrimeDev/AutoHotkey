@@ -3369,7 +3369,7 @@ SymbolType TokenIsPureNumeric(ExprTokenType &aToken, SymbolType &aNumType)
 }
 
 
-BOOL TokenIsEmptyString(ExprTokenType &aToken)
+BOOL TokenIsBlank(ExprTokenType &aToken)
 {
 	switch (aToken.symbol)
 	{
@@ -3377,10 +3377,8 @@ BOOL TokenIsEmptyString(ExprTokenType &aToken)
 		return !*aToken.marker;
 	case SYM_VAR:
 		return !aToken.var->HasContents();
-	//case SYM_MISSING: // This case is omitted because it currently should be
-		// impossible for all callers except for ParamIndexIsOmittedOrEmpty(),
-		// which checks for it explicitly.
-		//return TRUE;
+	case SYM_MISSING:
+		return TRUE;
 	default:
 		return FALSE;
 	}
@@ -3706,6 +3704,7 @@ ResultType TokenSetResult(ResultToken &aResultToken, LPCTSTR aValue, size_t aLen
 			return aResultToken.MemoryError();
 		aResultToken.marker = aResultToken.mem_to_free; // Store the address of the result for the caller.
 	}
+	aResultToken.symbol = SYM_STRING;
 	if (aValue) // Caller may pass NULL to retrieve a buffer of sufficient size.
 		tmemcpy(aResultToken.marker, aValue, aLength);
 	aResultToken.marker[aLength] = '\0'; // Must be done separately from the memcpy() because the memcpy() might just be taking a substring (i.e. long before result's terminator).
@@ -3747,7 +3746,6 @@ ResultType ResultToken::Return(LPTSTR aValue, size_t aLength)
 // Copy and return a string.
 {
 	ASSERT(aValue);
-	symbol = SYM_STRING;
 	return TokenSetResult(*this, aValue, aLength);
 }
 

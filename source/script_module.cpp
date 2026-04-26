@@ -65,7 +65,11 @@ ResultType Script::ParseModuleDirective(LPCTSTR aName)
 		mod = CreateModule(SimpleHeap::Alloc(aName));
 		mod->mDirectiveFileIndex = mCurrFileIndex;
 		mod->mDirectiveLineNumber = mCombinedLineNumber;
-		mod->mOuterFileIndex = mCurrentModule->IsFileModule() ? mCurrentModule->mSelfFileIndex : mCurrentModule->mOuterFileIndex;
+		auto outer = mLastModule;
+		while (!outer->IsFileModule()) outer = outer->mPrev;
+		mod->mOuterFileIndex = outer->mSelfFileIndex;
+		mod->mBackCompatMode = outer->mBackCompatMode; // Mode for startup code.  Set default based on __Init module.
+		mBackCompatMode = mod->mBackCompatMode; // Mode for function definitions to inherit.
 
 		// Let any previous #Warn settings carry over from the previous module, by default.
 		mod->Warn_LocalSameAsGlobal = mCurrentModule->Warn_LocalSameAsGlobal;

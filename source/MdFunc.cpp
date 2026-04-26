@@ -448,7 +448,8 @@ bool MdFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int aParam
 				aResultToken.AcceptMem(const_cast<LPTSTR>(strret->Value()), strret->Length());
 			else if (strret->Value())
 				aResultToken.SetValue(const_cast<LPTSTR>(strret->Value()), strret->Length());
-			//else leave aResultToken set to its default value, "".
+			else
+				aResultToken.SetValue(_T(""), 0);
 		}
 		else if (retval_arg_type != MdType::Variant) // Variant type passes aResultToken directly.
 			TypedPtrToToken(retval_arg_type, (void*)args[retval_index], aResultToken);
@@ -542,7 +543,7 @@ bool MdFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int aParam
 	{
 		aResultToken.Free();
 		aResultToken.mem_to_free = nullptr; // Because Free() doesn't clear it.
-		aResultToken.SetValue(_T(""), 0);
+		aResultToken.Unset();
 	}
 
 end:

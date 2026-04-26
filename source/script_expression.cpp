@@ -394,7 +394,7 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 					goto abort_if_result;
 				}
 				// For something like (a.b?) or (a.b ?? c), INVOKE_NOT_HANDLED is treated as unset.
-				result_token.symbol = SYM_MISSING;
+				result_token.Unset();
 			}
 
 			g_script.mCurrLine = this; // For error-reporting.
@@ -421,9 +421,29 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 			{
 				if (result_token.symbol == SYM_MISSING && !(flags & EIF_UNSET_RETURN))
 				{
-					result_token.Error(_T("No value was returned.")
-						, this_token.error_reporting_marker
-						, (flags & IT_BITMASK) == IT_GET && !member ? ErrorPrototype::UnsetItem : ErrorPrototype::Unset);
+					Object *err;
+					LPCTSTR msg;
+					if (result_token.unset_kind == UnsetKind::Unspecified)
+						result_token.unset_kind = (flags & IT_BITMASK) == IT_GET && !member ? UnsetKind::UnsetItem : UnsetKind::Unset;
+					switch (result_token.unset_kind)
+					{
+					case UnsetKind::Blank:
+						if (g_script.BackCompatMode())
+						{
+							this_token.SetValue(_T(""), 0);
+							goto push_this_token;
+						}
+						// Fall through:
+					default:
+						err = ErrorPrototype::Unset;
+						msg = _T("No value was returned.");
+						break;
+					case UnsetKind::UnsetItem:
+						err = ErrorPrototype::UnsetItem;
+						msg = ERR_ITEM_UNSET;
+						break;
+					}
+					result_token.Error(msg, this_token.error_reporting_marker, err);
 					aResult = result_token.Result(); // FAIL to abort, OK if user or OnError requested continuation.
 					goto abort_if_result;
 				}
@@ -786,24 +806,17 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 		case SYM_REF:
 			if (right.symbol != SYM_VAR) // Syntax error?
 				goto abort_with_exception;
-			if (this_token.var_usage != VARREF_READ)
+			if (this_token.var_usage != VARREF_READ // Creating a VarRef can be avoided.
+				&& !(right.var->IsAlias() && right.var->IsObject())) // It doesn't already have a VarRef.
 			{
-				if (this_token.var_usage != VARREF_REF)
-				{
-					// VARREF_OUTPUT_VAR -> SYM_VAR
-					this_token.SetVarRef(right.var);
-					goto push_this_token;
-				}
 				Var *target_var = right.var->ResolveAlias();
 				if (!target_var->IsNonStaticLocal()
-					|| !this_token.object
+					|| !this_token.object // Being passed to a built-in function.
 					|| !((UserFunc *)this_token.object)->mInstances)
 				{
 					// target_var definitely isn't a local var of the function being called,
-					// so it's safe to pass as SYM_VAR.  Pass right.var and not target_var,
-					// otherwise GetRef() won't be able to identify the existing VarRef and
-					// may create a new VarRef and a circular reference.
-					this_token.SetVarRef(right.var);
+					// so it's safe to pass as SYM_VAR.
+					this_token.SetVarRef(target_var);
 					goto push_this_token;
 				}
 			}
@@ -811,7 +824,6 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 			this_token.SetValue(right.var->GetRef());
 			if (!this_token.object)
 				goto outofmem;
-			to_free[to_free_count++] = &this_token;
 			break;
 
 		case SYM_POST_INCREMENT: // These were added in v1.0.46.  It doesn't seem worth translating them into
@@ -1163,7 +1175,7 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 				{
 					if (Object *right_obj = dynamic_cast<Object *>(TokenToObject(right)))
 					{
-						if (IObject *prototype = right_obj->GetOwnPropObj(_T("Prototype")))
+						if (IObject *prototype = right_obj->ClassGetPrototypeBackwardCompatible())
 						{
 							this_token.value_int64 = Object::HasBase(left, prototype);
 							break;
@@ -1525,10 +1537,7 @@ push_this_token:
 			aTarget[result_length] = '\0'; // Guarantee null-termination so it doesn't have to be done at an earlier stage.
 		}
 		if (aResultToken)
-		{
-			aResultToken->marker = aTarget;
-			aResultToken->marker_length = result_length;
-		}
+			aResultToken->SetValue(aTarget, result_length);
 		aTarget += result_size;
 		goto normal_end_skip_output_var; // output_var was already checked higher above, so no need to consider it again.
 
@@ -1548,7 +1557,7 @@ abort_if_result:
 	if (aResult != FAIL)
 	{
 		if (aResultToken)
-			aResultToken->symbol = SYM_MISSING;
+			aResultToken->Unset();
 		goto normal_end_skip_output_var;
 	}
 	// FALL THROUGH:
@@ -1855,7 +1864,7 @@ bool UserFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int aPar
 			{
 				ExprTokenType &this_param_token = *aParam[j];
 				if (this_param_token.symbol != SYM_VAR
-					|| VARREF_IS_WRITE(this_param_token.var_usage)) // VARREF_REF indicates SYM_VAR is being passed ByRef.
+					|| VARREF_IS_WRITE(this_param_token.var_usage)) // VARREF_REF indicates SYM_VAR is being passed ByRef (and caller should have verified that it is not our local variable).
 					continue;
 				// Since this SYM_VAR is being passed by value, convert it to a non-var to allow
 				// the variables to be backed up and reset further below without corrupting any
@@ -2004,7 +2013,6 @@ bool UserFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int aPar
 						auto ref = token.var->GetRef();
 						if (!ref)
 							goto free_and_return;
-						ref->Release(); // token.var retains a reference; release ours.
 						// Point our freevar to the caller's freevar, for use by our closures.
 						this_formal_param.var->GetAliasFor()->UpdateAlias(token.var);
 						// Also update our local alias below.

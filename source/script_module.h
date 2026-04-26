@@ -40,6 +40,8 @@ public:
 	bool mExecuted = false;
 	bool mIsBuiltinModule = false;
 	bool mHasWildcardExports = false;
+	bool mBackCompatMode = true; // Compatibility mode for module startup code.  true = requires v2.0, false = requires v2.1
+	bool mBackCompatModeWasSet = false;
 
 	// #Warn settings
 	WarnMode Warn_LocalSameAsGlobal = WARNMODE_OFF;

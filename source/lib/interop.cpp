@@ -264,9 +264,6 @@ BIF_DECL(BIF_StrGetPut) // BIF_DECL(BIF_StrGet), BIF_DECL(BIF_StrPut)
 		source_length = 0;
 	}
 
-	aResultToken.symbol = SYM_STRING;
-	aResultToken.marker = _T(""); // Set default in case of early return.
-
 	IObject *buffer_obj;
 	LPVOID 	address;
 	size_t  max_bytes = SIZE_MAX;
@@ -565,8 +562,7 @@ BIF_DECL(BIF_StrGetPut) // BIF_DECL(BIF_StrGet), BIF_DECL(BIF_StrPut)
 		else if (length == -1)
 		{
 			// Return this null-terminated string, no conversion necessary.
-			aResultToken.marker = (LPTSTR) address;
-			aResultToken.marker_length = _tcslen(aResultToken.marker);
+			aResultToken.SetValue((LPTSTR)address);
 		}
 		else
 		{

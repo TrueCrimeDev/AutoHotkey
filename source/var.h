@@ -464,7 +464,7 @@ public:
 				// to indicate a missing array item.  It should not be translated to a parameter's
 				// default value, because an unset var in that context would have raised an error.
 				// Some other callers may use this in place of IsUninitialized().
-				aToken.symbol = SYM_MISSING;
+				aToken.Unset();
 			else
 				aToken.SetValue(var.Contents(), var.Length());
 		}

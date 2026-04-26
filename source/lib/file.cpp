@@ -301,7 +301,6 @@ bif_impl FResult FileRead(StrArg aFilespec, optl<StrArg> aOptions, ResultToken &
 							return aResultToken.Exited() ? FR_FAIL : FR_ABORTED;
 						}
 						wlen = MultiByteToWideChar(codepage, 0, text, length, aResultToken.marker, wlen);
-						aResultToken.symbol = SYM_STRING;
 						aResultToken.marker[wlen] = 0;
 						aResultToken.marker_length = wlen;
 						if (!wlen)

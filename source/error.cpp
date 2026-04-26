@@ -1194,7 +1194,9 @@ void TokenTypeAndValue(ExprTokenType &aToken, LPCTSTR &aType, LPCTSTR &aValue, T
 {
 	if (aToken.symbol == SYM_VAR && aToken.var->IsUninitializedNormalVar())
 		aType = _T("unset variable"), aValue = aToken.var->mName;
-	else if (TokenIsEmptyString(aToken))
+	else if (aToken.symbol == SYM_MISSING) // Must be checked before TokenIsBlank() if SYM_MISSING is ever passed here.
+		aType = _T("unset"), aValue = _T("");
+	else if (TokenIsBlank(aToken))
 		aType = _T("empty string"), aValue = _T("");
 	else
 		aType = TokenTypeString(aToken), aValue = TokenToString(aToken, aNBuf);

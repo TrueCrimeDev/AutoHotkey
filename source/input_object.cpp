@@ -161,7 +161,7 @@ FResult InputObject::set_On(ExprTokenType &aValue, IObject *&aOn, int aValidPara
 			return fr;
 		obj->AddRef();
 	}
-	else if (!TokenIsEmptyString(aValue))
+	else if (!TokenIsBlank(aValue))
 		return FTypeError(_T("object"), aValue);
 	auto prev = aOn;
 	aOn = obj;

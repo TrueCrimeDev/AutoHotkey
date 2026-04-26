@@ -51,8 +51,7 @@ BIF_DECL(BIF_IsObject)
 
 BIF_DECL(BIF_ObjXXX)
 {
-	aResultToken.symbol = SYM_STRING;
-	aResultToken.marker = _T(""); // Set default for CallBuiltin().
+	aResultToken.InitInvokeRetVal();
 	
 	Object *obj = dynamic_cast<Object*>(TokenToObject(*aParam[0]));
 	if (obj)
@@ -269,7 +268,7 @@ BIF_DECL(StructClass_At)
 {
 	auto class_ = ParamIndexToObject(0);
 	auto proto = class_ && class_->IsOfType(Object::sPrototype) ? ((Object*)class_)->ClassGetPrototype() : nullptr;
-	if (!proto || !proto->IsDerivedFrom(Object::sStructPrototype) || proto->LockStructSize() == 0)
+	if (!proto || !proto->IsDerivedFrom(Object::sStructPrototype))
 		_f_throw(_T("Invalid class"));
 	auto ptr = (UINT_PTR)ParamIndexToInt64(1);
 	if (ptr < 65536)
@@ -295,6 +294,7 @@ FResult Object::SetDataPtr(UINT_PTR aPtr)
 	{
 		auto si = mBase->GetStructInfo();
 		*(UINT_PTR*)((char*)this + si->object_size + si->nested_object_size) = aPtr;
+		return OK;
 	}
 	return FR_E_FAILED;
 }

@@ -1842,6 +1842,7 @@ ResultType Script::LoadIncludedFile(TextStream *fp)
 	bool blocks_previously_open = mLineParent || mClassObjectCount; // For error detection.
 
 	auto module_previously_open = mCurrentModule;
+	bool caller_backcompatmode = mBackCompatMode;
 
 	LineBuffer buf, next_buf;
 	size_t &buf_length = buf.length, &next_buf_length = next_buf.length;
@@ -2527,6 +2528,9 @@ continue_main_loop: // This method is used in lieu of "continue" for performance
 
 	if (mCurrentModule != module_previously_open)
 		ReopenModule(module_previously_open);
+
+	// "#Requires AutoHotkey v2.1-" suppresses this mode until EOF.
+	mBackCompatMode = caller_backcompatmode;
 
 	return OK;
 }
@@ -3999,12 +4003,24 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 
 			if (IS_SPACE_OR_TAB(parameter[10]))
 			{
+				bool set_bc_mode = false, bc_mode = true;
 				TCHAR word[32];
 				for (LPCTSTR end, cp = parameter + 11; ; cp = end)
 				{
 					cp = omit_leading_whitespace(cp);
 					if (!*cp)
+					{
+						if (set_bc_mode)
+						{
+							if (!mCurrentModule->mBackCompatModeWasSet)
+							{
+								mCurrentModule->mBackCompatModeWasSet = true;
+								mCurrentModule->mBackCompatMode = bc_mode;
+							}
+							mBackCompatMode = bc_mode;
+						}
 						return CONDITION_TRUE;
+					}
 					
 					for (end = cp; *end && !IS_SPACE_OR_TAB(*end); ++end);
 					tcslcpy(word, cp, (std::min)((size_t)_countof(word), (size_t)(end - cp + 1)));
@@ -4013,11 +4029,13 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 					if (!_tcsicmp(word, _T(AHK_BIT)))
 						continue;
 
-					// It's either an unment requirement or a version number.
-					if (VersionSatisfies(T_AHK_VERSION, word))
-						continue;
-
-					break;
+					// It's either an unmet requirement or a version number.
+					if (!VersionSatisfies(T_AHK_VERSION, word))
+						break;
+					
+					// Set compatibility mode based on whether 2.0.x would also meet the requirement.
+					bc_mode = bc_mode && VersionSatisfies(_T("2.0.x"), word);
+					set_bc_mode = true;
 				}
 			}
 		}
@@ -4026,19 +4044,6 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 #endif
 	}
 	
-	if (IS_DIRECTIVE_MATCH(_T("#DefaultReturn")))
-	{
-		if (!parameter)
-			return ScriptError(ERR_PARAM1_REQUIRED);
-		if (!_tcsicmp(parameter, _T("unset")))
-			mDefaultReturn = SYM_MISSING;
-		else if (!_tcsicmp(parameter, _T("\"\""))) // Enforce consistency for this back-compat switch; require "" and not ''.
-			mDefaultReturn = SYM_STRING;
-		else
-			return ScriptError(ERR_PARAM1_INVALID, parameter);
-		return CONDITION_TRUE;
-	}
-
 	if (IS_DIRECTIVE_MATCH(_T("#Module")))
 	{
 		if (mLineParent || mClassObjectCount || mPendingHotkey)
@@ -5095,10 +5100,10 @@ ResultType Script::AddLine(ActionTypeType aActionType, LPTSTR aArg[], int aArgc,
 		mIgnoreNextBlockBegin = false;
 		return OK;
 	}
-	if (aActionType == ACT_RETURN && !aArgc && g->CurrentFunc && mDefaultReturn == SYM_MISSING) // SYM_STRING needs no handling as it is the real default, for now.
+	if (aActionType == ACT_RETURN && !aArgc && g->CurrentFunc && g->CurrentFunc->mBackCompatMode) // ACT_RETURN without args returns unset, so v2.0 mode needs the following.
 	{
 		aArg = (LPTSTR*)_alloca(sizeof(LPTSTR*));
-		*aArg = _T("unset");
+		*aArg = _T("\"\"");
 		aArgc = 1;
 	}
 
@@ -5399,7 +5404,7 @@ ResultType Script::AddLine(ActionTypeType aActionType, LPTSTR aArg[], int aArgc,
 
 		if (g->CurrentFunc && g->CurrentFunc == mLineParent->mAttribute)
 		{
-			g->CurrentFunc->mDefaultReturnUnset = mDefaultReturn == SYM_MISSING;
+			mBackCompatMode = g->CurrentFunc->mBackCompatMode; // Revert any change made by #Requires *within* this function.
 			line.mAttribute = g->CurrentFunc;  // Flag this ACT_BLOCK_END as the ending brace of this function's body.
 			g->CurrentFunc = g->CurrentFunc->mOuterFunc;  // Step out of this function.
 			if (g->CurrentFunc && !g->CurrentFunc->mJumpToLine)
@@ -5884,7 +5889,7 @@ ResultType Script::DefineFunc(LPTSTR aBuf, bool aStatic, FuncDefType aIsInExpres
 	{
 		Object *class_object = mClassObject[mClassObjectCount - 1];
 		if (!aStatic)
-			class_object = (Object *)class_object->GetOwnPropObj(_T("Prototype"));
+			class_object = class_object->ClassGetPrototype();
 
 		*param_start = '\0'; // Temporarily terminate, for simplicity.
 
@@ -6213,6 +6218,7 @@ ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport, bool aStruct)
 	Object *outer_class;
 	Object *base_class = aStruct ? Object::sStructClass : Object::sClass;
 	Object *base_prototype = aStruct ? Object::sStructPrototype : Object::sPrototype;
+	bool base_is_known = true;
 	Var *class_var;
 	ExprTokenType token;
 
@@ -6227,7 +6233,7 @@ ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport, bool aStruct)
 		base_class_name = omit_leading_whitespace(cp + 8);
 		if (!*base_class_name)
 			return ScriptError(_T("Missing class name."), cp);
-		ResolveBaseClass(base_class_name, aStruct, base_class, base_prototype);
+		base_is_known = ResolveBaseClass(base_class_name, aStruct, base_class, base_prototype);
 	}
 
 	// Validate the name even if this is a nested definition, for consistency.
@@ -6285,7 +6291,7 @@ ResultType Script::DefineClass(LPTSTR aBuf, TCHAR aExport, bool aStruct)
 	Object *prototype = Object::CreatePrototype(mClassName, base_prototype);
 	Object *class_object = Object::CreateClass(prototype, base_class ? base_class : Object::sClassPrototype);
 
-	if (!base_class)
+	if (!base_is_known)
 	{
 		// None of this module's class declarations up to this point match base_class_name,
 		// but it could be a class defined below this point, or a class defined in a module
@@ -6376,7 +6382,7 @@ ResultType Script::DefineClassProperty(LPTSTR aBuf, bool aStatic, bool &aBufHasB
 
 	Object *class_object = mClassObject[mClassObjectCount - 1];
 	if (!aStatic)
-		class_object = (Object *)class_object->GetOwnPropObj(_T("Prototype"));
+		class_object = class_object->ClassGetPrototype();
 	TCHAR end_char = *name_end; // In case there's no space before =>.
 	*name_end = 0; // Terminate for aBuf use below.
 	switch (class_object->GetOwnPropType(aBuf))
@@ -6437,7 +6443,7 @@ ResultType Script::DefineClassPropertyXet(LPTSTR aBuf, LPTSTR aEnd)
 ResultType Script::DefineClassVars(LPTSTR aBuf, bool aStatic)
 {
 	Object *class_object = mClassObject[mClassObjectCount - 1];
-	Object *prototype = aStatic ? class_object : (Object *)class_object->GetOwnPropObj(_T("Prototype"));
+	Object *prototype = aStatic ? class_object : class_object->ClassGetPrototype();
 
 	LPTSTR item, item_end;
 	TCHAR orig_char, buf[LINE_SIZE], type_buf[LINE_SIZE];
@@ -6744,14 +6750,13 @@ Object *Script::FindClass(LPCTSTR aClassName, size_t aClassNameLength)
 bool Script::ResolveBaseClass(LPCTSTR aClassName, bool aStruct, Object *&aClass, Object *&aProto)
 {
 	auto c = FindClass(aClassName);
-	auto p = c ? (Object*)c->GetOwnPropObj(_T("Prototype")) : nullptr;
+	auto p = c ? c->ClassGetPrototype() : nullptr;
 	if (p && aStruct == (p->IsDerivedFrom(Object::sStructPrototype) || p == Object::sStructPrototype))
 	{
 		aClass = c;
 		aProto = p;
 		return true;
 	}
-	aClass = aProto = nullptr;
 	return false;
 }
 
@@ -7003,6 +7008,7 @@ UserFunc *Script::AddFunc(LPCTSTR aFuncName, size_t aFuncNameLength, FuncDefType
 
 	the_new_func->mModule = mCurrentModule;
 	the_new_func->mIsFuncExpression = aIsInExpression;
+	the_new_func->mBackCompatMode = mBackCompatMode;
 
 	if (aClassObject)
 	{
@@ -7995,7 +8001,7 @@ ResultType Script::PreparseCatchClass(Line *aLine)
 		if (end == cp)
 			return aLine->LineError(ERR_EXPR_SYNTAX);
 		auto cls = FindClass(cp, end - cp);
-		if (  !cls || !(prototype[prototype_count++] = cls->GetOwnPropObj(_T("Prototype")))  )
+		if (  !cls || !(prototype[prototype_count++] = cls->ClassGetPrototype())  )
 			return aLine->LineError(_T("Invalid class."), FAIL, cp);
 		cp = next;
 	}
@@ -8871,13 +8877,13 @@ unquoted_literal:
 				CHECK_AUTO_CONCAT;
 				infix[infix_count].callsite = new CallSite();
 				infix[infix_count].callsite->func = sIsSetFunc;
-				infix[infix_count].error_reporting_marker = cp;
 				this_deref_ref.symbol = SYM_FUNC;
 			}
 			infix[infix_count].symbol = this_deref_ref.symbol;
-			infix[infix_count].error_reporting_marker = this_deref_ref.marker;
+			infix[infix_count].error_reporting_marker = cp;
 			if (this_deref_ref.symbol == SYM_MISSING)
 			{
+				infix[infix_count].unset_kind = UnsetKind::Unspecified; // This is required for function return values.
 				// Insert a SYM_MAYBE to handle validation.
 				infix_count++;
 				infix[infix_count].symbol = SYM_MAYBE;
@@ -9097,7 +9103,8 @@ unquoted_literal:
 				token->callsite = new CallSite();
 				if (!token->callsite)
 					return LineError(ERR_OUTOFMEM);
-				token->error_reporting_marker = this_infix->error_reporting_marker;
+				token->error_reporting_marker = this_infix[-1].symbol == SYM_VAR ? this_infix[-1].var_deref->marker
+					: this_infix->error_reporting_marker;
 				STACK_PUSH(token);
 			}
 			else
@@ -9813,8 +9820,7 @@ end_of_infix_to_postfix:
 		}
 		// Count the tokens which potentially use to_free[].
 		if (new_token.symbol == SYM_DYNAMIC || new_token.symbol == SYM_FUNC
-			|| new_token.symbol == SYM_CONCAT || new_token.symbol == SYM_REF
-			|| new_token.symbol == SYM_VAR)
+			|| new_token.symbol == SYM_CONCAT || new_token.symbol == SYM_VAR)
 			++max_alloc;
 	}
 	aArg.postfix[postfix_count].symbol = SYM_INVALID;  // Special item to mark the end of the array.
@@ -10969,10 +10975,10 @@ ResultType Line::ExecUntil(ExecUntilMode aMode, ResultToken *aResultToken, Line 
 			continue;  // Resume looping starting at the above line.  "continue" is actually slightly faster than "break" in these cases.
 
 		case ACT_BLOCK_END:
-			// v2.1: This is handled at runtime rather than by inserting ACT_RETURN avoid complications
+			// v2.1: This is handled at runtime rather than by inserting ACT_RETURN to avoid complications
 			// with 1) auto-generated __Init methods, and 2) #Warn Unreachable.
-			if (line->mAttribute && ((UserFunc*)line->mAttribute)->mDefaultReturnUnset && aResultToken)
-				aResultToken->symbol = SYM_MISSING;
+			if (line->mAttribute && ((UserFunc*)line->mAttribute)->mBackCompatMode && aResultToken)
+				aResultToken->SetValue(_T(""), 0);
 			// v2: This check is disabled to reduce code size, as it doesn't seem to be needed
 			// now that GOSUB has been removed.  Validation in PreparseBlocks() should make it
 			// impossible to produce this condition:
@@ -11387,8 +11393,6 @@ ResultType Line::PerformLoopFor(ResultToken *aResultToken, Line *&aJumpToLine, L
 			var->Free(VAR_NEVER_FREE | VAR_CLEAR_ALIASES); // Release var's reference to the VarRef.
 			var->Restore(var_bkp[i]);
 		}
-		if (var_param[i]->symbol == SYM_OBJECT)
-			var_param[i]->object->Release();
 	}
 	return result; // The script's loop is now over.
 }

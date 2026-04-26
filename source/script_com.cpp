@@ -392,9 +392,8 @@ BIF_DECL(BIF_ComObjType)
 	}
 	else
 	{
-		aResultToken.symbol = SYM_STRING; // for all code paths below
-		aResultToken.marker = _T(""); // in case of error
-		aResultToken.marker_length = 0;
+		aResultToken.marker = _T(""); // Set default for the case of no name/IID.
+		aResultToken.symbol = SYM_STRING; // As above but also for IID success path.
 
 		LPTSTR requested_info = TokenToString(*aParam[1]);
 
@@ -722,7 +721,7 @@ void VariantToToken(VARIANT &aVar, ResultToken &aToken, bool aRetainVar = true)
 	case VT_ERROR:
 		if (aVar.scode == DISP_E_PARAMNOTFOUND)
 		{
-			aToken.symbol = SYM_MISSING;
+			aToken.Unset();
 			break;
 		}
 		// FALL THROUGH to the next case:

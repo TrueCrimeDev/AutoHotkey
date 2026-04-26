@@ -216,27 +216,24 @@ void Var::UpdateVirtualObj(IObject *aTargetRef)
 
 IObject *Var::GetRef()
 {
+	// GetRef() should only be called on actual variables referenced by the script,
+	// so if "this" is a VarRef or downvar, there's probably a bug.  Avoid temptation
+	// to return (VarRef*)this, since downvars have VAR_VARREF and aren't VarRefs.
+	ASSERT(!(mScope & VAR_VARREF));
 	auto target_var = this;
 	if (mType == VAR_ALIAS)
 	{
 		if (mAttrib & VAR_ATTRIB_IS_OBJECT)
-		{
-			mObject->AddRef();
 			return mObject;
-		}
 		target_var = mAliasFor;
 		// It is also possible for a non-object alias to point to an object alias if the reference operator
 		// is applied to target_var itself or some other alias after this var became an alias of target_var.
 		if (target_var->mType == VAR_ALIAS && (target_var->mAttrib & VAR_ATTRIB_IS_OBJECT))
-		{
-			target_var->mObject->AddRef();
 			return target_var->mObject;
-		}
 	}
 	else if (mType == VAR_VIRTUAL_OBJ)
 	{
 		ASSERT(mAttrib & VAR_ATTRIB_IS_OBJECT);
-		mObject->AddRef();
 		return mObject;
 	}
 	auto ref = new VarRef();
@@ -248,6 +245,9 @@ IObject *Var::GetRef()
 	if (mType == VAR_ALIAS)
 		target_var->UpdateAlias(ref);
 	UpdateAlias(ref);
+	// Return an uncounted reference to avoid AddRef() and Release() calls in several places.
+	// Callers rely on the counted reference in this->mObject to keep the object alive.
+	ref->Release();
 	return ref;
 }
 
@@ -1280,7 +1280,7 @@ void VarBkp::ToToken(ExprTokenType &aValue)
 	case VAR_ATTRIB_IS_DOUBLE: aValue.SetValue(mContentsDouble); break;
 	default:
 		if (mAttrib & VAR_ATTRIB_UNINITIALIZED)
-			aValue.symbol = SYM_MISSING;
+			aValue.Unset();
 		else
 			aValue.SetValue(mCharContents, mByteLength / sizeof(TCHAR));
 	}

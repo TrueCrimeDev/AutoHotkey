@@ -1151,7 +1151,7 @@ FResult Hotkey::Dynamic(LPCTSTR aHotkeyName, LPCTSTR aOptions, IObject *aCallbac
 				hk = AddHotkey(aCallback, 0, aHotkeyName, no_suppress);
 			}
 			if (!hk)
-				return FAIL; // AddHotkey() already displayed the error.
+				return FR_FAIL; // AddHotkey() already displayed the error.
 			variant = hk->mLastVariant; // Update for use with the options-parsing section further below.
 			update_all_hotkeys = true;
 			variant_was_just_created = true;
@@ -2646,9 +2646,6 @@ Hotstring *Hotstring::FindHotstring(LPCTSTR aHotstring, bool aCaseSensitive, boo
 
 bif_impl FResult BIF_Hotstring(StrArg name, ExprTokenType *aReplacement, optl<StrArg> aOnOff, ResultToken &aResultToken)
 {
-	aResultToken.symbol = SYM_STRING;
-	aResultToken.marker = _T("");
-
 	TCHAR number_buf[MAX_NUMBER_SIZE];
 	auto action = aReplacement ? TokenToString(*aReplacement, number_buf) : _T("");
 

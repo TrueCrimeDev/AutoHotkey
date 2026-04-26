@@ -266,8 +266,7 @@ UINT64 CALLBACK RegisterCallbackCStub(UINT_PTR *params, char *address) // Used b
 						ASSERT(fr.symbol == SYM_OBJECT && dynamic_cast<Object*>(fr.object));
 						// New has set fr.object=obj but has not called AddRef, so don't call Free.
 						obj = (Object*)fr.object;
-						fr.symbol = SYM_STRING;
-						fr.marker = _T("");
+						fr.InitInvokeRetVal();
 						ExprTokenType *prm = &result_token;
 						// Invoke __Value as a "conversion operator".
 						ExprTokenType _et(obj);

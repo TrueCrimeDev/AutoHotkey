@@ -366,15 +366,16 @@ protected:
 #endif
 	enum Flags : decltype(mFlags)
 	{
-		ClassPrototype = 0x01,
-		NativeClassPrototype = 0x02,
-		DataIsSuffix = 0x04,
-		DataIsSuffixPtr = 0x08,
-		StructInfoInitialized = 0x10,
-		StructInfoLocked = 0x20,
-		NoCallDelete = 0x40,
-		CannotOwnProps = 0x80,
-		LastObjectFlag = 0x80
+		ClassPrototype			=   0x1,
+		NativeClassPrototype	=   0x2,
+		ObjectIsClass			=   0x4,
+		DataIsSuffix			=  0x10,
+		DataIsSuffixPtr			=  0x20,
+		StructInfoInitialized	=  0x40,
+		StructInfoLocked		=  0x80,
+		NoCallDelete			= 0x100,
+		CannotOwnProps			= 0x200,
+		LastObjectFlag			= 0x200
 	};
 
 	Object *CloneTo(Object &aTo);
@@ -426,7 +427,7 @@ protected:
 	ResultType CallMeta(LPTSTR aName, ResultToken &aResultToken, ExprTokenType &aThisToken, ExprTokenType *aParam[], int aParamCount);
 	ResultType CallMetaVarg(int aFlags, LPTSTR aName, ResultToken &aResultToken, ExprTokenType &aThisToken, ExprTokenType *aParam[], int aParamCount);
 	void CallMetaDelete();
-	ResultType NestedNew(ResultToken &aResultToken, StructInfo *si);
+	ResultType NestedNew(ResultToken &aResultToken, UINT_PTR aPtr, Object *aBase);
 	ResultType NestedSparseInit(ResultToken& aResultToken, TypedProperty& aProp, UINT_PTR aPtr);
 	ResultType CArrayNew(ResultToken &aResultToken, StructInfo *si);
 	
@@ -604,7 +605,9 @@ public:
 	bool IsOfType(Object *aPrototype) override;
 	bool IsDerivedFrom(IObject *aBase); // Always false for non-Object objects, but IObject* allows dynamic_cast to be avoided.
 
-	Object *ClassGetPrototype();
+	Object *ClassGetPrototype() { return (mFlags & ObjectIsClass) ? *(Object**)(this + 1) : nullptr; }
+	Object *ClassGetPrototypeBackwardCompatible();
+	void DefinePrototypeGetter();
 
 	void EndClassDefinition();
 	void RemoveMissingProperties();
@@ -612,7 +615,6 @@ public:
 	ResultType Invoke(IObject_Invoke_PARAMS_DECL);
 
 	static ObjectMember sMembers[];
-	static ObjectMember sClassMembers[];
 	static ObjectMember sErrorMembers[], sOSErrorMembers[];
 	static Object *sPrototype, *sClass, *sClassPrototype;
 	static IObject *sObjectCall;
@@ -1051,6 +1053,7 @@ struct NestedClassInfo
 	Object *class_object;
 	bool constructed;
 };
+BIF_DECL(Class_Prototype);
 BIF_DECL(Class_GetNestedClass);
 BIF_DECL(Class_CallNestedClass);
 BIF_DECL(Class_New);

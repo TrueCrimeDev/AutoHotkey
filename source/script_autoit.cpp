@@ -1233,7 +1233,8 @@ bif_impl FResult FileGetShortcut(StrArg aShortcutFile, StrRet *aTarget, StrRet *
 					if (aIconNum)
 						if (*buf)
 							aIconNum->SetValue(icon_index + (icon_index >= 0 ? 1 : 0));  // Convert from 0-based to 1-based for consistency with the Menu command, etc. but leave negative resource IDs as-is.
-						//else: Leave it blank to indicate that there is none.
+						else
+							aIconNum->SetValue(_T(""), 0); // "blank if none"
 				}
 				if (aRunState)
 				{

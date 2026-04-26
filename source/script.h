@@ -196,6 +196,7 @@ enum CommandIDs {CONTROL_ID_FIRST = IDCANCEL + 1
 #define ERR_TYPE_MISMATCH _T("Type mismatch.")
 #define ERR_NOT_ENUMERABLE _T("Value not enumerable.")
 #define ERR_PROPERTY_READONLY _T("Property is read-only.")
+#define ERR_ITEM_UNSET _T("Item has no value.")
 #define ERR_NO_PROCESS _T("Target process not found.")
 #define ERR_NO_WINDOW _T("Target window not found.")
 #define ERR_NO_CONTROL _T("Target control not found.")
@@ -406,7 +407,7 @@ __int64 pow_ll(__int64 base, __int64 exp); // integer power function
 #define _f_return_p(...)		_f__ret(_f_set_retval_p(__VA_ARGS__)) // Return a string which is already in persistent memory.
 #define _f_return_retval		return  // Return the value set by _f_set_retval().
 #define _f_return_empty			_f_return_p(_T(""), 0)
-#define _f_return_unset			_f__ret(aResultToken.symbol = SYM_MISSING)
+#define _f_return_unset			_f__ret(aResultToken.Unset(UnsetKind::Unset))
 #define _f_retval_buf			(aResultToken.buf)
 #define _f_retval_buf_size		MAX_NUMBER_SIZE
 #define _f_number_buf			_f_retval_buf  // An alias to show intended usage, and in case the buffer size is changed.
@@ -425,8 +426,11 @@ __int64 pow_ll(__int64 base, __int64 exp); // integer power function
 #define _o_return_p				_f_return_p
 #define _o_return_FAIL			_f_return_FAIL
 #define _o_return_retval		_f_return_retval
-#define _o_return_empty			_o_return_retval  // Default return value for Invoke is "".
-#define _o_return_unset			return (void)(aResultToken.symbol = SYM_MISSING)
+#define _o_return_empty			_f_return_empty
+#define _o_return_unset_blank	_o__ret(aResultToken.Unset(UnsetKind::Blank)) // Reverts to "" in v2.0 mode.
+#define _o_return_unset_(K)		_o__ret(ASSERT(aResultToken.symbol == SYM_MISSING); aResultToken.unset_kind = (K))
+#define _o_return_unset			_o_return_unset_(UnsetKind::Unset) // ExpandExpression throws UnsetError if unset is not permitted.
+#define _o_return_unset_item	_o_return_unset_(UnsetKind::UnsetItem) // ExpandExpression throws UnsetItemError if unset is not permitted.
 
 
 struct LoopFilesStruct : WIN32_FIND_DATA
@@ -1501,7 +1505,7 @@ public:
 	// Keep small members adjacent to each other to save space and improve perf. due to byte alignment:
 	FuncDefType mIsFuncExpression; // Whether this function was defined *within* an expression and is therefore allowed under a control flow statement.
 	bool mIsStatic = false; // Whether the "static" keyword was used with a function (not method); this prevents a nested function from becoming a closure.
-	bool mDefaultReturnUnset = false; // Whether "#DefaultReturn unset" was in effect for the function's block end.
+	bool mBackCompatMode; // true = requires v2.0, false = requires v2.1
 #define VAR_DECLARE_GLOBAL (VAR_DECLARED | VAR_GLOBAL)
 #define VAR_DECLARE_LOCAL  (VAR_DECLARED | VAR_LOCAL)
 #define VAR_DECLARE_STATIC (VAR_DECLARED | VAR_LOCAL | VAR_LOCAL_STATIC)
@@ -2166,9 +2170,9 @@ private:
 	LPCTSTR mPendingHotkey = nullptr; // The name of a hotkey or hotstring awaiting its block/function.
 	PartialExpression *mExprContainingThisFunc = nullptr;
 	int mExprFuncIndex = INT_MAX;
-	SymbolType mDefaultReturn = SYM_STRING;
 	bool mNextLineIsFunctionBody; // Whether the very next line to be added will be the first one of the body.
 	bool mIgnoreNextBlockBegin;
+	bool mBackCompatMode = true; // Most recently set compatibility mode, used only during load-time.  true = requires v2.0, false = requires v2.1
 
 #define MAX_NESTED_CLASSES 5
 #define MAX_CLASS_NAME_LENGTH UCHAR_MAX
@@ -2398,6 +2402,8 @@ public:
 	Var *FindGlobalVar(LPCTSTR aVarName, size_t aVarNameLength = 0) { return FindVar(aVarName, aVarNameLength, FINDVAR_GLOBAL); }
 
 	VarList *GlobalVars() { return &CurrentModule()->mVars; }
+
+	bool &BackCompatMode() { return g->CurrentFunc ? g->CurrentFunc->mBackCompatMode : mCurrentModule->mBackCompatMode; }
 	
 	ScriptModule *CurrentModule() { return g->CurrentFunc ? g->CurrentFunc->mModule : mCurrentModule; }
 	ScriptModule *FindDirectiveModule(LPCTSTR aName, ScriptModule *aList);
@@ -2696,7 +2702,7 @@ ToggleValueType TokenToToggleValue(ExprTokenType &aToken);
 SymbolType TokenIsNumeric(ExprTokenType &aToken);
 SymbolType TokenIsPureNumeric(ExprTokenType &aToken);
 SymbolType TokenIsPureNumeric(ExprTokenType &aToken, SymbolType &aIsImpureNumeric);
-BOOL TokenIsEmptyString(ExprTokenType &aToken);
+BOOL TokenIsBlank(ExprTokenType &aToken);
 SymbolType TypeOfToken(ExprTokenType &aToken);
 __int64 TokenToInt64(ExprTokenType &aToken);
 double TokenToDouble(ExprTokenType &aToken, BOOL aCheckForHex = TRUE);
