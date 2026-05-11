@@ -8,4 +8,4 @@ FileAppend "Working Dir: " A_WorkingDir "`n", "*"
 FileAppend "`nAbout to throw an error...`n", "*"
 
 ; Cause a runtime error
-throw Error("Test error from console mode", -1, "Extra info here")
+throw Error("Test error from console mode", -1, "Extra info")

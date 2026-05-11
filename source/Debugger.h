@@ -26,6 +26,7 @@ freely, without restriction.
 
 #include <winsock2.h>
 #include "script_object.h"
+#include "DebugTransport.h"
 
 
 #define DEBUGGER_INITIAL_BUFFER_SIZE 2048
@@ -75,6 +76,7 @@ extern Debugger g_Debugger;
 // jackieku: modified to hold the buffer.
 extern CStringA g_DebuggerHost;
 extern CStringA g_DebuggerPort;
+extern bool g_DebugStdio; // True when /Debug=stdio is used.
 
 extern LPCTSTR g_AutoExecuteThreadDesc;
 
@@ -190,7 +192,7 @@ public:
 	int Connect(const char *aAddress, const char *aPort);
 	int Disconnect();
 	void Exit(ExitReasons aExitReason, char *aCommandName=NULL); // Called when exiting AutoHotkey.
-	inline bool IsConnected() { return mSocket != INVALID_SOCKET; }
+	inline bool IsConnected() { return mTransport && mTransport->IsConnected(); }
 	inline bool IsStepping() { return mInternalState >= DIS_StepInto; }
 	inline bool HasStdErrHook() { return mStdErrMode != SR_Disabled; }
 	inline bool HasStdOutHook() { return mStdOutMode != SR_Disabled; }
@@ -255,14 +257,16 @@ public:
 
 
 	Debugger() {}
+	~Debugger() { delete mTransport; }
 
-	
+
 	// Stack - keeps track of threads and function calls.
 	DbgStack mStack;
 	friend struct DbgStack;
 
+	DebugTransport *mTransport = nullptr;
+
 private:
-	SOCKET mSocket = INVALID_SOCKET;
 	Line *mCurrLine = nullptr; // Similar to g_script.mCurrLine, but may be different when breaking post-function-call, before continuing expression evaluation.
 	ExprTokenType *mThrownToken = nullptr; // The exception that triggered the current exception breakpoint.
 	// Linked list of breakpoints.  Using the exception breakpoint as the const head of the list simplifies

@@ -1,6 +1,6 @@
-# AHK v3 Milestones 1-3 Status
+# AHK v3 Milestone Status
 
-This file tracks the first three v3 milestones that were implemented as a practical baseline in this branch.
+This file tracks the v3 milestones implemented as a practical baseline in this branch.
 
 ## Milestone 1 (`v3-alpha.1`) Complete
 
@@ -62,6 +62,24 @@ Implemented in MCP server:
    - File: `debugger-tool/mcp-server/src/index.ts`
 3. Docs updated for new MCP tooling:
    - `debugger-tool/mcp-server/README.md`
+
+## Milestone 4 (`v3-alpha.4`) Complete
+
+Scope:
+
+- Direct Claude API integration for autonomous error analysis
+- Variable watch/change notification system
+
+Implemented:
+
+1. Claude API integration in `analyze_error`:
+   - `use_api: true` sends analysis prompt to Anthropic API
+   - Graceful fallback when API key missing or call fails
+   - Files: `debugger-tool/mcp-server/src/index.ts`
+2. Variable watch system:
+   - `watch_add`, `watch_remove`, `watch_list` tools
+   - Automatic change detection on step commands
+   - Files: `debugger-tool/mcp-server/src/index.ts`, `debugger-tool/mcp-server/src/dbgp-client.ts`
 
 ## Quick Commands
 

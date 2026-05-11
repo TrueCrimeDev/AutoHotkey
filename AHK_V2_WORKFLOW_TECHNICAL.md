@@ -6,7 +6,7 @@ This document explains how this repository's AutoHotkey v2 build works in practi
 
 This repo is not just stock AHK v2 source. It includes:
 
-- A custom engine build tag: `2.1-alpha.22+Console` (`source/ahkversion.h`)
+- A custom engine build tag: `2.1-alpha.26+Console` (`source/ahkversion.h`)
 - Runtime console/error behavior around `/ErrorStdOut` (`source/error.cpp`, `source/AutoHotkey.cpp`)
 - A built-in `_ScriptGetLines()` helper (`source/error.cpp`, `source/lib/functions.h`)
 
@@ -88,7 +88,7 @@ Example in repo:
 
 `source/ahkversion.h` defines:
 
-- `RAW_AHK_VERSION "2.1-alpha.22+Console"`
+- `RAW_AHK_VERSION "2.1-alpha.26+Console"`
 
 The `+Console` metadata signals this fork includes console-oriented behavior.
 

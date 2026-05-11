@@ -1,10 +1,10 @@
 /*
 DarkMode v2 Showcase — tests all dark-styled controls
 */
-#Requires AutoHotkey v2.1-alpha.26
+#Requires AutoHotkey v2.1-alpha.28
 #Include ..\DarkMode.ahk
 
-myGui := Dark.Gui("+Resize", "DarkMode v2 Showcase")
+myGui := DarkGui("+Resize", "DarkMode v2 Showcase")
 
 myGui.Add("Text", "x16 y16 w400 Section", "DarkMode v2 — All Controls")
 

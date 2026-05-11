@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "autohotkey-debug": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\uphol\\Documents\\Design\\Coding\\AutoHotkey\\debugger-tool\\mcp-server\\build\\index.js"
+      ],
+      "env": {}
+    }
+  }
+}

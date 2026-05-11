@@ -1,4 +1,52 @@
 {
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/ahk-debug-context.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__autohotkey-debug__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/check-ahk-connection.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__autohotkey-debug__capture_error|mcp__autohotkey-debug__analyze_error|mcp__autohotkey-debug__apply_fix",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post-capture-guidance.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/ahk-post-edit.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "WebFetch(domain:docs.anthropic.com)",
@@ -117,7 +165,8 @@
       "Bash(\"/mnt/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe\" /ErrorStdOut \"/mnt/c/Users/uphol/Documents/Design/Coding/AHK/!Running/_Tableau.ahk\")",
       "Bash(\"/mnt/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe\" /ErrorStdOut \"GUI_ButtonMaker.ahk\")",
       "SlashCommand(/ahk-orchestrator)",
-      "Bash(\"/mnt/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe\" /ErrorStdOut \"TestPaddedButtons.ahk\")"
+      "Bash(\"/mnt/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe\" /ErrorStdOut \"TestPaddedButtons.ahk\")",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []

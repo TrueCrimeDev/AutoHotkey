@@ -309,30 +309,6 @@ source/WinGroup.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/WinGroup.cpp.s
 .PHONY : source/WinGroup.cpp.s
 
-source/ahklib.obj: source/ahklib.cpp.obj
-.PHONY : source/ahklib.obj
-
-# target to build an object file
-source/ahklib.cpp.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/ahklib.cpp.obj
-.PHONY : source/ahklib.cpp.obj
-
-source/ahklib.i: source/ahklib.cpp.i
-.PHONY : source/ahklib.i
-
-# target to preprocess a source file
-source/ahklib.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/ahklib.cpp.i
-.PHONY : source/ahklib.cpp.i
-
-source/ahklib.s: source/ahklib.cpp.s
-.PHONY : source/ahklib.s
-
-# target to generate assembly for a file
-source/ahklib.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/ahklib.cpp.s
-.PHONY : source/ahklib.cpp.s
-
 source/ahkversion.obj: source/ahkversion.cpp.obj
 .PHONY : source/ahkversion.obj
 
@@ -1860,9 +1836,6 @@ help:
 	@echo ... source/WinGroup.obj
 	@echo ... source/WinGroup.i
 	@echo ... source/WinGroup.s
-	@echo ... source/ahklib.obj
-	@echo ... source/ahklib.i
-	@echo ... source/ahklib.s
 	@echo ... source/ahkversion.obj
 	@echo ... source/ahkversion.i
 	@echo ... source/ahkversion.s

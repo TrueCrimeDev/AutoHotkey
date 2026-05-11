@@ -71,7 +71,7 @@ When user asks to debug a script:
    ```
 
 2. If not connected, tell user:
-   > Run your script with: `bin\AutoHotkey64.exe /Debug your_script.ahk`
+   > Run your script with: `C:\Users\uphol\Documents\Design\Coding\AutoHotkey\bin\AutoHotkey64.exe /Debug your_script.ahk`
 
 3. Once connected, run and wait for error:
    ```

@@ -16,8 +16,6 @@ file(REMOVE_RECURSE
   "CMakeFiles/AutoHotkey64.dir/source/TextIO.cpp.obj.d"
   "CMakeFiles/AutoHotkey64.dir/source/WinGroup.cpp.obj"
   "CMakeFiles/AutoHotkey64.dir/source/WinGroup.cpp.obj.d"
-  "CMakeFiles/AutoHotkey64.dir/source/ahklib.cpp.obj"
-  "CMakeFiles/AutoHotkey64.dir/source/ahklib.cpp.obj.d"
   "CMakeFiles/AutoHotkey64.dir/source/ahkversion.cpp.obj"
   "CMakeFiles/AutoHotkey64.dir/source/ahkversion.cpp.obj.d"
   "CMakeFiles/AutoHotkey64.dir/source/application.cpp.obj"

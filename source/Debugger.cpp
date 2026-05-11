@@ -33,6 +33,7 @@ freely, without restriction.
 Debugger g_Debugger;
 CStringA g_DebuggerHost;
 CStringA g_DebuggerPort;
+bool g_DebugStdio = false;
 
 LPCTSTR g_AutoExecuteThreadDesc = _T("Auto-execute"); // This is used to reduce code size (allow comparing address vs. string).
 
@@ -265,13 +266,12 @@ bool Debugger::PreThrow(ExprTokenType *aException)
 
 
 bool Debugger::HasPendingCommand()
-// Returns true if there is data in the socket's receive buffer.
+// Returns true if there is data available to read.
 // This is used for receiving commands asynchronously.
 {
-	u_long dataPending;
-	if (ioctlsocket(mSocket, FIONREAD, &dataPending) == 0)
-		return dataPending > 0;
-	return false;
+	if (!mTransport)
+		return false;
+	return mTransport->HasPendingData();
 }
 
 
@@ -346,10 +346,9 @@ int Debugger::ProcessCommands(LPCSTR aBreakReason)
 	// stepping out of a function.  This ensures it won't be overwritten during eval:
 	PRIVATIZE_S_DEREF_BUF;
 
-	// Disable notification of READ readiness and reset socket to synchronous mode.
-	u_long zero = 0;
-	WSAAsyncSelect(mSocket, g_hWnd, 0, 0);
-	ioctlsocket(mSocket, FIONBIO, &zero);
+	// Disable async notifications and enter synchronous mode for command processing.
+	if (mTransport)
+		mTransport->EnterSyncMode(g_hWnd);
 
 	for (;;)
 	{
@@ -418,7 +417,7 @@ int Debugger::ProcessCommands(LPCSTR aBreakReason)
 			// response buffer is full and cannot be expanded).
 			mResponseBuf.Clear();
 
-			if (mSocket == INVALID_SOCKET) // Already disconnected; see FatalError().
+			if (!IsConnected()) // Already disconnected; see FatalError().
 				break;
 
 			if (err = SendErrorResponse(command, transaction_id, err))
@@ -450,8 +449,8 @@ int Debugger::ProcessCommands(LPCSTR aBreakReason)
 	// is received asynchronously, control will be passed back to the debugger
 	// to process it.  This allows the debugger engine to respond even if the
 	// script is sleeping or waiting for messages.
-	if (mSocket != INVALID_SOCKET)
-		WSAAsyncSelect(mSocket, g_hWnd, AHK_CHECK_DEBUGGER, FD_READ | FD_CLOSE);
+	if (mTransport && mTransport->IsConnected())
+		mTransport->ExitSyncMode(g_hWnd);
 	return err;
 }
 
@@ -2393,7 +2392,7 @@ int Debugger::SendContinuationResponse(LPCSTR aCommand, LPCSTR aStatus, LPCSTR a
 //
 int Debugger::ReceiveCommand(int *aCommandLength)
 {
-	ASSERT(mSocket != INVALID_SOCKET); // Shouldn't be at this point; will be caught by recv() anyway.
+	ASSERT(mTransport && mTransport->IsConnected());
 	ASSERT(!mCommandBuf.mFailed); // Should have been previously reset.
 
 	DWORD u = 0;
@@ -2416,9 +2415,10 @@ int Debugger::ReceiveCommand(int *aCommandLength)
 			return FatalError(); // This also calls mCommandBuf.Clear() via Disconnect().
 
 		// Receive and append data.
-		int bytes_received = recv(mSocket, mCommandBuf.mData + mCommandBuf.mDataUsed, (int)(mCommandBuf.mDataSize - mCommandBuf.mDataUsed), 0);
+		int bytes_received;
+		int err = mTransport->Recv(mCommandBuf.mData + mCommandBuf.mDataUsed, mCommandBuf.mDataSize - mCommandBuf.mDataUsed, bytes_received);
 
-		if (bytes_received == SOCKET_ERROR)
+		if (err != DEBUGGER_E_OK)
 			return FatalError();
 
 		mCommandBuf.mDataUsed += bytes_received;
@@ -2438,11 +2438,11 @@ int Debugger::SendResponse(size_t aStartOffset)
 	char response_header[DEBUGGER_RESPONSE_OVERHEAD];
 
 	size_t data_length = mResponseBuf.mDataUsed - aStartOffset;
-	
+
 	// Messages sent by the debugger engine must always be NULL terminated.
 	// ExpandIfNecessary() reserved 1 byte for this (excluded from mDataSize):
 	mResponseBuf.mData[mResponseBuf.mDataUsed] = '\0';
-	
+
 	// Each message is prepended with a stringified integer representing the length of the XML data packet.
 	Exp32or64(_itoa,_i64toa)(data_length + DEBUGGER_XML_TAG_SIZE, response_header, 10);
 
@@ -2452,10 +2452,9 @@ int Debugger::SendResponse(size_t aStartOffset)
 	// The XML document tag must always be present to provide XML version and encoding information.
 	buf += sprintf(buf, "%s", DEBUGGER_XML_TAG);
 
-	// Send the response header.
-	if (  SOCKET_ERROR == send(mSocket, response_header, (int)(buf - response_header), 0)
-	   // Send the message body.
-	   || SOCKET_ERROR == send(mSocket, mResponseBuf.mData + aStartOffset, (int)(data_length + 1), 0)  )
+	// Send the response header, then the message body.
+	if (  mTransport->Send(response_header, (size_t)(buf - response_header)) != DEBUGGER_E_OK
+	   || mTransport->Send(mResponseBuf.mData + aStartOffset, data_length + 1) != DEBUGGER_E_OK  )
 	{
 		// Unrecoverable error: disconnect the debugger.
 		return FatalError();
@@ -2465,84 +2464,223 @@ int Debugger::SendResponse(size_t aStartOffset)
 	return DEBUGGER_E_OK;
 }
 
-// Debugger::Connect
-//
-// Connect to a debugger UI. Returns a Winsock error code on failure, otherwise 0.
-//
-int Debugger::Connect(const char *aAddress, const char *aPort)
+// =====================================================================
+// DebugTransport implementations
+// =====================================================================
+
+// --- SocketTransport ---
+
+int SocketTransport::Connect(const char *aAddress, const char *aPort)
 {
 	int err;
 	WSADATA wsadata;
-	SOCKET s;
-	
+
 	if (WSAStartup(MAKEWORD(2,2), &wsadata))
-		return FatalError();
-	
-	s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		return DEBUGGER_E_INTERNAL_ERROR;
+	mWsaInitialized = true;
 
-	if (s != INVALID_SOCKET)
+	SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (s == INVALID_SOCKET)
 	{
-		addrinfo hints = {0};
-		addrinfo *res;
-		
-		hints.ai_family = AF_INET;
-		hints.ai_socktype = SOCK_STREAM;
-		hints.ai_protocol = IPPROTO_TCP;
-
-		err = getaddrinfo(aAddress, aPort, &hints, &res);
-		
-		if (err == 0)
-		{
-			for (;;)
-			{
-				err = connect(s, res->ai_addr, (int)res->ai_addrlen);
-				if (err == 0)
-					break;
-				switch (MessageBox(g_hWnd, DEBUGGER_ERR_FAILEDTOCONNECT, g_script.mFileSpec, MB_ABORTRETRYIGNORE | MB_ICONSTOP | MB_SETFOREGROUND | MB_APPLMODAL))
-				{
-				case IDABORT:
-					g_script.ExitApp(EXIT_CLOSE);
-					// If it didn't exit (due to OnExit), fall through to the next case:
-				case IDIGNORE:
-					closesocket(s);
-					return DEBUGGER_E_INTERNAL_ERROR;
-				}
-			}
-			
-			freeaddrinfo(res);
-			
-			if (err == 0)
-			{
-				mSocket = s;
-
-				CStringUTF8FromTChar ide_key(CString().GetEnvironmentVariable(_T("DBGP_IDEKEY")));
-				CStringUTF8FromTChar session(CString().GetEnvironmentVariable(_T("DBGP_COOKIE")));
-
-				// Clear the buffer in case of a previous failed session.
-				mResponseBuf.Clear();
-
-				// Write init message.
-				mResponseBuf.WriteF("<init appid=\"" AHK_NAME "\" ide_key=\"%e\" session=\"%e\" thread=\"%u\" parent=\"\" language=\"" DEBUGGER_LANG_NAME
-					"\" protocol_version=\"1.0\" fileuri=\"%r\"/>"
-					, ide_key.GetString(), session.GetString(), GetCurrentThreadId(), g_script.mFileSpec);
-
-				if (SendResponse() == DEBUGGER_E_OK)
-				{
-					// mCurrLine isn't updated unless the debugger is connected, so set it now.
-					// g_script.mCurrLine should always be non-NULL after the script is loaded,
-					// even if no threads are active.
-					mCurrLine = g_script.mCurrLine;
-					return DEBUGGER_E_OK;
-				}
-
-				mSocket = INVALID_SOCKET; // Don't want FatalError() to attempt a second closesocket().
-			}
-		}
-
-		closesocket(s);
+		WSACleanup();
+		mWsaInitialized = false;
+		return DEBUGGER_E_INTERNAL_ERROR;
 	}
 
-	WSACleanup();
+	addrinfo hints = {0};
+	addrinfo *res;
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+
+	err = getaddrinfo(aAddress, aPort, &hints, &res);
+	if (err == 0)
+	{
+		for (;;)
+		{
+			err = connect(s, res->ai_addr, (int)res->ai_addrlen);
+			if (err == 0)
+				break;
+			switch (MessageBox(g_hWnd, DEBUGGER_ERR_FAILEDTOCONNECT, g_script.mFileSpec, MB_ABORTRETRYIGNORE | MB_ICONSTOP | MB_SETFOREGROUND | MB_APPLMODAL))
+			{
+			case IDABORT:
+				g_script.ExitApp(EXIT_CLOSE);
+				// If it didn't exit (due to OnExit), fall through to the next case:
+			case IDIGNORE:
+				freeaddrinfo(res);
+				closesocket(s);
+				WSACleanup();
+				mWsaInitialized = false;
+				return DEBUGGER_E_INTERNAL_ERROR;
+			}
+		}
+		freeaddrinfo(res);
+	}
+
+	if (err != 0)
+	{
+		closesocket(s);
+		WSACleanup();
+		mWsaInitialized = false;
+		return DEBUGGER_E_INTERNAL_ERROR;
+	}
+
+	mSocket = s;
+	return DEBUGGER_E_OK;
+}
+
+void SocketTransport::Disconnect()
+{
+	if (mSocket != INVALID_SOCKET)
+	{
+		shutdown(mSocket, 2);
+		closesocket(mSocket);
+		mSocket = INVALID_SOCKET;
+	}
+	if (mWsaInitialized)
+	{
+		WSACleanup();
+		mWsaInitialized = false;
+	}
+}
+
+int SocketTransport::Send(const char *aData, size_t aSize)
+{
+	if (SOCKET_ERROR == send(mSocket, aData, (int)aSize, 0))
+		return DEBUGGER_E_INTERNAL_ERROR;
+	return DEBUGGER_E_OK;
+}
+
+int SocketTransport::Recv(char *aBuffer, size_t aBufferSize, int &aBytesRead)
+{
+	int result = recv(mSocket, aBuffer, (int)aBufferSize, 0);
+	if (result == SOCKET_ERROR || result == 0)
+		return DEBUGGER_E_INTERNAL_ERROR;
+	aBytesRead = result;
+	return DEBUGGER_E_OK;
+}
+
+bool SocketTransport::HasPendingData()
+{
+	u_long dataPending;
+	if (ioctlsocket(mSocket, FIONREAD, &dataPending) == 0)
+		return dataPending > 0;
+	return false;
+}
+
+void SocketTransport::EnterSyncMode(HWND aWnd)
+{
+	u_long zero = 0;
+	WSAAsyncSelect(mSocket, aWnd, 0, 0);
+	ioctlsocket(mSocket, FIONBIO, &zero);
+}
+
+void SocketTransport::ExitSyncMode(HWND aWnd)
+{
+	WSAAsyncSelect(mSocket, aWnd, AHK_CHECK_DEBUGGER, FD_READ | FD_CLOSE);
+}
+
+
+// --- StdioTransport ---
+
+int StdioTransport::Connect(const char *aAddress, const char *aPort)
+{
+	// Set stdin and stdout to binary mode to prevent CR/LF translation.
+	_setmode(_fileno(stdin), _O_BINARY);
+	_setmode(_fileno(stdout), _O_BINARY);
+	mInput = GetStdHandle(STD_INPUT_HANDLE);
+	mConnected = true;
+	return DEBUGGER_E_OK;
+}
+
+void StdioTransport::Disconnect()
+{
+	if (mConnected)
+	{
+		fflush(stdout);
+		mConnected = false;
+	}
+}
+
+int StdioTransport::Send(const char *aData, size_t aSize)
+{
+	size_t written = fwrite(aData, 1, aSize, stdout);
+	fflush(stdout);
+	if (written != aSize)
+		return DEBUGGER_E_INTERNAL_ERROR;
+	return DEBUGGER_E_OK;
+}
+
+int StdioTransport::Recv(char *aBuffer, size_t aBufferSize, int &aBytesRead)
+{
+	int result = _read(_fileno(stdin), aBuffer, (unsigned int)aBufferSize);
+	if (result <= 0)
+		return DEBUGGER_E_INTERNAL_ERROR;
+	aBytesRead = result;
+	return DEBUGGER_E_OK;
+}
+
+bool StdioTransport::HasPendingData()
+{
+	if (!mConnected || mInput == INVALID_HANDLE_VALUE)
+		return false;
+
+	DWORD available = 0;
+	if (PeekNamedPipe(mInput, nullptr, 0, nullptr, &available, nullptr))
+		return available > 0;
+
+	return false;
+}
+
+
+// =====================================================================
+// Debugger methods
+// =====================================================================
+
+// Debugger::Connect
+//
+// Connect to a debugger UI via the configured transport.
+// Returns DEBUGGER_E_OK on success.
+//
+int Debugger::Connect(const char *aAddress, const char *aPort)
+{
+	// Create the appropriate transport if not already set.
+	if (!mTransport)
+	{
+		if (g_DebugStdio)
+			mTransport = new StdioTransport();
+		else
+			mTransport = new SocketTransport();
+	}
+
+	int err = mTransport->Connect(aAddress, aPort);
+	if (err != DEBUGGER_E_OK)
+		return FatalError(DEBUGGER_ERR_FAILEDTOCONNECT DEBUGGER_ERR_DISCONNECT_PROMPT);
+
+	CStringUTF8FromTChar ide_key(CString().GetEnvironmentVariable(_T("DBGP_IDEKEY")));
+	CStringUTF8FromTChar session(CString().GetEnvironmentVariable(_T("DBGP_COOKIE")));
+
+	// Clear the buffer in case of a previous failed session.
+	mResponseBuf.Clear();
+
+	// Write init message.
+	mResponseBuf.WriteF("<init appid=\"" AHK_NAME "\" ide_key=\"%e\" session=\"%e\" thread=\"%u\" parent=\"\" language=\"" DEBUGGER_LANG_NAME
+		"\" protocol_version=\"1.0\" fileuri=\"%r\"/>"
+		, ide_key.GetString(), session.GetString(), GetCurrentThreadId(), g_script.mFileSpec);
+
+	if (SendResponse() == DEBUGGER_E_OK)
+	{
+		if (g_DebugStdio)
+			mStdOutMode = SR_Redirect; // Keep DBGp stdout free of raw script output.
+
+		// mCurrLine isn't updated unless the debugger is connected, so set it now.
+		// g_script.mCurrLine should always be non-NULL after the script is loaded,
+		// even if no threads are active.
+		mCurrLine = g_script.mCurrLine;
+		return DEBUGGER_E_OK;
+	}
+
+	mTransport->Disconnect();
 	return FatalError(DEBUGGER_ERR_FAILEDTOCONNECT DEBUGGER_ERR_DISCONNECT_PROMPT);
 }
 
@@ -2552,13 +2690,8 @@ int Debugger::Connect(const char *aAddress, const char *aPort)
 //
 int Debugger::Disconnect()
 {
-	if (mSocket != INVALID_SOCKET)
-	{
-		shutdown(mSocket, 2);
-		closesocket(mSocket);
-		mSocket = INVALID_SOCKET;
-		WSACleanup();
-	}
+	if (mTransport)
+		mTransport->Disconnect();
 	// These are reset in case we re-attach to the debugger client later:
 	mCommandBuf.Clear();
 	mResponseBuf.Clear();
@@ -2576,7 +2709,7 @@ int Debugger::Disconnect()
 //
 void Debugger::Exit(ExitReasons aExitReason, char *aCommandName)
 {
-	if (mSocket == INVALID_SOCKET)
+	if (!IsConnected())
 		return;
 	// Don't care if it fails as we may be exiting due to a previous failure.
 	SendContinuationResponse(aCommandName, "stopped", aExitReason == EXIT_ERROR ? "error" : "ok");
@@ -2587,7 +2720,12 @@ int Debugger::FatalError(LPCTSTR aMessage)
 {
 	g_Debugger.Disconnect();
 
-	if (IDNO == MessageBox(g_hWnd, aMessage, g_script.mFileSpec, MB_YESNO | MB_ICONSTOP | MB_SETFOREGROUND | MB_APPLMODAL))
+	if (g_DebugStdio)
+	{
+		// In stdio mode, write error to stderr instead of showing a dialog.
+		fprintf(stderr, "Debugger error: %ls\n", aMessage);
+	}
+	else if (IDNO == MessageBox(g_hWnd, aMessage, g_script.mFileSpec, MB_YESNO | MB_ICONSTOP | MB_SETFOREGROUND | MB_APPLMODAL))
 	{
 		// This might not exit, depending on OnExit:
 		g_script.ExitApp(EXIT_CLOSE);

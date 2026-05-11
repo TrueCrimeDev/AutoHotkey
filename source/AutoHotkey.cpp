@@ -237,17 +237,27 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 			{
 				param += 7;
 
-				LPTSTR c = _tcsrchr(param, ':');
-
-				if (c)
+				if (!_tcsicmp(param, _T("stdio")))
 				{
-					StringTCharToChar(param, g_DebuggerHost, (int)(c-param));
-					StringTCharToChar(c + 1, g_DebuggerPort);
+					// Stdio transport: debugger protocol over stdin/stdout.
+					g_DebugStdio = true;
+					g_DebuggerHost = "stdio";
+					g_DebuggerPort = "0";
 				}
 				else
 				{
-					StringTCharToChar(param, g_DebuggerHost);
-					g_DebuggerPort = "9000";
+					LPTSTR c = _tcsrchr(param, ':');
+
+					if (c)
+					{
+						StringTCharToChar(param, g_DebuggerHost, (int)(c-param));
+						StringTCharToChar(c + 1, g_DebuggerPort);
+					}
+					else
+					{
+						StringTCharToChar(param, g_DebuggerHost);
+						g_DebuggerPort = "9000";
+					}
 				}
 			}
 			else

@@ -1,6 +1,7 @@
 CMakeFiles/AutoHotkey64.dir/source/AutoHotkey.cpp.obj: \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\AutoHotkey.cpp \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\stdafx.h \
+ C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\config.h \
  C:/msys64/mingw64/include/stdio.h \
  C:/msys64/mingw64/include/corecrt_stdio_config.h \
  C:/msys64/mingw64/include/corecrt.h C:/msys64/mingw64/include/_mingw.h \
@@ -305,6 +306,7 @@ CMakeFiles/AutoHotkey64.dir/source/AutoHotkey.cpp.obj: \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\defines.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\ahkversion.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\abi.h \
+ C:/msys64/mingw64/include/c++/15.2.0/cstddef \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\StrRet.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\util.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script.h \
@@ -318,6 +320,18 @@ CMakeFiles/AutoHotkey64.dir/source/AutoHotkey.cpp.obj: \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\Util.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\resources/resource.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\Debugger.h \
+ C:/msys64/mingw64/include/winsock2.h \
+ C:/msys64/mingw64/include/psdk_inc/_ws1_undef.h \
+ C:/msys64/mingw64/include/_timeval.h \
+ C:/msys64/mingw64/include/_bsd_types.h \
+ C:/msys64/mingw64/include/inaddr.h \
+ C:/msys64/mingw64/include/psdk_inc/_socket_types.h \
+ C:/msys64/mingw64/include/psdk_inc/_fd_types.h \
+ C:/msys64/mingw64/include/psdk_inc/_ip_types.h \
+ C:/msys64/mingw64/include/psdk_inc/_wsadata.h \
+ C:/msys64/mingw64/include/ws2def.h \
+ C:/msys64/mingw64/include/psdk_inc/_wsa_errnos.h \
+ C:/msys64/mingw64/include/qos.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\os_version.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_module.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\input_object.h \

@@ -7,7 +7,7 @@
 <p>
   <strong>Repository:</strong> <a href="https://github.com/TrueCrimeDev/AutoHotkey">TrueCrimeDev/AutoHotkey</a><br>
   <strong>Default branch:</strong> <code>alpha</code><br>
-  <strong>Current engine tag:</strong> <code>2.1-alpha.22+Console</code>
+  <strong>Current engine tag:</strong> <code>2.1-alpha.26+Console</code>
 </p>
 
 ## What This Version Changes

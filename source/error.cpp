@@ -333,8 +333,16 @@ static int FormatDiagJson(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR
 void Script::PrintErrorStdOut(LPCTSTR aErrorText, int aLength, LPCTSTR aFile)
 {
 #ifdef CONFIG_DEBUGGER
-	if (g_Debugger.OutputStdOut(aErrorText))
-		return;
+	if (aFile && !_tcscmp(aFile, _T("**")))
+	{
+		if (g_Debugger.OutputStdErr(aErrorText))
+			return;
+	}
+	else if (aFile && !_tcscmp(aFile, _T("*")))
+	{
+		if (g_Debugger.OutputStdOut(aErrorText))
+			return;
+	}
 #endif
 	TextFile tf;
 	tf.Open(aFile, TextStream::APPEND, mErrorStdOutCP);

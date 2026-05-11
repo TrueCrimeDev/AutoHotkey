@@ -1,6 +1,7 @@
 CMakeFiles/AutoHotkey64.dir/source/ahkversion.cpp.obj: \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\ahkversion.cpp \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\stdafx.h \
+ C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\config.h \
  C:/msys64/mingw64/include/stdio.h \
  C:/msys64/mingw64/include/corecrt_stdio_config.h \
  C:/msys64/mingw64/include/corecrt.h C:/msys64/mingw64/include/_mingw.h \

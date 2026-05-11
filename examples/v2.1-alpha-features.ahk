@@ -1,6 +1,6 @@
 /*
     AutoHotkey v2.1 Alpha Feature Showcase
-    Demonstrates features from alpha.1 through alpha.22 in a single script.
+    Demonstrates features from alpha.1 through alpha.26 in a single script.
     Run with: AutoHotkey64.exe /ErrorStdOut=utf-8 examples\v2.1-alpha-features.ahk
 
     Features are grouped by category with the alpha version that introduced them.
@@ -130,7 +130,7 @@ out("Computed prop:     " obj.NameUpper)
 
 ; Read-only property
 DefineProp(obj, "Version", {
-    Get: (*) => "2.1-alpha.22"
+    Get: (*) => "2.1-alpha.26"
 })
 out("Read-only prop:    " obj.Version)
 

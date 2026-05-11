@@ -19,8 +19,30 @@ import { DBGpClient, ErrorInfo } from './dbgp-client.js';
 import { z } from 'zod';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import Anthropic from '@anthropic-ai/sdk';
 
 const client = new DBGpClient(9000);
+
+// === Claude API (lazy init) ===
+
+let anthropicClient: Anthropic | null = null;
+
+function getAnthropicClient(): Anthropic {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY environment variable not set');
+  if (!anthropicClient) anthropicClient = new Anthropic({ apiKey });
+  return anthropicClient;
+}
+
+// === Variable Watch State ===
+
+interface WatchEntry {
+  name: string;
+  lastValue: string | null;
+  lastType: string | null;
+}
+
+const watchList: Map<string, WatchEntry> = new Map();
 const server = new Server(
   {
     name: 'mcp-autohotkey-debug',
@@ -78,6 +100,14 @@ const DebugCommandSchema = z.object({
 
 const SourceOutlineSchema = z.object({
   file: z.string().describe('Path to the AutoHotkey source file'),
+});
+
+const WatchAddSchema = z.object({
+  name: z.string().describe('Variable name or expression to watch'),
+});
+
+const WatchRemoveSchema = z.object({
+  name: z.string().describe('Variable name or expression to remove'),
 });
 
 const WorkspaceSymbolsSchema = z.object({
@@ -183,6 +213,39 @@ async function getWorkspaceSymbols(root: string, query = '', maxResults = 200): 
   }
 
   return symbols;
+}
+
+// === Watch Helpers ===
+
+interface WatchSnapshot {
+  name: string;
+  value: string;
+  previous: string | null;
+  changed: boolean;
+}
+
+async function snapshotWatches(): Promise<WatchSnapshot[]> {
+  if (watchList.size === 0 || !client.isConnected()) return [];
+
+  const snapshots: WatchSnapshot[] = [];
+  for (const [name, entry] of watchList) {
+    let value: string;
+    try {
+      value = await client.evaluateExpression(name);
+    } catch {
+      value = '<error>';
+    }
+    if (!value && value !== '') value = '<undefined>';
+
+    const changed = entry.lastValue !== null && entry.lastValue !== value;
+    const previous = entry.lastValue;
+
+    entry.lastValue = value;
+    entry.lastType = typeof value;
+
+    snapshots.push({ name, value, previous, changed });
+  }
+  return snapshots;
 }
 
 // === MCP Tools ===
@@ -374,6 +437,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: [],
         },
       },
+      // Watch / Change Notifications
+      {
+        name: 'watch_add',
+        description: 'Add a variable or expression to the watch list for change tracking during stepping',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Variable name or expression to watch' },
+          },
+          required: ['name'],
+        },
+      },
+      {
+        name: 'watch_remove',
+        description: 'Remove a variable or expression from the watch list',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Variable name or expression to remove' },
+          },
+          required: ['name'],
+        },
+      },
+      {
+        name: 'watch_list',
+        description: 'List all watched variables with current values and change status',
+        inputSchema: { type: 'object', properties: {}, required: [] },
+      },
+
       {
         name: 'list_errors',
         description: 'List all queued errors without removing them',
@@ -406,6 +498,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     'evaluate',
     'stack_trace',
     'capture_error',
+    'watch_list',
   ]);
 
   if (!client.isConnected() && requiresDebugger.has(name)) {
@@ -436,11 +529,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'debug_step_into': {
         const response = await client.stepInto();
+        const watches = await snapshotWatches();
+        const result: any = {
+          status: response.status,
+          line: response.lineno || null,
+        };
+        if (watches.length > 0) result.watches = watches;
         return {
           content: [
             {
               type: 'text',
-              text: `Stepped into. Status: ${response.status}, Line: ${response.lineno || 'unknown'}`,
+              text: watches.length > 0
+                ? JSON.stringify(result, null, 2)
+                : `Stepped into. Status: ${response.status}, Line: ${response.lineno || 'unknown'}`,
             },
           ],
         };
@@ -448,11 +549,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'debug_step_over': {
         const response = await client.stepOver();
+        const watches = await snapshotWatches();
+        const result: any = {
+          status: response.status,
+          line: response.lineno || null,
+        };
+        if (watches.length > 0) result.watches = watches;
         return {
           content: [
             {
               type: 'text',
-              text: `Stepped over. Status: ${response.status}, Line: ${response.lineno || 'unknown'}`,
+              text: watches.length > 0
+                ? JSON.stringify(result, null, 2)
+                : `Stepped over. Status: ${response.status}, Line: ${response.lineno || 'unknown'}`,
             },
           ],
         };
@@ -460,11 +569,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'debug_step_out': {
         const response = await client.stepOut();
+        const watches = await snapshotWatches();
+        const result: any = {
+          status: response.status,
+        };
+        if (watches.length > 0) result.watches = watches;
         return {
           content: [
             {
               type: 'text',
-              text: `Stepped out. Status: ${response.status}`,
+              text: watches.length > 0
+                ? JSON.stringify(result, null, 2)
+                : `Stepped out. Status: ${response.status}`,
             },
           ],
         };
@@ -670,19 +786,50 @@ Format response as JSON:
 }`;
 
         if (useApi) {
-          // TODO: Call Claude API directly when API key is configured
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  status: 'api_not_configured',
-                  message: 'Claude API integration not yet configured. Use use_api=false for client-side analysis.',
-                  analysis_prompt: analysisPrompt,
-                }),
-              },
-            ],
-          };
+          try {
+            const apiClient = getAnthropicClient();
+            const response = await apiClient.messages.create({
+              model: 'claude-sonnet-4-5-20250929',
+              max_tokens: 1024,
+              messages: [{ role: 'user', content: analysisPrompt }],
+            });
+            const analysisText = response.content[0].type === 'text'
+              ? response.content[0].text : '';
+
+            let analysis: any;
+            try {
+              analysis = JSON.parse(analysisText);
+            } catch {
+              analysis = { raw: analysisText };
+            }
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    status: 'analyzed',
+                    error,
+                    analysis,
+                    raw_response: analysisText,
+                  }, null, 2),
+                },
+              ],
+            };
+          } catch (apiErr) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    status: 'api_error',
+                    message: apiErr instanceof Error ? apiErr.message : String(apiErr),
+                    analysis_prompt: analysisPrompt,
+                  }),
+                },
+              ],
+            };
+          }
         }
 
         return {
@@ -819,6 +966,51 @@ Format response as JSON:
                 count: symbols.length,
                 symbols,
               }, null, 2),
+            },
+          ],
+        };
+      }
+
+      // === Watch Tools ===
+
+      case 'watch_add': {
+        const params = WatchAddSchema.parse(args);
+        if (watchList.has(params.name)) {
+          return {
+            content: [{ type: 'text', text: `Already watching: ${params.name}` }],
+          };
+        }
+        watchList.set(params.name, { name: params.name, lastValue: null, lastType: null });
+        return {
+          content: [{ type: 'text', text: `Watching: ${params.name} (${watchList.size} total)` }],
+        };
+      }
+
+      case 'watch_remove': {
+        const params = WatchRemoveSchema.parse(args);
+        const removed = watchList.delete(params.name);
+        return {
+          content: [{
+            type: 'text',
+            text: removed
+              ? `Removed watch: ${params.name} (${watchList.size} remaining)`
+              : `Not found: ${params.name}`,
+          }],
+        };
+      }
+
+      case 'watch_list': {
+        const snapshots = await snapshotWatches();
+        if (snapshots.length === 0) {
+          return {
+            content: [{ type: 'text', text: 'No watches configured. Use watch_add to start tracking variables.' }],
+          };
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ count: snapshots.length, watches: snapshots }, null, 2),
             },
           ],
         };
@@ -990,6 +1182,7 @@ async function main() {
 
   client.on('disconnected', () => {
     console.error('AutoHotkey disconnected');
+    watchList.clear();
   });
 
   client.on('error', (err) => {
