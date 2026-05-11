@@ -59,6 +59,7 @@ LPCOLORREF getbits(HBITMAP ahImage, HDC hdc, LONG &aWidth, LONG &aHeight, bool &
 	aWidth = bmi.bmiHeader.biWidth;
 	aHeight = bmi.bmiHeader.biHeight;
 
+	{ // Scope-wrap image_pixel_count/is_8bit so they exit scope before `end:` (gcc goto-crosses-init rule).
 	int image_pixel_count = aWidth * aHeight;
 	if (   !(image_pixel = (LPCOLORREF)malloc(image_pixel_count * sizeof(COLORREF)))   )
 		goto end;
@@ -119,6 +120,7 @@ LPCOLORREF getbits(HBITMAP ahImage, HDC hdc, LONG &aWidth, LONG &aHeight, bool &
 	
 	// Since above didn't "goto end", indicate success:
 	success = true;
+	} // end of image_pixel_count/is_8bit scope (closed before `end:` for gcc goto-crosses-init rule).
 
 end:
 	if (tdc_orig_select) // i.e. the original call to SelectObject() didn't fail.
@@ -234,7 +236,8 @@ FResult PixelSearch(BOOL *aFound, ResultToken *aFoundX, ResultToken *aFoundY
 	// second problem [in the test script], since GetPixel even in 16bit will return some "valid"
 	// data in the last 3bits of each byte."
 	register int i;
-	LONG screen_pixel_count = screen_width * screen_height;
+	LONG screen_pixel_count; // Split decl/init so gcc doesn't see a goto from above crossing an initialization (the label and other uses are after `fast_end:`).
+	screen_pixel_count = screen_width * screen_height;
 	if (screen_is_16bit)
 		for (i = 0; i < screen_pixel_count; ++i)
 			screen_pixel[i] &= 0xF8F8F8F8;
@@ -539,8 +542,11 @@ bif_impl FResult ImageSearch(ResultToken *aFoundX, ResultToken *aFoundY
 		goto end;
 
 	// Create an empty bitmap to hold all the pixels currently visible on the screen that lie within the search area:
-	int search_width = aRight - aLeft + 1;
-	int search_height = aBottom - aTop + 1;
+	// Split decl/init so gcc doesn't see a goto from above crossing an initialization.
+	int search_width;
+	int search_height;
+	search_width = aRight - aLeft + 1;
+	search_height = aBottom - aTop + 1;
 	if (   !(sdc = CreateCompatibleDC(hdc)) || !(hbitmap_screen = CreateCompatibleBitmap(hdc, search_width, search_height))   )
 		goto end;
 
@@ -556,8 +562,11 @@ bif_impl FResult ImageSearch(ResultToken *aFoundX, ResultToken *aFoundY
 	if (   !(screen_pixel = getbits(hbitmap_screen, sdc, screen_width, screen_height, screen_is_16bit))   )
 		goto end;
 
-	LONG image_pixel_count = image_width * image_height;
-	LONG screen_pixel_count = screen_width * screen_height;
+	// Split decl/init so gcc doesn't see a goto from above crossing an initialization (the label and uses below are after `end:`).
+	LONG image_pixel_count;
+	LONG screen_pixel_count;
+	image_pixel_count = image_width * image_height;
+	screen_pixel_count = screen_width * screen_height;
 	int i, j, k, x, y; // Declaring as "register" makes no performance difference with current compiler, so let the compiler choose which should be registers.
 
 	// If either is 16-bit, convert *both* to the 16-bit-compatible 32-bit format:

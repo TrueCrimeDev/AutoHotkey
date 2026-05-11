@@ -90,7 +90,7 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 	__int64 right_int64, left_int64;
 	LPTSTR right_string, left_string;
 	size_t right_length, left_length;
-	TCHAR left_buf[max(MAX_NUMBER_SIZE, _f_retval_buf_size)];
+	TCHAR left_buf[(MAX_NUMBER_SIZE > _f_retval_buf_size) ? MAX_NUMBER_SIZE : _f_retval_buf_size]; // Avoid macro `max` for cross-compiler portability (mingw/gcc don't expose it in C++ mode).
 	TCHAR right_buf[MAX_NUMBER_SIZE];
 	LPTSTR result; // "result" is used for return values and also the final result.
 	VarSizeType result_length;
@@ -691,6 +691,7 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 		// Get the first operand for this operator (for non-unary operators, this is the right-side operand):
 		if (!stack_count) // Prevent stack underflow.  An expression such as -*3 causes this.
 			goto abort_with_exception;
+		{ // Wrap `right` so it goes out of scope before push_this_token below (gcc goto-crosses-init rule).
 		ExprTokenType &right = *STACK_POP;
 		if (right.symbol == SYM_MISSING)
 		{
@@ -1350,6 +1351,7 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 			// Now fall through and push this_token onto the stack as an operand for use by future operators.
 			// This is because by convention, an assignment like "x+=1" produces a usable operand.
 		}
+		} // end of `right` scope (closed before push_this_token for gcc goto-crosses-init rule).
 
 push_this_token:
 		ASSERT(stack_count < mArg[aArgIndex].max_stack);
@@ -1359,6 +1361,7 @@ push_this_token:
 	if (stack_count != 1) // Even for multi-statement expressions, the stack should have only one item left on it:
 		goto abort_with_exception; // the overall result.  Any conditions that cause this *should* be detected at load time.
 
+	{ // Wrap result_token so it goes out of scope before the abort/error labels below (required by gcc; MSVC tolerates a goto crossing a reference's initialization).
 	ExprTokenType &result_token = *stack[0];  // For performance and convenience.  Even for multi-statement, the bottommost item on the stack is the final result so that things like var1:=1,var2:=2 work.
 
 	// Although ACT_EXPRESSION was already checked higher above for function calls, there are other ways besides
@@ -1554,6 +1557,7 @@ push_this_token:
 		error_value = &result_token;
 		goto type_mismatch;
 	} // switch (result_token.symbol)
+	} // end of result_token scope (closed before abort labels for gcc goto-crosses-init rule).
 
 // ALL PATHS ABOVE SHOULD "GOTO".  TO CATCH BUGS, ANY THAT DON'T FALL INTO "ABORT" BELOW.
 abort_with_exception:
@@ -1956,6 +1960,7 @@ bool UserFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int aPar
 			}
 		}
 
+		{ // Scope-wrap default_expr/prev_func/result so they exit scope before free_and_return (gcc goto-crosses-init rule).
 		int default_expr = mParamCount;
 		for (j = 0; j < mParamCount; ++j) // For each formal parameter.
 		{
@@ -2120,6 +2125,7 @@ bool UserFunc::Call(ResultToken &aResultToken, ExprTokenType *aParam[], int aPar
 		// Setting this unconditionally isn't likely to perform any worse than checking for EXIT/FAIL,
 		// and likely produces smaller code.  Execute() takes care of translating EARLY_RETURN to OK.
 		aResultToken.SetResult(result);
+		} // end of default_expr/prev_func/result scope (closed before free_and_return for gcc goto-crosses-init rule).
 
 free_and_return:
 		// Free the memory of all the just-completed function's local variables.  This is done in
@@ -2364,9 +2370,11 @@ ResultType Line::ExpandArgs(ResultToken *aResultTokens)
 	// that all the other sections don't need to check mArgc anymore.
 	// Benchmarks show that it doesn't help performance to try to tweak this with a pre-check such as
 	// "if (mArgc < max_params)":
+	{ // Scope-wrap max_params so it exits scope before `end:` (gcc goto-crosses-init rule).
 	int max_params = g_act[mActionType].MaxParams; // Resolve once for performance.
 	for (i = mArgc; i < max_params; ++i) // START AT mArgc.  For performance, this only does the actual max args for THIS command, not MAX_ARGS.
 		sArgDeref[i] = _T("");
+	}
 
 	// When the main/large loop above ends normally, it falls into the label below and uses the original/default
 	// value of "result_to_return".

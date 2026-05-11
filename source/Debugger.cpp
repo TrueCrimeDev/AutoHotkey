@@ -27,7 +27,10 @@ freely, without restriction.
 #define U4T(s) CStringUTF8FromTChar(s).GetString()
 
 #include <ws2tcpip.h>
-#include <wspiapi.h> // for getaddrinfo()
+#if defined(_MSC_VER)
+	#include <wspiapi.h> // MSVC: backward-compat shim for getaddrinfo() on Win2K and earlier.
+#endif
+// mingw/gcc: <ws2tcpip.h> above already provides getaddrinfo/freeaddrinfo natively; the Wspiapi shim isn't linked.
 #include <stdarg.h>
 
 Debugger g_Debugger;

@@ -1043,7 +1043,7 @@ __int64 nstrtoi64(LPCTSTR buf)
 					// but to get the correct result we must not wrap the multiplier.
 					while (exp >= 20) // Implies !exp_negative.  10**20 won't fit in multiplier.
 					{
-						i *= 10000000000000000000ui64;
+						i *= 10000000000000000000ULL; // Standard C++ unsigned-long-long literal (MSVC `ui64` suffix is non-portable).
 						exp -= 19;
 					}
 					if (exp != 0) // An exponent of 0 is valid but does not alter the result.

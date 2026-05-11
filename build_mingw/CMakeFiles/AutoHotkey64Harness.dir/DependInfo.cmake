@@ -4,9 +4,32 @@ set(CMAKE_DEPENDS_IN_PROJECT_ONLY OFF)
 
 # The set of languages for which implicit dependencies are needed:
 set(CMAKE_DEPENDS_LANGUAGES
+  "ASM"
   "RC"
   )
 # The set of files for implicit dependencies of each language:
+set(CMAKE_DEPENDS_CHECK_ASM
+  "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/libx64call/x64call.s" "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/build_mingw/CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64call.s.obj"
+  "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/libx64call/x64stub.s" "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/build_mingw/CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64stub.s.obj"
+  )
+set(CMAKE_ASM_COMPILER_ID "GNU")
+
+# Preprocessor definitions for this target.
+set(CMAKE_TARGET_DEFINITIONS_ASM
+  "AHK_HARNESS_CONSOLE"
+  "PCRE_STATIC"
+  "UNICODE"
+  "WIN32"
+  "_UNICODE"
+  "_WIN64"
+  "_WINDOWS"
+  )
+
+# The include file search paths:
+set(CMAKE_ASM_TARGET_INCLUDE_PATH
+  "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source"
+  "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib_pcre/pcre"
+  )
 set(CMAKE_DEPENDS_CHECK_RC
   "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/resources/AutoHotkey.rc" "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/build_mingw/CMakeFiles/AutoHotkey64Harness.dir/source/resources/AutoHotkey.rc.obj"
   )

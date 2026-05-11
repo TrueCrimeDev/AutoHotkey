@@ -241,6 +241,7 @@ void DynaCall(void *aFunction, DYNAPARM aParam[], int aParamCount, DWORD &aExcep
 	}
 
 	// Call the function.
+#if defined(_MSC_VER)
 	__try
 	{
 		Res.UIntPtr = PerformDynaCall(stackArgsSize, stackArgs, regArgs, aFunction);
@@ -249,6 +250,11 @@ void DynaCall(void *aFunction, DYNAPARM aParam[], int aParamCount, DWORD &aExcep
 	{
 		aException = GetExceptionCode(); // aException is an output parameter for our caller.
 	}
+#else
+	// mingw/gcc does not support MSVC-style __try/__except SEH. Call without
+	// exception protection; native exceptions in DllCall will terminate the process.
+	Res.UIntPtr = PerformDynaCall(stackArgsSize, stackArgs, regArgs, aFunction);
+#endif
 
 #endif
 
@@ -845,8 +851,9 @@ has_valid_return_type:
 				if (aParam[i+1]->symbol != SYM_VAR || !aParam[i+1]->var->IsUninitialized()) // It's not &var, or var has a value.
 				{
 					aResultToken.InitInvokeRetVal(); // Set default for Invoke (New set aResultToken to obj without calling AddRef).
+					ExprTokenType _et(obj);
 					auto result = obj->Invoke(aResultToken, IT_SET | IF_BYPASS_METAFUNC | IF_NO_NEW_PROPS
-						, _T("__Value"), ExprTokenType(obj), aParam + i + 1, 1);
+						, _T("__Value"), _et, aParam + i + 1, 1);
 					if (result == INVOKE_NOT_HANDLED && this_param.symbol != SYM_MISSING)
 					{
 						auto classname = param_proto->GetOwnPropString(_T("__Class"));
@@ -1211,7 +1218,8 @@ has_valid_return_type:
 	if (return_struct_size && !aResultToken.Exited())
 	{
 		aResultToken.InitInvokeRetVal();
-		auto result = pObj[0]->Invoke(aResultToken, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), ExprTokenType(pObj[0]), nullptr, 0);
+		ExprTokenType _et(pObj[0]);
+		auto result = pObj[0]->Invoke(aResultToken, IT_GET | IF_BYPASS_METAFUNC, _T("__value"), _et, nullptr, 0);
 		if (result == INVOKE_NOT_HANDLED)
 		{
 			aResultToken.SetValue(pObj[0]);

@@ -36,25 +36,25 @@ inline LPTSTR _OptionalStringDefaultHelper(LPTSTR aDef, LPTSTR aBuf = NULL, size
 	return aDef;
 }
 #define ParamIndexToOptionalStringDef(index, def, ...) \
-	(ParamIndexIsOmitted(index) ? _OptionalStringDefaultHelper(def, __VA_ARGS__) \
-								: ParamIndexToString(index, __VA_ARGS__))
+	(ParamIndexIsOmitted(index) ? _OptionalStringDefaultHelper(def __VA_OPT__(,) __VA_ARGS__) \
+								: ParamIndexToString(index __VA_OPT__(,) __VA_ARGS__))
 // The macro below defaults to "", since that is by far the most common default.
 // No check for SYM_MISSING is needed since TokenToString() returns "" for that.
 #define ParamIndexToOptionalString(index, ...) \
-	(((index) < aParamCount) ? ParamIndexToString(index, __VA_ARGS__) \
-							: _OptionalStringDefaultHelper(_T(""), __VA_ARGS__))
+	(((index) < aParamCount) ? ParamIndexToString(index __VA_OPT__(,) __VA_ARGS__) \
+							: _OptionalStringDefaultHelper(_T("") __VA_OPT__(,) __VA_ARGS__))
 
 #define ParamIndexToOptionalObject(index)			((index) < aParamCount ? ParamIndexToObject(index) : NULL)
 
 #define _f_param_string(name, index, ...) \
 	TCHAR name##_buf[MAX_NUMBER_SIZE], *name; \
-	if (!TokenToStringParam(aResultToken, aParam, index, name##_buf, name, __VA_ARGS__)) return
+	if (!TokenToStringParam(aResultToken, aParam, index, name##_buf, name __VA_OPT__(,) __VA_ARGS__)) return
 #define _f_param_string_opt_def(name, index, def, ...) \
 	TCHAR name##_buf[MAX_NUMBER_SIZE], *name; \
-	if (ParamIndexIsOmitted(index)) name = _OptionalStringDefaultHelper(def, name##_buf, __VA_ARGS__); else \
-	if (!TokenToStringParam(aResultToken, aParam, index, name##_buf, name, __VA_ARGS__)) return
+	if (ParamIndexIsOmitted(index)) name = _OptionalStringDefaultHelper(def, name##_buf __VA_OPT__(,) __VA_ARGS__); else \
+	if (!TokenToStringParam(aResultToken, aParam, index, name##_buf, name __VA_OPT__(,) __VA_ARGS__)) return
 #define _f_param_string_opt(name, index, ...) \
-	_f_param_string_opt_def(name, index, _T(""), __VA_ARGS__)
+	_f_param_string_opt_def(name, index, _T("") __VA_OPT__(,) __VA_ARGS__)
 
 #define Throw_if_Param_NaN(ParamIndex) \
 	if (!TokenIsNumeric(*aParam[(ParamIndex)])) \
@@ -65,7 +65,7 @@ inline LPTSTR _OptionalStringDefaultHelper(LPTSTR aDef, LPTSTR aBuf = NULL, size
 	if (!TokenIsNumeric(aValue)) \
 		_f_throw_type(_T("Number"), aValue)
 
-#define BivRValueToString(...)  TokenToString(aValue, _f_number_buf, __VA_ARGS__)
+#define BivRValueToString(...)  TokenToString(aValue, _f_number_buf __VA_OPT__(,) __VA_ARGS__)
 #define BivRValueToInt64()  TokenToInt64(aValue)
 #define BivRValueToBOOL()  TokenToBOOL(aValue)
 #define BivRValueToObject()  TokenToObject(aValue)

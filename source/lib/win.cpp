@@ -484,6 +484,7 @@ bif_impl FResult ControlClick(ExprTokenType *aControlSpec, ExprTokenType *aWinTi
 			click.y = (rect.bottom - rect.top) / 2;
 	}
 
+	{ // Scope-wrap wparam_up/vk_is_wheel/vk_is_hwheel/lparam/result so they exit scope before `control_error:` (gcc goto-crosses-init rule).
 	UINT msg_down, msg_up;
 	WPARAM wparam, wparam_up = 0;
 	bool vk_is_wheel = aVK == VK_WHEEL_UP || aVK == VK_WHEEL_DOWN;
@@ -607,6 +608,7 @@ bif_impl FResult ControlClick(ExprTokenType *aControlSpec, ExprTokenType *aWinTi
 	DETACH_THREAD_INPUT  // Also takes into account do_activate, indirectly.
 
 	return result;
+	} // end of wparam_up/etc. scope (closed before `control_error:` for gcc goto-crosses-init rule).
 
 control_error:
 	return FError(ERR_NO_CONTROL, aControl, ErrorPrototype::Target);

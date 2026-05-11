@@ -1404,7 +1404,8 @@ ResultType GuiType::ControlChoose(GuiControlType &aControl, ExprTokenType &aPara
 	case SYM_OBJECT: goto error;
 	}
 	TCHAR buf[MAX_NUMBER_SIZE];
-	
+
+	{ // Scope-wrap msg_set_index/msg_select_string/msg_find_string so they exit scope before `error:` (gcc goto-crosses-init rule).
 	UINT msg_set_index = 0, msg_select_string = 0, msg_find_string = 0;
 	switch(aControl.type)
 	{
@@ -1523,6 +1524,7 @@ ResultType GuiType::ControlChoose(GuiControlType &aControl, ExprTokenType &aPara
 			goto error;
 	}
 	return OK;
+	} // end of msg_set_index/etc. scope (closed before `error:` for gcc goto-crosses-init rule).
 
 error:
 	return ValueError(aOneExact ? ERR_INVALID_VALUE : ERR_PARAM1_INVALID, nullptr, FAIL_OR_OK); // Invalid parameter #1 is almost definitely the cause.
@@ -7906,6 +7908,7 @@ FResult GuiType::Submit(optl<BOOL> aHideIt, IObject *&aRetVal)
 
 	// Handle GUI_CONTROL_RADIO separately so that any radio group that has a single name
 	// to share among all its members can be given special treatment:
+	{ // Scope-wrap radio-group locals so they exit scope before `outofmem:` (gcc goto-crosses-init rule).
 	int group_radios = 0;           // The number of radio buttons in the current group.
 	int group_radios_with_name = 0; // The number of the above that have a name.
 	LPTSTR group_name = NULL;       // The last-found name of the current group.
@@ -7973,6 +7976,7 @@ FResult GuiType::Submit(optl<BOOL> aHideIt, IObject *&aRetVal)
 		Cancel();
 	aRetVal = ret;
 	return OK;
+	} // end of radio-group locals scope (closed before `outofmem:` for gcc goto-crosses-init rule).
 
 outofmem:
 	ret->Release();
@@ -8257,6 +8261,7 @@ int GuiType::FindOrCreateFont(LPCTSTR aOptions, LPCTSTR aFontName, FontType *aFo
 	if (aColor) // Caller wanted color returned in an output parameter.
 		*aColor = color;
 
+	{ // Scope-wrap hdc/pixels_per_point_y/font_index so they exit scope before `invalid_option:` (gcc goto-crosses-init rule).
 	HDC hdc = GetDC(mHwnd); // mHwnd vs. HWND_DESKTOP doesn't actually seem to help, but it shows the intent better.
 
 	// On modern systems (probably Windows 8.1 and later) GetDeviceCaps(hdc, LOGPIXELSY) returns
@@ -8311,6 +8316,7 @@ int GuiType::FindOrCreateFont(LPCTSTR aOptions, LPCTSTR aFontName, FontType *aFo
 
 	sFont[sFontCount++] = font; // Copy the newly created font's attributes into the next array element.
 	return sFontCount - 1; // The index of the newly created font.
+	} // end of hdc/pixels_per_point_y/font_index scope (closed before `invalid_option:` for gcc goto-crosses-init rule).
 
 	// This "subroutine" is used to reduce code size:
 invalid_option:

@@ -90,12 +90,12 @@ clean: CMakeFiles/AutoHotkey64Harness.dir/clean
 CMakeFiles/pcre16.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\pcre16.dir\build.make CMakeFiles/pcre16.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\pcre16.dir\build.make CMakeFiles/pcre16.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100 "Built target pcre16"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=86,87,88,89,90,91,92,93,94,95,96,97,98,99,100 "Built target pcre16"
 .PHONY : CMakeFiles/pcre16.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/pcre16.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles 16
+	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles 15
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 CMakeFiles/pcre16.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles 0
 .PHONY : CMakeFiles/pcre16.dir/rule
@@ -107,7 +107,7 @@ pcre16: CMakeFiles/pcre16.dir/rule
 # codegen rule for target.
 CMakeFiles/pcre16.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\pcre16.dir\build.make CMakeFiles/pcre16.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100 "Finished codegen for target pcre16"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=86,87,88,89,90,91,92,93,94,95,96,97,98,99,100 "Finished codegen for target pcre16"
 .PHONY : CMakeFiles/pcre16.dir/codegen
 
 # clean rule for target.
@@ -127,7 +127,7 @@ CMakeFiles/AutoHotkey64.dir/all: CMakeFiles/pcre16.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/AutoHotkey64.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles 58
+	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles 57
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 CMakeFiles/AutoHotkey64.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles 0
 .PHONY : CMakeFiles/AutoHotkey64.dir/rule
@@ -154,7 +154,7 @@ CMakeFiles/AutoHotkey64.dir/clean:
 CMakeFiles/AutoHotkey64Harness.dir/all: CMakeFiles/pcre16.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84 "Built target AutoHotkey64Harness"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85 "Built target AutoHotkey64Harness"
 .PHONY : CMakeFiles/AutoHotkey64Harness.dir/all
 
 # Build rule for subdir invocation for target.
@@ -171,7 +171,7 @@ AutoHotkey64Harness: CMakeFiles/AutoHotkey64Harness.dir/rule
 # codegen rule for target.
 CMakeFiles/AutoHotkey64Harness.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84 "Finished codegen for target AutoHotkey64Harness"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85 "Finished codegen for target AutoHotkey64Harness"
 .PHONY : CMakeFiles/AutoHotkey64Harness.dir/codegen
 
 # clean rule for target.

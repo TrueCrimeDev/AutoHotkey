@@ -836,9 +836,37 @@ CMakeFiles/AutoHotkey64.dir/source/lib/win.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/AutoHotkey64.dir/source/lib/win.cpp.s"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\win.cpp -o CMakeFiles\AutoHotkey64.dir\source\lib\win.cpp.s
 
+CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.obj: CMakeFiles/AutoHotkey64.dir/flags.make
+CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.obj: CMakeFiles/AutoHotkey64.dir/includes_ASM.rsp
+CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/libx64call/x64call.s
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_52) "Building ASM object CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.obj"
+	C:\msys64\mingw64\bin\gcc.exe $(ASM_DEFINES) $(ASM_INCLUDES) $(ASM_FLAGS) -o CMakeFiles\AutoHotkey64.dir\source\libx64call\x64call.s.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\libx64call\x64call.s
+
+CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing ASM source to CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.i"
+	C:\msys64\mingw64\bin\gcc.exe $(ASM_DEFINES) $(ASM_INCLUDES) $(ASM_FLAGS) -E C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\libx64call\x64call.s > CMakeFiles\AutoHotkey64.dir\source\libx64call\x64call.s.i
+
+CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling ASM source to assembly CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.s"
+	C:\msys64\mingw64\bin\gcc.exe $(ASM_DEFINES) $(ASM_INCLUDES) $(ASM_FLAGS) -S C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\libx64call\x64call.s -o CMakeFiles\AutoHotkey64.dir\source\libx64call\x64call.s.s
+
+CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.obj: CMakeFiles/AutoHotkey64.dir/flags.make
+CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.obj: CMakeFiles/AutoHotkey64.dir/includes_ASM.rsp
+CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/libx64call/x64stub.s
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Building ASM object CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.obj"
+	C:\msys64\mingw64\bin\gcc.exe $(ASM_DEFINES) $(ASM_INCLUDES) $(ASM_FLAGS) -o CMakeFiles\AutoHotkey64.dir\source\libx64call\x64stub.s.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\libx64call\x64stub.s
+
+CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing ASM source to CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.i"
+	C:\msys64\mingw64\bin\gcc.exe $(ASM_DEFINES) $(ASM_INCLUDES) $(ASM_FLAGS) -E C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\libx64call\x64stub.s > CMakeFiles\AutoHotkey64.dir\source\libx64call\x64stub.s.i
+
+CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling ASM source to assembly CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.s"
+	C:\msys64\mingw64\bin\gcc.exe $(ASM_DEFINES) $(ASM_INCLUDES) $(ASM_FLAGS) -S C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\libx64call\x64stub.s -o CMakeFiles\AutoHotkey64.dir\source\libx64call\x64stub.s.s
+
 CMakeFiles/AutoHotkey64.dir/source/resources/AutoHotkey.rc.obj: CMakeFiles/AutoHotkey64.dir/flags.make
 CMakeFiles/AutoHotkey64.dir/source/resources/AutoHotkey.rc.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/resources/AutoHotkey.rc
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_52) "Building RC object CMakeFiles/AutoHotkey64.dir/source/resources/AutoHotkey.rc.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_54) "Building RC object CMakeFiles/AutoHotkey64.dir/source/resources/AutoHotkey.rc.obj"
 	C:\msys64\mingw64\bin\windres.exe -O coff $(RC_DEFINES) $(RC_INCLUDES) $(RC_FLAGS) C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\resources\AutoHotkey.rc CMakeFiles\AutoHotkey64.dir\source\resources\AutoHotkey.rc.obj
 
 # Object files for target AutoHotkey64
@@ -894,6 +922,8 @@ AutoHotkey64_OBJECTS = \
 "CMakeFiles/AutoHotkey64.dir/source/lib/vars.cpp.obj" \
 "CMakeFiles/AutoHotkey64.dir/source/lib/wait.cpp.obj" \
 "CMakeFiles/AutoHotkey64.dir/source/lib/win.cpp.obj" \
+"CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.obj" \
+"CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.obj" \
 "CMakeFiles/AutoHotkey64.dir/source/resources/AutoHotkey.rc.obj"
 
 # External object files for target AutoHotkey64
@@ -950,13 +980,15 @@ C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: CMakeFil
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: CMakeFiles/AutoHotkey64.dir/source/lib/vars.cpp.obj
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: CMakeFiles/AutoHotkey64.dir/source/lib/wait.cpp.obj
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: CMakeFiles/AutoHotkey64.dir/source/lib/win.cpp.obj
+C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.obj
+C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.obj
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: CMakeFiles/AutoHotkey64.dir/source/resources/AutoHotkey.rc.obj
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: CMakeFiles/AutoHotkey64.dir/build.make
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: libpcre16.a
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: CMakeFiles/AutoHotkey64.dir/linkLibs.rsp
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: CMakeFiles/AutoHotkey64.dir/objects1.rsp
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe: CMakeFiles/AutoHotkey64.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Linking CXX executable C:\Users\uphol\Documents\Design\Coding\AutoHotkey\bin\AutoHotkey64.exe"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_55) "Linking CXX executable C:\Users\uphol\Documents\Design\Coding\AutoHotkey\bin\AutoHotkey64.exe"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles\AutoHotkey64.dir\link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(AutoHotkey VERSION 2.1.0 LANGUAGES CXX C)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
@@ -117,6 +117,19 @@ if(MSVC)
     endif()
 endif()
 
+if(MINGW)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        # GAS-syntax equivalents of x64call.asm / x64stub.asm for mingw's
+        # assembler. They mirror the MASM versions but omit the unwind
+        # directives (no SEH unwind info for these stubs in mingw builds).
+        enable_language(ASM)
+        list(APPEND AHK_SOURCES
+            source/libx64call/x64call.s
+            source/libx64call/x64stub.s
+        )
+    endif()
+endif()
+
 # Resource file for Windows
 set(AHK_RESOURCES
     source/resources/AutoHotkey.rc
@@ -135,6 +148,7 @@ function(configure_ahk_executable target_name output_dir)
     target_link_libraries(${target_name} PRIVATE
         pcre16
         wsock32
+        ws2_32   # getaddrinfo/freeaddrinfo (Debugger DBGp listener) on mingw; harmless on MSVC.
         winmm
         version
         comctl32
@@ -157,7 +171,7 @@ function(configure_ahk_executable target_name output_dir)
 
     if(MINGW)
         target_compile_options(${target_name} PRIVATE -fpermissive)
-        target_link_options(${target_name} PRIVATE -static -static-libgcc -static-libstdc++)
+        target_link_options(${target_name} PRIVATE -static -static-libgcc -static-libstdc++ -municode)
     endif()
 
     set_target_properties(${target_name} PROPERTIES

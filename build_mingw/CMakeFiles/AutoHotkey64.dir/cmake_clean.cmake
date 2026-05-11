@@ -74,6 +74,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/AutoHotkey64.dir/source/lib/wait.cpp.obj.d"
   "CMakeFiles/AutoHotkey64.dir/source/lib/win.cpp.obj"
   "CMakeFiles/AutoHotkey64.dir/source/lib/win.cpp.obj.d"
+  "CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.obj"
+  "CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.obj"
   "CMakeFiles/AutoHotkey64.dir/source/os_version.cpp.obj"
   "CMakeFiles/AutoHotkey64.dir/source/os_version.cpp.obj.d"
   "CMakeFiles/AutoHotkey64.dir/source/resources/AutoHotkey.rc.obj"
@@ -109,6 +111,6 @@ file(REMOVE_RECURSE
 )
 
 # Per-language clean rules from dependency scanning.
-foreach(lang CXX RC)
+foreach(lang ASM CXX RC)
   include(CMakeFiles/AutoHotkey64.dir/cmake_clean_${lang}.cmake OPTIONAL)
 endforeach()

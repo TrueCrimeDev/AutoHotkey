@@ -1558,6 +1558,24 @@ source/lib_pcre/pcre/pcre16_xclass.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\pcre16.dir\build.make CMakeFiles/pcre16.dir/source/lib_pcre/pcre/pcre16_xclass.c.s
 .PHONY : source/lib_pcre/pcre/pcre16_xclass.c.s
 
+source/libx64call/x64call.obj: source/libx64call/x64call.s.obj
+.PHONY : source/libx64call/x64call.obj
+
+# target to build an object file
+source/libx64call/x64call.s.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/libx64call/x64call.s.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64call.s.obj
+.PHONY : source/libx64call/x64call.s.obj
+
+source/libx64call/x64stub.obj: source/libx64call/x64stub.s.obj
+.PHONY : source/libx64call/x64stub.obj
+
+# target to build an object file
+source/libx64call/x64stub.s.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/libx64call/x64stub.s.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64stub.s.obj
+.PHONY : source/libx64call/x64stub.s.obj
+
 source/os_version.obj: source/os_version.cpp.obj
 .PHONY : source/os_version.obj
 
@@ -2145,6 +2163,8 @@ help:
 	@echo ... source/lib_pcre/pcre/pcre16_xclass.obj
 	@echo ... source/lib_pcre/pcre/pcre16_xclass.i
 	@echo ... source/lib_pcre/pcre/pcre16_xclass.s
+	@echo ... source/libx64call/x64call.obj
+	@echo ... source/libx64call/x64stub.obj
 	@echo ... source/os_version.obj
 	@echo ... source/os_version.i
 	@echo ... source/os_version.s

@@ -215,7 +215,7 @@ void RegExMatchObject::Invoke(ResultToken &aResultToken, int aID, int aFlags, Ex
 	switch (aID)
 	{
 	case M_Count: _o_return(mPatternCount - 1);
-	case M_Mark: _o_return(mMark ? mMark : _T(""));
+	case M_Mark: _o_return(mMark ? mMark : const_cast<LPTSTR>(_T(""))); // const_cast needed for gcc strict mode; the empty literal is read-only by convention.
 	case M___Enum: _o_return(new IndexEnumerator(this, ParamIndexToOptionalInt(0, 0)
 		, static_cast<IndexEnumerator::Callback>(&RegExMatchObject::GetEnumItem)));
 	}
@@ -260,7 +260,7 @@ void RegExMatchObject::Invoke(ResultToken &aResultToken, int aID, int aFlags, Ex
 	case M_Value: _o_return(mHaystack - mHaystackStart + mOffset[p*2], mOffset[p*2+1]);
 	case M_Pos: _o_return(mOffset[2*p] + 1);
 	case M_Len: _o_return(mOffset[2*p + 1]);
-	case M_Name: _o_return((mPatternName && mPatternName[p]) ? mPatternName[p] : _T(""));
+	case M_Name: _o_return((mPatternName && mPatternName[p]) ? mPatternName[p] : const_cast<LPTSTR>(_T(""))); // const_cast needed for gcc strict mode.
 	}
 }
 
@@ -623,6 +623,7 @@ break_both:
 
 	// ADD THE NEWLY-COMPILED REGEX TO THE CACHE.
 	// An earlier stage has set insert_pos to be the desired insert-position in the cache.
+	{ // Scope-wrap this_entry (a reference) so it exits scope before match_found/error labels (gcc goto-crosses-init rule).
 	pcre_cache_entry &this_entry = sCache[insert_pos]; // For performance and convenience.
 	if (this_entry.re_compiled) // An existing cache item is being overwritten, so free it's attributes.
 	{
@@ -653,6 +654,7 @@ break_both:
 
 	LeaveCriticalSection(&g_CriticalRegExCache);
 	return re_compiled; // Indicate success.
+	} // end of this_entry scope (closed before match_found/error labels for gcc goto-crosses-init rule).
 
 match_found: // RegEx was found in the cache at position sLastFound, so return the cached info back to the caller.
 	aExtra = sCache[sLastFound].extra;
@@ -933,13 +935,17 @@ FResult RegExSearch::Replace(ExprTokenType *aReplacement, int *aOutCount, optl<i
 					if (FAILED(fresult))
 						goto abort;
 					result_token.SetValue(_T(""));
-					callback_obj->Invoke(result_token, IT_CALL, nullptr, ExprTokenType{ callback_obj }, &params, 1);
+					{
+						ExprTokenType _et{ callback_obj };
+						callback_obj->Invoke(result_token, IT_CALL, nullptr, _et, &params, 1);
+					}
 					matchobj_token.object->Release();
 					if (result_token.symbol == SYM_OBJECT)
 					{
 						auto obj = result_token.object;
 						result_token.SetValue(_T(""));
-						ObjectToString(result_token, ExprTokenType{ obj }, obj);
+						ExprTokenType _et{ obj };
+						ObjectToString(result_token, _et, obj);
 						obj->Release();
 					}
 					if (result_token.Exited())

@@ -675,7 +675,7 @@ Object::~Object()
 		if (si->pointed_class) // Struct.Array or Struct.Ptr class, or a Class.
 		{
 			// Element type is inferred by overall nest size and count.
-			size_t count = max(si->item_count, 1);
+			size_t count = (si->item_count > 1) ? si->item_count : 1; // Avoid macro `max` for cross-compiler portability.
 			size_t nested_size = si->nested_object_size / count;
 			char *nest = (char*)this + si->object_size + si->nested_object_size;
 			if (nested_size == sizeof(Object*))
@@ -1319,7 +1319,8 @@ void Map::__Item(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *
 		{
 			if (ParamIndexIsOmitted(1))
 			{
-				auto result = Invoke(aResultToken, IT_GET, _T("Default"), ExprTokenType { this }, nullptr, 0);
+				ExprTokenType _et { this };
+				auto result = Invoke(aResultToken, IT_GET, _T("Default"), _et, nullptr, 0);
 				if (result == INVOKE_NOT_HANDLED)
 				{
 					if (g_script.BackCompatMode())
@@ -1795,7 +1796,8 @@ BIF_DECL(StructClass_Ptr)
 	{
 		auto cls = (Object*)aResultToken.object;
 		aResultToken.InitInvokeRetVal();
-		cls->Invoke(aResultToken, IT_CALL, nullptr, ExprTokenType{ cls }, aParam + 1, aParamCount - 1);
+		ExprTokenType _et{ cls };
+		cls->Invoke(aResultToken, IT_CALL, nullptr, _et, aParam + 1, aParamCount - 1);
 		cls->Release();
 	}
 }
@@ -3092,7 +3094,8 @@ void Array::Invoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType
 				aResultToken.CopyValueFrom(*aParam[1]);
 				return;
 			}
-			auto result = Object::Invoke(aResultToken, IT_GET, _T("Default"), ExprTokenType{this}, nullptr, 0);
+			ExprTokenType _et{this};
+			auto result = Object::Invoke(aResultToken, IT_GET, _T("Default"), _et, nullptr, 0);
 			if (result != INVOKE_NOT_HANDLED)
 				_o_return_retval;
 			if (g_script.BackCompatMode())
@@ -4599,7 +4602,8 @@ BIF_DECL(Class_CallNestedClass)
 	}
 	else
 		aResultToken.InitInvokeRetVal();
-	cls->Invoke(aResultToken, IT_CALL, nullptr, ExprTokenType { cls }, aParam + 1, aParamCount - 1);
+	ExprTokenType _et { cls };
+	cls->Invoke(aResultToken, IT_CALL, nullptr, _et, aParam + 1, aParamCount - 1);
 }
 
 
@@ -4639,5 +4643,6 @@ BIF_DECL(Class_New)
 
 	// Don't call any inherited __Init, since that would reinitialize static variables and duplicate
 	// any typed properties defined by that one class.  This either releases or returns class_obj:
-	class_obj->CallNew(aResultToken, aParam, aParamCount, ExprTokenType(class_obj));
+	ExprTokenType _et(class_obj);
+	class_obj->CallNew(aResultToken, aParam, aParamCount, _et);
 }

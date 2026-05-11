@@ -5064,7 +5064,7 @@ inline LPTSTR Script::ParseActionType(LPTSTR aBufTarget, LPTSTR aBufSource)
 
 
 
-inline ActionTypeType Script::ConvertActionType(LPCTSTR aActionTypeString)
+ActionTypeType Script::ConvertActionType(LPCTSTR aActionTypeString) // `inline` removed: mingw/gcc requires the definition to be externally linkable when called from other TUs (var.cpp).
 // inline since it's called so often, but don't keep it in the .h due to #include issues.
 {
 	// For the loop's index:
@@ -7176,6 +7176,7 @@ ResultType ScriptItemList<T,S>::Alloc(int aAllocCount)
 
 // Explicit instantiation needed for other compilation units.
 template struct ScriptItemList<ScriptModule, 16>;
+template struct ScriptItemList<Var, 32>; // mingw/gcc needs this explicit instantiation; MSVC was implicitly emitting it.
 
 
 
