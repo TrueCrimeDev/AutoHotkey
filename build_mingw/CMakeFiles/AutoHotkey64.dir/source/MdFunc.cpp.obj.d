@@ -330,6 +330,8 @@ CMakeFiles/AutoHotkey64.dir/source/MdFunc.cpp.obj: \
  C:/msys64/mingw64/include/ws2def.h \
  C:/msys64/mingw64/include/psdk_inc/_wsa_errnos.h \
  C:/msys64/mingw64/include/qos.h \
+ C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\DebugTransport.h \
+ C:/msys64/mingw64/include/io.h C:/msys64/mingw64/include/fcntl.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\os_version.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_module.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_func_impl.h \

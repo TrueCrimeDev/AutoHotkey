@@ -7,7 +7,7 @@
 	// Custom build with /ErrorStdOut runtime error support
 	// Use + instead of - so version comparison treats this as >= base version
 	// (- marks pre-release which sorts lower, + marks metadata which is ignored)
-	#define RAW_AHK_VERSION "2.1-alpha.28+Console"
+	#define RAW_AHK_VERSION "2.1-alpha.29+Console"
 #endif
 #ifdef RC_INVOKED
 	#define AHK_VERSION RAW_AHK_VERSION

@@ -129,7 +129,7 @@ struct ClassFactoryDef
 	bool is_bif;
 	ClassFactoryDef(BuiltInFunctionType aCall, int aMin, int aMax, bool aVariadic = false) : call(aCall), min_params(aMin), max_params(aMax), is_variadic(aVariadic), is_bif(true) {}
 	ClassFactoryDef(BuiltInFunctionType aCall = nullptr) : ClassFactoryDef(aCall, 1, 1, true) {}
-	ClassFactoryDef(nullptr_t) : ClassFactoryDef((BuiltInFunctionType)nullptr) {}
+	ClassFactoryDef(std::nullptr_t) : ClassFactoryDef((BuiltInFunctionType)nullptr) {}
 
 	// Object size is inferred from the return type of the parameter,
 	// so the return type must be the exact type this factory constructs.

@@ -330,6 +330,8 @@ CMakeFiles/AutoHotkey64.dir/source/script_autoit.cpp.obj: \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\Util.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\resources/resource.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\Debugger.h \
+ C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\DebugTransport.h \
+ C:/msys64/mingw64/include/io.h C:/msys64/mingw64/include/fcntl.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\os_version.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_module.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\globaldata.h \

@@ -61,4 +61,5 @@ set(CMAKE_MAKEFILE_PRODUCTS
 set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/pcre16.dir/DependInfo.cmake"
   "CMakeFiles/AutoHotkey64.dir/DependInfo.cmake"
+  "CMakeFiles/AutoHotkey64Harness.dir/DependInfo.cmake"
   )

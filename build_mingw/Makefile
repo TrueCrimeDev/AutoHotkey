@@ -66,8 +66,8 @@ CMAKE_BINARY_DIR = C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw
 
 # Special rule for the target edit_cache
 edit_cache:
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "No interactive CMake dialog available..."
-	C:\msys64\mingw64\bin\cmake.exe -E echo "No interactive CMake dialog available."
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running CMake cache editor..."
+	"C:\Program Files\CMake\bin\cmake-gui.exe" -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
 .PHONY : edit_cache
 
 # Special rule for the target edit_cache
@@ -141,12 +141,26 @@ AutoHotkey64/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/build
 .PHONY : AutoHotkey64/fast
 
+#=============================================================================
+# Target rules for targets named AutoHotkey64Harness
+
+# Build rule for target.
+AutoHotkey64Harness: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 AutoHotkey64Harness
+.PHONY : AutoHotkey64Harness
+
+# fast build rule for target.
+AutoHotkey64Harness/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/build
+.PHONY : AutoHotkey64Harness/fast
+
 source/AutoHotkey.obj: source/AutoHotkey.cpp.obj
 .PHONY : source/AutoHotkey.obj
 
 # target to build an object file
 source/AutoHotkey.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/AutoHotkey.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/AutoHotkey.cpp.obj
 .PHONY : source/AutoHotkey.cpp.obj
 
 source/AutoHotkey.i: source/AutoHotkey.cpp.i
@@ -155,6 +169,7 @@ source/AutoHotkey.i: source/AutoHotkey.cpp.i
 # target to preprocess a source file
 source/AutoHotkey.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/AutoHotkey.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/AutoHotkey.cpp.i
 .PHONY : source/AutoHotkey.cpp.i
 
 source/AutoHotkey.s: source/AutoHotkey.cpp.s
@@ -163,6 +178,7 @@ source/AutoHotkey.s: source/AutoHotkey.cpp.s
 # target to generate assembly for a file
 source/AutoHotkey.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/AutoHotkey.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/AutoHotkey.cpp.s
 .PHONY : source/AutoHotkey.cpp.s
 
 source/Debugger.obj: source/Debugger.cpp.obj
@@ -171,6 +187,7 @@ source/Debugger.obj: source/Debugger.cpp.obj
 # target to build an object file
 source/Debugger.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/Debugger.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.obj
 .PHONY : source/Debugger.cpp.obj
 
 source/Debugger.i: source/Debugger.cpp.i
@@ -179,6 +196,7 @@ source/Debugger.i: source/Debugger.cpp.i
 # target to preprocess a source file
 source/Debugger.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/Debugger.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.i
 .PHONY : source/Debugger.cpp.i
 
 source/Debugger.s: source/Debugger.cpp.s
@@ -187,6 +205,7 @@ source/Debugger.s: source/Debugger.cpp.s
 # target to generate assembly for a file
 source/Debugger.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/Debugger.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.s
 .PHONY : source/Debugger.cpp.s
 
 source/MdFunc.obj: source/MdFunc.cpp.obj
@@ -195,6 +214,7 @@ source/MdFunc.obj: source/MdFunc.cpp.obj
 # target to build an object file
 source/MdFunc.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/MdFunc.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/MdFunc.cpp.obj
 .PHONY : source/MdFunc.cpp.obj
 
 source/MdFunc.i: source/MdFunc.cpp.i
@@ -203,6 +223,7 @@ source/MdFunc.i: source/MdFunc.cpp.i
 # target to preprocess a source file
 source/MdFunc.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/MdFunc.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/MdFunc.cpp.i
 .PHONY : source/MdFunc.cpp.i
 
 source/MdFunc.s: source/MdFunc.cpp.s
@@ -211,6 +232,7 @@ source/MdFunc.s: source/MdFunc.cpp.s
 # target to generate assembly for a file
 source/MdFunc.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/MdFunc.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/MdFunc.cpp.s
 .PHONY : source/MdFunc.cpp.s
 
 source/SimpleHeap.obj: source/SimpleHeap.cpp.obj
@@ -219,6 +241,7 @@ source/SimpleHeap.obj: source/SimpleHeap.cpp.obj
 # target to build an object file
 source/SimpleHeap.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/SimpleHeap.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/SimpleHeap.cpp.obj
 .PHONY : source/SimpleHeap.cpp.obj
 
 source/SimpleHeap.i: source/SimpleHeap.cpp.i
@@ -227,6 +250,7 @@ source/SimpleHeap.i: source/SimpleHeap.cpp.i
 # target to preprocess a source file
 source/SimpleHeap.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/SimpleHeap.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/SimpleHeap.cpp.i
 .PHONY : source/SimpleHeap.cpp.i
 
 source/SimpleHeap.s: source/SimpleHeap.cpp.s
@@ -235,6 +259,7 @@ source/SimpleHeap.s: source/SimpleHeap.cpp.s
 # target to generate assembly for a file
 source/SimpleHeap.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/SimpleHeap.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/SimpleHeap.cpp.s
 .PHONY : source/SimpleHeap.cpp.s
 
 source/StringConv.obj: source/StringConv.cpp.obj
@@ -243,6 +268,7 @@ source/StringConv.obj: source/StringConv.cpp.obj
 # target to build an object file
 source/StringConv.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/StringConv.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/StringConv.cpp.obj
 .PHONY : source/StringConv.cpp.obj
 
 source/StringConv.i: source/StringConv.cpp.i
@@ -251,6 +277,7 @@ source/StringConv.i: source/StringConv.cpp.i
 # target to preprocess a source file
 source/StringConv.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/StringConv.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/StringConv.cpp.i
 .PHONY : source/StringConv.cpp.i
 
 source/StringConv.s: source/StringConv.cpp.s
@@ -259,6 +286,7 @@ source/StringConv.s: source/StringConv.cpp.s
 # target to generate assembly for a file
 source/StringConv.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/StringConv.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/StringConv.cpp.s
 .PHONY : source/StringConv.cpp.s
 
 source/TextIO.obj: source/TextIO.cpp.obj
@@ -267,6 +295,7 @@ source/TextIO.obj: source/TextIO.cpp.obj
 # target to build an object file
 source/TextIO.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/TextIO.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/TextIO.cpp.obj
 .PHONY : source/TextIO.cpp.obj
 
 source/TextIO.i: source/TextIO.cpp.i
@@ -275,6 +304,7 @@ source/TextIO.i: source/TextIO.cpp.i
 # target to preprocess a source file
 source/TextIO.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/TextIO.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/TextIO.cpp.i
 .PHONY : source/TextIO.cpp.i
 
 source/TextIO.s: source/TextIO.cpp.s
@@ -283,6 +313,7 @@ source/TextIO.s: source/TextIO.cpp.s
 # target to generate assembly for a file
 source/TextIO.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/TextIO.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/TextIO.cpp.s
 .PHONY : source/TextIO.cpp.s
 
 source/WinGroup.obj: source/WinGroup.cpp.obj
@@ -291,6 +322,7 @@ source/WinGroup.obj: source/WinGroup.cpp.obj
 # target to build an object file
 source/WinGroup.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/WinGroup.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/WinGroup.cpp.obj
 .PHONY : source/WinGroup.cpp.obj
 
 source/WinGroup.i: source/WinGroup.cpp.i
@@ -299,6 +331,7 @@ source/WinGroup.i: source/WinGroup.cpp.i
 # target to preprocess a source file
 source/WinGroup.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/WinGroup.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/WinGroup.cpp.i
 .PHONY : source/WinGroup.cpp.i
 
 source/WinGroup.s: source/WinGroup.cpp.s
@@ -307,6 +340,7 @@ source/WinGroup.s: source/WinGroup.cpp.s
 # target to generate assembly for a file
 source/WinGroup.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/WinGroup.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/WinGroup.cpp.s
 .PHONY : source/WinGroup.cpp.s
 
 source/ahkversion.obj: source/ahkversion.cpp.obj
@@ -315,6 +349,7 @@ source/ahkversion.obj: source/ahkversion.cpp.obj
 # target to build an object file
 source/ahkversion.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/ahkversion.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/ahkversion.cpp.obj
 .PHONY : source/ahkversion.cpp.obj
 
 source/ahkversion.i: source/ahkversion.cpp.i
@@ -323,6 +358,7 @@ source/ahkversion.i: source/ahkversion.cpp.i
 # target to preprocess a source file
 source/ahkversion.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/ahkversion.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/ahkversion.cpp.i
 .PHONY : source/ahkversion.cpp.i
 
 source/ahkversion.s: source/ahkversion.cpp.s
@@ -331,6 +367,7 @@ source/ahkversion.s: source/ahkversion.cpp.s
 # target to generate assembly for a file
 source/ahkversion.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/ahkversion.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/ahkversion.cpp.s
 .PHONY : source/ahkversion.cpp.s
 
 source/application.obj: source/application.cpp.obj
@@ -339,6 +376,7 @@ source/application.obj: source/application.cpp.obj
 # target to build an object file
 source/application.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/application.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/application.cpp.obj
 .PHONY : source/application.cpp.obj
 
 source/application.i: source/application.cpp.i
@@ -347,6 +385,7 @@ source/application.i: source/application.cpp.i
 # target to preprocess a source file
 source/application.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/application.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/application.cpp.i
 .PHONY : source/application.cpp.i
 
 source/application.s: source/application.cpp.s
@@ -355,6 +394,7 @@ source/application.s: source/application.cpp.s
 # target to generate assembly for a file
 source/application.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/application.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/application.cpp.s
 .PHONY : source/application.cpp.s
 
 source/clipboard.obj: source/clipboard.cpp.obj
@@ -363,6 +403,7 @@ source/clipboard.obj: source/clipboard.cpp.obj
 # target to build an object file
 source/clipboard.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/clipboard.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/clipboard.cpp.obj
 .PHONY : source/clipboard.cpp.obj
 
 source/clipboard.i: source/clipboard.cpp.i
@@ -371,6 +412,7 @@ source/clipboard.i: source/clipboard.cpp.i
 # target to preprocess a source file
 source/clipboard.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/clipboard.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/clipboard.cpp.i
 .PHONY : source/clipboard.cpp.i
 
 source/clipboard.s: source/clipboard.cpp.s
@@ -379,6 +421,7 @@ source/clipboard.s: source/clipboard.cpp.s
 # target to generate assembly for a file
 source/clipboard.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/clipboard.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/clipboard.cpp.s
 .PHONY : source/clipboard.cpp.s
 
 source/error.obj: source/error.cpp.obj
@@ -387,6 +430,7 @@ source/error.obj: source/error.cpp.obj
 # target to build an object file
 source/error.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/error.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.obj
 .PHONY : source/error.cpp.obj
 
 source/error.i: source/error.cpp.i
@@ -395,6 +439,7 @@ source/error.i: source/error.cpp.i
 # target to preprocess a source file
 source/error.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/error.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.i
 .PHONY : source/error.cpp.i
 
 source/error.s: source/error.cpp.s
@@ -403,6 +448,7 @@ source/error.s: source/error.cpp.s
 # target to generate assembly for a file
 source/error.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/error.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.s
 .PHONY : source/error.cpp.s
 
 source/globaldata.obj: source/globaldata.cpp.obj
@@ -411,6 +457,7 @@ source/globaldata.obj: source/globaldata.cpp.obj
 # target to build an object file
 source/globaldata.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/globaldata.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.obj
 .PHONY : source/globaldata.cpp.obj
 
 source/globaldata.i: source/globaldata.cpp.i
@@ -419,6 +466,7 @@ source/globaldata.i: source/globaldata.cpp.i
 # target to preprocess a source file
 source/globaldata.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/globaldata.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.i
 .PHONY : source/globaldata.cpp.i
 
 source/globaldata.s: source/globaldata.cpp.s
@@ -427,6 +475,7 @@ source/globaldata.s: source/globaldata.cpp.s
 # target to generate assembly for a file
 source/globaldata.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/globaldata.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.s
 .PHONY : source/globaldata.cpp.s
 
 source/hook.obj: source/hook.cpp.obj
@@ -435,6 +484,7 @@ source/hook.obj: source/hook.cpp.obj
 # target to build an object file
 source/hook.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/hook.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/hook.cpp.obj
 .PHONY : source/hook.cpp.obj
 
 source/hook.i: source/hook.cpp.i
@@ -443,6 +493,7 @@ source/hook.i: source/hook.cpp.i
 # target to preprocess a source file
 source/hook.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/hook.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/hook.cpp.i
 .PHONY : source/hook.cpp.i
 
 source/hook.s: source/hook.cpp.s
@@ -451,6 +502,7 @@ source/hook.s: source/hook.cpp.s
 # target to generate assembly for a file
 source/hook.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/hook.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/hook.cpp.s
 .PHONY : source/hook.cpp.s
 
 source/hotkey.obj: source/hotkey.cpp.obj
@@ -459,6 +511,7 @@ source/hotkey.obj: source/hotkey.cpp.obj
 # target to build an object file
 source/hotkey.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/hotkey.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/hotkey.cpp.obj
 .PHONY : source/hotkey.cpp.obj
 
 source/hotkey.i: source/hotkey.cpp.i
@@ -467,6 +520,7 @@ source/hotkey.i: source/hotkey.cpp.i
 # target to preprocess a source file
 source/hotkey.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/hotkey.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/hotkey.cpp.i
 .PHONY : source/hotkey.cpp.i
 
 source/hotkey.s: source/hotkey.cpp.s
@@ -475,6 +529,7 @@ source/hotkey.s: source/hotkey.cpp.s
 # target to generate assembly for a file
 source/hotkey.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/hotkey.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/hotkey.cpp.s
 .PHONY : source/hotkey.cpp.s
 
 source/input_object.obj: source/input_object.cpp.obj
@@ -483,6 +538,7 @@ source/input_object.obj: source/input_object.cpp.obj
 # target to build an object file
 source/input_object.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/input_object.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/input_object.cpp.obj
 .PHONY : source/input_object.cpp.obj
 
 source/input_object.i: source/input_object.cpp.i
@@ -491,6 +547,7 @@ source/input_object.i: source/input_object.cpp.i
 # target to preprocess a source file
 source/input_object.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/input_object.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/input_object.cpp.i
 .PHONY : source/input_object.cpp.i
 
 source/input_object.s: source/input_object.cpp.s
@@ -499,6 +556,7 @@ source/input_object.s: source/input_object.cpp.s
 # target to generate assembly for a file
 source/input_object.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/input_object.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/input_object.cpp.s
 .PHONY : source/input_object.cpp.s
 
 source/keyboard_mouse.obj: source/keyboard_mouse.cpp.obj
@@ -507,6 +565,7 @@ source/keyboard_mouse.obj: source/keyboard_mouse.cpp.obj
 # target to build an object file
 source/keyboard_mouse.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/keyboard_mouse.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/keyboard_mouse.cpp.obj
 .PHONY : source/keyboard_mouse.cpp.obj
 
 source/keyboard_mouse.i: source/keyboard_mouse.cpp.i
@@ -515,6 +574,7 @@ source/keyboard_mouse.i: source/keyboard_mouse.cpp.i
 # target to preprocess a source file
 source/keyboard_mouse.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/keyboard_mouse.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/keyboard_mouse.cpp.i
 .PHONY : source/keyboard_mouse.cpp.i
 
 source/keyboard_mouse.s: source/keyboard_mouse.cpp.s
@@ -523,6 +583,7 @@ source/keyboard_mouse.s: source/keyboard_mouse.cpp.s
 # target to generate assembly for a file
 source/keyboard_mouse.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/keyboard_mouse.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/keyboard_mouse.cpp.s
 .PHONY : source/keyboard_mouse.cpp.s
 
 source/lib/CCallback.obj: source/lib/CCallback.cpp.obj
@@ -531,6 +592,7 @@ source/lib/CCallback.obj: source/lib/CCallback.cpp.obj
 # target to build an object file
 source/lib/CCallback.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/CCallback.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/CCallback.cpp.obj
 .PHONY : source/lib/CCallback.cpp.obj
 
 source/lib/CCallback.i: source/lib/CCallback.cpp.i
@@ -539,6 +601,7 @@ source/lib/CCallback.i: source/lib/CCallback.cpp.i
 # target to preprocess a source file
 source/lib/CCallback.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/CCallback.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/CCallback.cpp.i
 .PHONY : source/lib/CCallback.cpp.i
 
 source/lib/CCallback.s: source/lib/CCallback.cpp.s
@@ -547,6 +610,7 @@ source/lib/CCallback.s: source/lib/CCallback.cpp.s
 # target to generate assembly for a file
 source/lib/CCallback.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/CCallback.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/CCallback.cpp.s
 .PHONY : source/lib/CCallback.cpp.s
 
 source/lib/DllCall.obj: source/lib/DllCall.cpp.obj
@@ -555,6 +619,7 @@ source/lib/DllCall.obj: source/lib/DllCall.cpp.obj
 # target to build an object file
 source/lib/DllCall.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/DllCall.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/DllCall.cpp.obj
 .PHONY : source/lib/DllCall.cpp.obj
 
 source/lib/DllCall.i: source/lib/DllCall.cpp.i
@@ -563,6 +628,7 @@ source/lib/DllCall.i: source/lib/DllCall.cpp.i
 # target to preprocess a source file
 source/lib/DllCall.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/DllCall.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/DllCall.cpp.i
 .PHONY : source/lib/DllCall.cpp.i
 
 source/lib/DllCall.s: source/lib/DllCall.cpp.s
@@ -571,6 +637,7 @@ source/lib/DllCall.s: source/lib/DllCall.cpp.s
 # target to generate assembly for a file
 source/lib/DllCall.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/DllCall.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/DllCall.cpp.s
 .PHONY : source/lib/DllCall.cpp.s
 
 source/lib/Gui.ListView.obj: source/lib/Gui.ListView.cpp.obj
@@ -579,6 +646,7 @@ source/lib/Gui.ListView.obj: source/lib/Gui.ListView.cpp.obj
 # target to build an object file
 source/lib/Gui.ListView.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/Gui.ListView.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.ListView.cpp.obj
 .PHONY : source/lib/Gui.ListView.cpp.obj
 
 source/lib/Gui.ListView.i: source/lib/Gui.ListView.cpp.i
@@ -587,6 +655,7 @@ source/lib/Gui.ListView.i: source/lib/Gui.ListView.cpp.i
 # target to preprocess a source file
 source/lib/Gui.ListView.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/Gui.ListView.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.ListView.cpp.i
 .PHONY : source/lib/Gui.ListView.cpp.i
 
 source/lib/Gui.ListView.s: source/lib/Gui.ListView.cpp.s
@@ -595,6 +664,7 @@ source/lib/Gui.ListView.s: source/lib/Gui.ListView.cpp.s
 # target to generate assembly for a file
 source/lib/Gui.ListView.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/Gui.ListView.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.ListView.cpp.s
 .PHONY : source/lib/Gui.ListView.cpp.s
 
 source/lib/Gui.StatusBar.obj: source/lib/Gui.StatusBar.cpp.obj
@@ -603,6 +673,7 @@ source/lib/Gui.StatusBar.obj: source/lib/Gui.StatusBar.cpp.obj
 # target to build an object file
 source/lib/Gui.StatusBar.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/Gui.StatusBar.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.StatusBar.cpp.obj
 .PHONY : source/lib/Gui.StatusBar.cpp.obj
 
 source/lib/Gui.StatusBar.i: source/lib/Gui.StatusBar.cpp.i
@@ -611,6 +682,7 @@ source/lib/Gui.StatusBar.i: source/lib/Gui.StatusBar.cpp.i
 # target to preprocess a source file
 source/lib/Gui.StatusBar.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/Gui.StatusBar.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.StatusBar.cpp.i
 .PHONY : source/lib/Gui.StatusBar.cpp.i
 
 source/lib/Gui.StatusBar.s: source/lib/Gui.StatusBar.cpp.s
@@ -619,6 +691,7 @@ source/lib/Gui.StatusBar.s: source/lib/Gui.StatusBar.cpp.s
 # target to generate assembly for a file
 source/lib/Gui.StatusBar.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/Gui.StatusBar.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.StatusBar.cpp.s
 .PHONY : source/lib/Gui.StatusBar.cpp.s
 
 source/lib/Gui.TreeView.obj: source/lib/Gui.TreeView.cpp.obj
@@ -627,6 +700,7 @@ source/lib/Gui.TreeView.obj: source/lib/Gui.TreeView.cpp.obj
 # target to build an object file
 source/lib/Gui.TreeView.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/Gui.TreeView.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.TreeView.cpp.obj
 .PHONY : source/lib/Gui.TreeView.cpp.obj
 
 source/lib/Gui.TreeView.i: source/lib/Gui.TreeView.cpp.i
@@ -635,6 +709,7 @@ source/lib/Gui.TreeView.i: source/lib/Gui.TreeView.cpp.i
 # target to preprocess a source file
 source/lib/Gui.TreeView.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/Gui.TreeView.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.TreeView.cpp.i
 .PHONY : source/lib/Gui.TreeView.cpp.i
 
 source/lib/Gui.TreeView.s: source/lib/Gui.TreeView.cpp.s
@@ -643,6 +718,7 @@ source/lib/Gui.TreeView.s: source/lib/Gui.TreeView.cpp.s
 # target to generate assembly for a file
 source/lib/Gui.TreeView.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/Gui.TreeView.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.TreeView.cpp.s
 .PHONY : source/lib/Gui.TreeView.cpp.s
 
 source/lib/InputBox.obj: source/lib/InputBox.cpp.obj
@@ -651,6 +727,7 @@ source/lib/InputBox.obj: source/lib/InputBox.cpp.obj
 # target to build an object file
 source/lib/InputBox.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/InputBox.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/InputBox.cpp.obj
 .PHONY : source/lib/InputBox.cpp.obj
 
 source/lib/InputBox.i: source/lib/InputBox.cpp.i
@@ -659,6 +736,7 @@ source/lib/InputBox.i: source/lib/InputBox.cpp.i
 # target to preprocess a source file
 source/lib/InputBox.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/InputBox.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/InputBox.cpp.i
 .PHONY : source/lib/InputBox.cpp.i
 
 source/lib/InputBox.s: source/lib/InputBox.cpp.s
@@ -667,6 +745,7 @@ source/lib/InputBox.s: source/lib/InputBox.cpp.s
 # target to generate assembly for a file
 source/lib/InputBox.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/InputBox.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/InputBox.cpp.s
 .PHONY : source/lib/InputBox.cpp.s
 
 source/lib/drive.obj: source/lib/drive.cpp.obj
@@ -675,6 +754,7 @@ source/lib/drive.obj: source/lib/drive.cpp.obj
 # target to build an object file
 source/lib/drive.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/drive.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/drive.cpp.obj
 .PHONY : source/lib/drive.cpp.obj
 
 source/lib/drive.i: source/lib/drive.cpp.i
@@ -683,6 +763,7 @@ source/lib/drive.i: source/lib/drive.cpp.i
 # target to preprocess a source file
 source/lib/drive.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/drive.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/drive.cpp.i
 .PHONY : source/lib/drive.cpp.i
 
 source/lib/drive.s: source/lib/drive.cpp.s
@@ -691,6 +772,7 @@ source/lib/drive.s: source/lib/drive.cpp.s
 # target to generate assembly for a file
 source/lib/drive.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/drive.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/drive.cpp.s
 .PHONY : source/lib/drive.cpp.s
 
 source/lib/env.obj: source/lib/env.cpp.obj
@@ -699,6 +781,7 @@ source/lib/env.obj: source/lib/env.cpp.obj
 # target to build an object file
 source/lib/env.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/env.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/env.cpp.obj
 .PHONY : source/lib/env.cpp.obj
 
 source/lib/env.i: source/lib/env.cpp.i
@@ -707,6 +790,7 @@ source/lib/env.i: source/lib/env.cpp.i
 # target to preprocess a source file
 source/lib/env.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/env.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/env.cpp.i
 .PHONY : source/lib/env.cpp.i
 
 source/lib/env.s: source/lib/env.cpp.s
@@ -715,6 +799,7 @@ source/lib/env.s: source/lib/env.cpp.s
 # target to generate assembly for a file
 source/lib/env.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/env.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/env.cpp.s
 .PHONY : source/lib/env.cpp.s
 
 source/lib/file.obj: source/lib/file.cpp.obj
@@ -723,6 +808,7 @@ source/lib/file.obj: source/lib/file.cpp.obj
 # target to build an object file
 source/lib/file.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/file.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/file.cpp.obj
 .PHONY : source/lib/file.cpp.obj
 
 source/lib/file.i: source/lib/file.cpp.i
@@ -731,6 +817,7 @@ source/lib/file.i: source/lib/file.cpp.i
 # target to preprocess a source file
 source/lib/file.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/file.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/file.cpp.i
 .PHONY : source/lib/file.cpp.i
 
 source/lib/file.s: source/lib/file.cpp.s
@@ -739,6 +826,7 @@ source/lib/file.s: source/lib/file.cpp.s
 # target to generate assembly for a file
 source/lib/file.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/file.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/file.cpp.s
 .PHONY : source/lib/file.cpp.s
 
 source/lib/input.obj: source/lib/input.cpp.obj
@@ -747,6 +835,7 @@ source/lib/input.obj: source/lib/input.cpp.obj
 # target to build an object file
 source/lib/input.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/input.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/input.cpp.obj
 .PHONY : source/lib/input.cpp.obj
 
 source/lib/input.i: source/lib/input.cpp.i
@@ -755,6 +844,7 @@ source/lib/input.i: source/lib/input.cpp.i
 # target to preprocess a source file
 source/lib/input.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/input.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/input.cpp.i
 .PHONY : source/lib/input.cpp.i
 
 source/lib/input.s: source/lib/input.cpp.s
@@ -763,6 +853,7 @@ source/lib/input.s: source/lib/input.cpp.s
 # target to generate assembly for a file
 source/lib/input.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/input.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/input.cpp.s
 .PHONY : source/lib/input.cpp.s
 
 source/lib/interop.obj: source/lib/interop.cpp.obj
@@ -771,6 +862,7 @@ source/lib/interop.obj: source/lib/interop.cpp.obj
 # target to build an object file
 source/lib/interop.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/interop.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/interop.cpp.obj
 .PHONY : source/lib/interop.cpp.obj
 
 source/lib/interop.i: source/lib/interop.cpp.i
@@ -779,6 +871,7 @@ source/lib/interop.i: source/lib/interop.cpp.i
 # target to preprocess a source file
 source/lib/interop.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/interop.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/interop.cpp.i
 .PHONY : source/lib/interop.cpp.i
 
 source/lib/interop.s: source/lib/interop.cpp.s
@@ -787,6 +880,7 @@ source/lib/interop.s: source/lib/interop.cpp.s
 # target to generate assembly for a file
 source/lib/interop.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/interop.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/interop.cpp.s
 .PHONY : source/lib/interop.cpp.s
 
 source/lib/math.obj: source/lib/math.cpp.obj
@@ -795,6 +889,7 @@ source/lib/math.obj: source/lib/math.cpp.obj
 # target to build an object file
 source/lib/math.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/math.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/math.cpp.obj
 .PHONY : source/lib/math.cpp.obj
 
 source/lib/math.i: source/lib/math.cpp.i
@@ -803,6 +898,7 @@ source/lib/math.i: source/lib/math.cpp.i
 # target to preprocess a source file
 source/lib/math.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/math.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/math.cpp.i
 .PHONY : source/lib/math.cpp.i
 
 source/lib/math.s: source/lib/math.cpp.s
@@ -811,6 +907,7 @@ source/lib/math.s: source/lib/math.cpp.s
 # target to generate assembly for a file
 source/lib/math.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/math.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/math.cpp.s
 .PHONY : source/lib/math.cpp.s
 
 source/lib/pixel.obj: source/lib/pixel.cpp.obj
@@ -819,6 +916,7 @@ source/lib/pixel.obj: source/lib/pixel.cpp.obj
 # target to build an object file
 source/lib/pixel.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/pixel.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/pixel.cpp.obj
 .PHONY : source/lib/pixel.cpp.obj
 
 source/lib/pixel.i: source/lib/pixel.cpp.i
@@ -827,6 +925,7 @@ source/lib/pixel.i: source/lib/pixel.cpp.i
 # target to preprocess a source file
 source/lib/pixel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/pixel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/pixel.cpp.i
 .PHONY : source/lib/pixel.cpp.i
 
 source/lib/pixel.s: source/lib/pixel.cpp.s
@@ -835,6 +934,7 @@ source/lib/pixel.s: source/lib/pixel.cpp.s
 # target to generate assembly for a file
 source/lib/pixel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/pixel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/pixel.cpp.s
 .PHONY : source/lib/pixel.cpp.s
 
 source/lib/process.obj: source/lib/process.cpp.obj
@@ -843,6 +943,7 @@ source/lib/process.obj: source/lib/process.cpp.obj
 # target to build an object file
 source/lib/process.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/process.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/process.cpp.obj
 .PHONY : source/lib/process.cpp.obj
 
 source/lib/process.i: source/lib/process.cpp.i
@@ -851,6 +952,7 @@ source/lib/process.i: source/lib/process.cpp.i
 # target to preprocess a source file
 source/lib/process.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/process.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/process.cpp.i
 .PHONY : source/lib/process.cpp.i
 
 source/lib/process.s: source/lib/process.cpp.s
@@ -859,6 +961,7 @@ source/lib/process.s: source/lib/process.cpp.s
 # target to generate assembly for a file
 source/lib/process.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/process.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/process.cpp.s
 .PHONY : source/lib/process.cpp.s
 
 source/lib/regex.obj: source/lib/regex.cpp.obj
@@ -867,6 +970,7 @@ source/lib/regex.obj: source/lib/regex.cpp.obj
 # target to build an object file
 source/lib/regex.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/regex.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/regex.cpp.obj
 .PHONY : source/lib/regex.cpp.obj
 
 source/lib/regex.i: source/lib/regex.cpp.i
@@ -875,6 +979,7 @@ source/lib/regex.i: source/lib/regex.cpp.i
 # target to preprocess a source file
 source/lib/regex.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/regex.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/regex.cpp.i
 .PHONY : source/lib/regex.cpp.i
 
 source/lib/regex.s: source/lib/regex.cpp.s
@@ -883,6 +988,7 @@ source/lib/regex.s: source/lib/regex.cpp.s
 # target to generate assembly for a file
 source/lib/regex.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/regex.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/regex.cpp.s
 .PHONY : source/lib/regex.cpp.s
 
 source/lib/sound.obj: source/lib/sound.cpp.obj
@@ -891,6 +997,7 @@ source/lib/sound.obj: source/lib/sound.cpp.obj
 # target to build an object file
 source/lib/sound.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/sound.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/sound.cpp.obj
 .PHONY : source/lib/sound.cpp.obj
 
 source/lib/sound.i: source/lib/sound.cpp.i
@@ -899,6 +1006,7 @@ source/lib/sound.i: source/lib/sound.cpp.i
 # target to preprocess a source file
 source/lib/sound.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/sound.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/sound.cpp.i
 .PHONY : source/lib/sound.cpp.i
 
 source/lib/sound.s: source/lib/sound.cpp.s
@@ -907,6 +1015,7 @@ source/lib/sound.s: source/lib/sound.cpp.s
 # target to generate assembly for a file
 source/lib/sound.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/sound.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/sound.cpp.s
 .PHONY : source/lib/sound.cpp.s
 
 source/lib/string.obj: source/lib/string.cpp.obj
@@ -915,6 +1024,7 @@ source/lib/string.obj: source/lib/string.cpp.obj
 # target to build an object file
 source/lib/string.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/string.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/string.cpp.obj
 .PHONY : source/lib/string.cpp.obj
 
 source/lib/string.i: source/lib/string.cpp.i
@@ -923,6 +1033,7 @@ source/lib/string.i: source/lib/string.cpp.i
 # target to preprocess a source file
 source/lib/string.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/string.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/string.cpp.i
 .PHONY : source/lib/string.cpp.i
 
 source/lib/string.s: source/lib/string.cpp.s
@@ -931,6 +1042,7 @@ source/lib/string.s: source/lib/string.cpp.s
 # target to generate assembly for a file
 source/lib/string.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/string.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/string.cpp.s
 .PHONY : source/lib/string.cpp.s
 
 source/lib/vars.obj: source/lib/vars.cpp.obj
@@ -939,6 +1051,7 @@ source/lib/vars.obj: source/lib/vars.cpp.obj
 # target to build an object file
 source/lib/vars.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/vars.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/vars.cpp.obj
 .PHONY : source/lib/vars.cpp.obj
 
 source/lib/vars.i: source/lib/vars.cpp.i
@@ -947,6 +1060,7 @@ source/lib/vars.i: source/lib/vars.cpp.i
 # target to preprocess a source file
 source/lib/vars.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/vars.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/vars.cpp.i
 .PHONY : source/lib/vars.cpp.i
 
 source/lib/vars.s: source/lib/vars.cpp.s
@@ -955,6 +1069,7 @@ source/lib/vars.s: source/lib/vars.cpp.s
 # target to generate assembly for a file
 source/lib/vars.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/vars.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/vars.cpp.s
 .PHONY : source/lib/vars.cpp.s
 
 source/lib/wait.obj: source/lib/wait.cpp.obj
@@ -963,6 +1078,7 @@ source/lib/wait.obj: source/lib/wait.cpp.obj
 # target to build an object file
 source/lib/wait.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/wait.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/wait.cpp.obj
 .PHONY : source/lib/wait.cpp.obj
 
 source/lib/wait.i: source/lib/wait.cpp.i
@@ -971,6 +1087,7 @@ source/lib/wait.i: source/lib/wait.cpp.i
 # target to preprocess a source file
 source/lib/wait.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/wait.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/wait.cpp.i
 .PHONY : source/lib/wait.cpp.i
 
 source/lib/wait.s: source/lib/wait.cpp.s
@@ -979,6 +1096,7 @@ source/lib/wait.s: source/lib/wait.cpp.s
 # target to generate assembly for a file
 source/lib/wait.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/wait.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/wait.cpp.s
 .PHONY : source/lib/wait.cpp.s
 
 source/lib/win.obj: source/lib/win.cpp.obj
@@ -987,6 +1105,7 @@ source/lib/win.obj: source/lib/win.cpp.obj
 # target to build an object file
 source/lib/win.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/win.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.obj
 .PHONY : source/lib/win.cpp.obj
 
 source/lib/win.i: source/lib/win.cpp.i
@@ -995,6 +1114,7 @@ source/lib/win.i: source/lib/win.cpp.i
 # target to preprocess a source file
 source/lib/win.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/win.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.i
 .PHONY : source/lib/win.cpp.i
 
 source/lib/win.s: source/lib/win.cpp.s
@@ -1003,6 +1123,7 @@ source/lib/win.s: source/lib/win.cpp.s
 # target to generate assembly for a file
 source/lib/win.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/lib/win.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.s
 .PHONY : source/lib/win.cpp.s
 
 source/lib_pcre/pcre/pcre16_chartables.obj: source/lib_pcre/pcre/pcre16_chartables.c.obj
@@ -1443,6 +1564,7 @@ source/os_version.obj: source/os_version.cpp.obj
 # target to build an object file
 source/os_version.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/os_version.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/os_version.cpp.obj
 .PHONY : source/os_version.cpp.obj
 
 source/os_version.i: source/os_version.cpp.i
@@ -1451,6 +1573,7 @@ source/os_version.i: source/os_version.cpp.i
 # target to preprocess a source file
 source/os_version.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/os_version.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/os_version.cpp.i
 .PHONY : source/os_version.cpp.i
 
 source/os_version.s: source/os_version.cpp.s
@@ -1459,6 +1582,7 @@ source/os_version.s: source/os_version.cpp.s
 # target to generate assembly for a file
 source/os_version.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/os_version.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/os_version.cpp.s
 .PHONY : source/os_version.cpp.s
 
 source/resources/AutoHotkey.obj: source/resources/AutoHotkey.rc.obj
@@ -1467,6 +1591,7 @@ source/resources/AutoHotkey.obj: source/resources/AutoHotkey.rc.obj
 # target to build an object file
 source/resources/AutoHotkey.rc.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/resources/AutoHotkey.rc.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/resources/AutoHotkey.rc.obj
 .PHONY : source/resources/AutoHotkey.rc.obj
 
 source/script.obj: source/script.cpp.obj
@@ -1475,6 +1600,7 @@ source/script.obj: source/script.cpp.obj
 # target to build an object file
 source/script.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.obj
 .PHONY : source/script.cpp.obj
 
 source/script.i: source/script.cpp.i
@@ -1483,6 +1609,7 @@ source/script.i: source/script.cpp.i
 # target to preprocess a source file
 source/script.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.i
 .PHONY : source/script.cpp.i
 
 source/script.s: source/script.cpp.s
@@ -1491,6 +1618,7 @@ source/script.s: source/script.cpp.s
 # target to generate assembly for a file
 source/script.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.s
 .PHONY : source/script.cpp.s
 
 source/script2.obj: source/script2.cpp.obj
@@ -1499,6 +1627,7 @@ source/script2.obj: source/script2.cpp.obj
 # target to build an object file
 source/script2.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script2.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script2.cpp.obj
 .PHONY : source/script2.cpp.obj
 
 source/script2.i: source/script2.cpp.i
@@ -1507,6 +1636,7 @@ source/script2.i: source/script2.cpp.i
 # target to preprocess a source file
 source/script2.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script2.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script2.cpp.i
 .PHONY : source/script2.cpp.i
 
 source/script2.s: source/script2.cpp.s
@@ -1515,6 +1645,7 @@ source/script2.s: source/script2.cpp.s
 # target to generate assembly for a file
 source/script2.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script2.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script2.cpp.s
 .PHONY : source/script2.cpp.s
 
 source/script_autoit.obj: source/script_autoit.cpp.obj
@@ -1523,6 +1654,7 @@ source/script_autoit.obj: source/script_autoit.cpp.obj
 # target to build an object file
 source/script_autoit.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_autoit.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_autoit.cpp.obj
 .PHONY : source/script_autoit.cpp.obj
 
 source/script_autoit.i: source/script_autoit.cpp.i
@@ -1531,6 +1663,7 @@ source/script_autoit.i: source/script_autoit.cpp.i
 # target to preprocess a source file
 source/script_autoit.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_autoit.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_autoit.cpp.i
 .PHONY : source/script_autoit.cpp.i
 
 source/script_autoit.s: source/script_autoit.cpp.s
@@ -1539,6 +1672,7 @@ source/script_autoit.s: source/script_autoit.cpp.s
 # target to generate assembly for a file
 source/script_autoit.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_autoit.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_autoit.cpp.s
 .PHONY : source/script_autoit.cpp.s
 
 source/script_com.obj: source/script_com.cpp.obj
@@ -1547,6 +1681,7 @@ source/script_com.obj: source/script_com.cpp.obj
 # target to build an object file
 source/script_com.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_com.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_com.cpp.obj
 .PHONY : source/script_com.cpp.obj
 
 source/script_com.i: source/script_com.cpp.i
@@ -1555,6 +1690,7 @@ source/script_com.i: source/script_com.cpp.i
 # target to preprocess a source file
 source/script_com.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_com.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_com.cpp.i
 .PHONY : source/script_com.cpp.i
 
 source/script_com.s: source/script_com.cpp.s
@@ -1563,6 +1699,7 @@ source/script_com.s: source/script_com.cpp.s
 # target to generate assembly for a file
 source/script_com.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_com.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_com.cpp.s
 .PHONY : source/script_com.cpp.s
 
 source/script_expression.obj: source/script_expression.cpp.obj
@@ -1571,6 +1708,7 @@ source/script_expression.obj: source/script_expression.cpp.obj
 # target to build an object file
 source/script_expression.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_expression.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_expression.cpp.obj
 .PHONY : source/script_expression.cpp.obj
 
 source/script_expression.i: source/script_expression.cpp.i
@@ -1579,6 +1717,7 @@ source/script_expression.i: source/script_expression.cpp.i
 # target to preprocess a source file
 source/script_expression.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_expression.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_expression.cpp.i
 .PHONY : source/script_expression.cpp.i
 
 source/script_expression.s: source/script_expression.cpp.s
@@ -1587,6 +1726,7 @@ source/script_expression.s: source/script_expression.cpp.s
 # target to generate assembly for a file
 source/script_expression.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_expression.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_expression.cpp.s
 .PHONY : source/script_expression.cpp.s
 
 source/script_gui.obj: source/script_gui.cpp.obj
@@ -1595,6 +1735,7 @@ source/script_gui.obj: source/script_gui.cpp.obj
 # target to build an object file
 source/script_gui.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_gui.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_gui.cpp.obj
 .PHONY : source/script_gui.cpp.obj
 
 source/script_gui.i: source/script_gui.cpp.i
@@ -1603,6 +1744,7 @@ source/script_gui.i: source/script_gui.cpp.i
 # target to preprocess a source file
 source/script_gui.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_gui.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_gui.cpp.i
 .PHONY : source/script_gui.cpp.i
 
 source/script_gui.s: source/script_gui.cpp.s
@@ -1611,6 +1753,7 @@ source/script_gui.s: source/script_gui.cpp.s
 # target to generate assembly for a file
 source/script_gui.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_gui.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_gui.cpp.s
 .PHONY : source/script_gui.cpp.s
 
 source/script_menu.obj: source/script_menu.cpp.obj
@@ -1619,6 +1762,7 @@ source/script_menu.obj: source/script_menu.cpp.obj
 # target to build an object file
 source/script_menu.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_menu.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_menu.cpp.obj
 .PHONY : source/script_menu.cpp.obj
 
 source/script_menu.i: source/script_menu.cpp.i
@@ -1627,6 +1771,7 @@ source/script_menu.i: source/script_menu.cpp.i
 # target to preprocess a source file
 source/script_menu.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_menu.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_menu.cpp.i
 .PHONY : source/script_menu.cpp.i
 
 source/script_menu.s: source/script_menu.cpp.s
@@ -1635,6 +1780,7 @@ source/script_menu.s: source/script_menu.cpp.s
 # target to generate assembly for a file
 source/script_menu.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_menu.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_menu.cpp.s
 .PHONY : source/script_menu.cpp.s
 
 source/script_module.obj: source/script_module.cpp.obj
@@ -1643,6 +1789,7 @@ source/script_module.obj: source/script_module.cpp.obj
 # target to build an object file
 source/script_module.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_module.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_module.cpp.obj
 .PHONY : source/script_module.cpp.obj
 
 source/script_module.i: source/script_module.cpp.i
@@ -1651,6 +1798,7 @@ source/script_module.i: source/script_module.cpp.i
 # target to preprocess a source file
 source/script_module.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_module.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_module.cpp.i
 .PHONY : source/script_module.cpp.i
 
 source/script_module.s: source/script_module.cpp.s
@@ -1659,6 +1807,7 @@ source/script_module.s: source/script_module.cpp.s
 # target to generate assembly for a file
 source/script_module.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_module.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_module.cpp.s
 .PHONY : source/script_module.cpp.s
 
 source/script_object.obj: source/script_object.cpp.obj
@@ -1667,6 +1816,7 @@ source/script_object.obj: source/script_object.cpp.obj
 # target to build an object file
 source/script_object.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_object.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_object.cpp.obj
 .PHONY : source/script_object.cpp.obj
 
 source/script_object.i: source/script_object.cpp.i
@@ -1675,6 +1825,7 @@ source/script_object.i: source/script_object.cpp.i
 # target to preprocess a source file
 source/script_object.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_object.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_object.cpp.i
 .PHONY : source/script_object.cpp.i
 
 source/script_object.s: source/script_object.cpp.s
@@ -1683,6 +1834,7 @@ source/script_object.s: source/script_object.cpp.s
 # target to generate assembly for a file
 source/script_object.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_object.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_object.cpp.s
 .PHONY : source/script_object.cpp.s
 
 source/script_object_bif.obj: source/script_object_bif.cpp.obj
@@ -1691,6 +1843,7 @@ source/script_object_bif.obj: source/script_object_bif.cpp.obj
 # target to build an object file
 source/script_object_bif.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_object_bif.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_object_bif.cpp.obj
 .PHONY : source/script_object_bif.cpp.obj
 
 source/script_object_bif.i: source/script_object_bif.cpp.i
@@ -1699,6 +1852,7 @@ source/script_object_bif.i: source/script_object_bif.cpp.i
 # target to preprocess a source file
 source/script_object_bif.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_object_bif.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_object_bif.cpp.i
 .PHONY : source/script_object_bif.cpp.i
 
 source/script_object_bif.s: source/script_object_bif.cpp.s
@@ -1707,6 +1861,7 @@ source/script_object_bif.s: source/script_object_bif.cpp.s
 # target to generate assembly for a file
 source/script_object_bif.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_object_bif.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_object_bif.cpp.s
 .PHONY : source/script_object_bif.cpp.s
 
 source/script_registry.obj: source/script_registry.cpp.obj
@@ -1715,6 +1870,7 @@ source/script_registry.obj: source/script_registry.cpp.obj
 # target to build an object file
 source/script_registry.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_registry.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_registry.cpp.obj
 .PHONY : source/script_registry.cpp.obj
 
 source/script_registry.i: source/script_registry.cpp.i
@@ -1723,6 +1879,7 @@ source/script_registry.i: source/script_registry.cpp.i
 # target to preprocess a source file
 source/script_registry.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_registry.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_registry.cpp.i
 .PHONY : source/script_registry.cpp.i
 
 source/script_registry.s: source/script_registry.cpp.s
@@ -1731,6 +1888,7 @@ source/script_registry.s: source/script_registry.cpp.s
 # target to generate assembly for a file
 source/script_registry.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/script_registry.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/script_registry.cpp.s
 .PHONY : source/script_registry.cpp.s
 
 source/util.obj: source/util.cpp.obj
@@ -1739,6 +1897,7 @@ source/util.obj: source/util.cpp.obj
 # target to build an object file
 source/util.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/util.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/util.cpp.obj
 .PHONY : source/util.cpp.obj
 
 source/util.i: source/util.cpp.i
@@ -1747,6 +1906,7 @@ source/util.i: source/util.cpp.i
 # target to preprocess a source file
 source/util.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/util.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/util.cpp.i
 .PHONY : source/util.cpp.i
 
 source/util.s: source/util.cpp.s
@@ -1755,6 +1915,7 @@ source/util.s: source/util.cpp.s
 # target to generate assembly for a file
 source/util.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/util.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/util.cpp.s
 .PHONY : source/util.cpp.s
 
 source/var.obj: source/var.cpp.obj
@@ -1763,6 +1924,7 @@ source/var.obj: source/var.cpp.obj
 # target to build an object file
 source/var.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/var.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/var.cpp.obj
 .PHONY : source/var.cpp.obj
 
 source/var.i: source/var.cpp.i
@@ -1771,6 +1933,7 @@ source/var.i: source/var.cpp.i
 # target to preprocess a source file
 source/var.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/var.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/var.cpp.i
 .PHONY : source/var.cpp.i
 
 source/var.s: source/var.cpp.s
@@ -1779,6 +1942,7 @@ source/var.s: source/var.cpp.s
 # target to generate assembly for a file
 source/var.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/var.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/var.cpp.s
 .PHONY : source/var.cpp.s
 
 source/window.obj: source/window.cpp.obj
@@ -1787,6 +1951,7 @@ source/window.obj: source/window.cpp.obj
 # target to build an object file
 source/window.cpp.obj:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/window.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/window.cpp.obj
 .PHONY : source/window.cpp.obj
 
 source/window.i: source/window.cpp.i
@@ -1795,6 +1960,7 @@ source/window.i: source/window.cpp.i
 # target to preprocess a source file
 source/window.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/window.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/window.cpp.i
 .PHONY : source/window.cpp.i
 
 source/window.s: source/window.cpp.s
@@ -1803,6 +1969,7 @@ source/window.s: source/window.cpp.s
 # target to generate assembly for a file
 source/window.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/window.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/window.cpp.s
 .PHONY : source/window.cpp.s
 
 # Help Target
@@ -1814,6 +1981,7 @@ help:
 	@echo ... edit_cache
 	@echo ... rebuild_cache
 	@echo ... AutoHotkey64
+	@echo ... AutoHotkey64Harness
 	@echo ... pcre16
 	@echo ... source/AutoHotkey.obj
 	@echo ... source/AutoHotkey.i
