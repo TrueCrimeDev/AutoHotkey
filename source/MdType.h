@@ -206,6 +206,9 @@ template<typename T> constexpr void* cast_into_voidp(T in)
 #define md_property(class_name, member_name, arg_type) \
 	md_property_get(class_name, member_name, arg_type), \
 	md_property_set(class_name, member_name, arg_type)
+#define md_property_opt(class_name, member_name, arg_type) \
+	md_property_get(class_name, member_name, arg_type), \
+	md_member(class_name, member_name, SET, (In_Opt, arg_type, Value))
 
 
 void TypedPtrToToken(MdType aType, void *aPtr, ExprTokenType &aToken);

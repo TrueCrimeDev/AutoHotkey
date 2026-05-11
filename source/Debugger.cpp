@@ -172,7 +172,7 @@ void Debugger::SetBreakpointForLineGroup(Line *line, Breakpoint *bp)
 		auto fl = func.mJumpToLine;
 		// Fat arrow functions are either removed from the main line list or come after the
 		// line which contains them, in which case our caller would have found the latter.
-		if (fl->mLineNumber == line_no && fl->mFileIndex == file_no && func.mIsFuncExpression)
+		if (fl->mLineNumber == line_no && fl->mFileIndex == file_no && func.IsInExpression())
 			fl->mBreakpoint = bp;
 		// After the script loads, a function's parameter default initializers precede mJumpToLine.
 		for (fl = fl->mPrevLine

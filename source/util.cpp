@@ -3006,12 +3006,15 @@ int FindExprDelim(LPCTSTR aBuf, TCHAR aDelimiter, int aStartIndex)
 			if (!aBuf[mark]) // i.e. it isn't safe to do ++mark.
 				return mark; // See case '\0' for comments.
 			continue;
+		case g_delimiter:
+			if (aDelimiter) // Caller wants to find a specific symbol and it's not this one.
+				continue;
+			// Fall through:
 		case ')':
 		case ']':
 		case '}':
-		case g_delimiter:
-			if (aDelimiter) // Caller wants to find a specific symbol and it's not this one.
-				continue; // Unbalanced parentheses etc are caught at a later stage.
+			// There could be unbalanced parentheses (impossible for some callers due GetLineContExpr),
+			// or '?' to be interpreted as SYM_MAYBE rather than SYM_IFF_THEN (i.e. no ':' present).
 			return mark;
 		case ':':
 			if (aDelimiter // See above.
@@ -3050,8 +3053,8 @@ int FindExprDelim(LPCTSTR aBuf, TCHAR aDelimiter, int aStartIndex)
 			// Scan for the corresponding ':' (or some other closing symbol if that's missing)
 			// so that it won't terminate the sub-expression.
 			mark = FindExprDelim(aBuf, ':', mark);
-			if (!aBuf[mark]) // i.e. it isn't safe to do ++mark.
-				return mark; // See case '\0' for comments.
+			if (aBuf[mark] != ':') // Found end of string, ')' or similar, meaning the end of this sub-expression.
+				return mark; // This '?' might be SYM_MAYBE or a syntax error.
 			continue; // The colon is also skipped via the loop's increment.
 		case g_DerefChar:
 			// Since the check at the top of the loop didn't "return", this is the beginning

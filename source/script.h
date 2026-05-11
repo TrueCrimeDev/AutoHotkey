@@ -373,7 +373,8 @@ struct ArgStruct
 enum FuncDefType : UCHAR
 {
 	FuncDefNormal = FALSE,
-	FuncDefFatArrow,
+	FuncDefFatArrowStandalone,
+	FuncDefFatArrow, // Keep in this order for range checks.
 	FuncDefExpression,
 	FuncDefExpressionResolved
 };
@@ -407,7 +408,8 @@ __int64 pow_ll(__int64 base, __int64 exp); // integer power function
 #define _f_return_p(...)		_f__ret(_f_set_retval_p(__VA_ARGS__)) // Return a string which is already in persistent memory.
 #define _f_return_retval		return  // Return the value set by _f_set_retval().
 #define _f_return_empty			_f_return_p(_T(""), 0)
-#define _f_return_unset			_f__ret(aResultToken.Unset(UnsetKind::Unset))
+#define _f_return_unset			_f__ret(aResultToken.Unset(UnsetKind::Unset)) // Follows v2.1 rules.
+#define _f_return_unset_blank	_f__ret(aResultToken.Unset(UnsetKind::Blank)) // Reverts to "" in v2.0 mode.
 #define _f_retval_buf			(aResultToken.buf)
 #define _f_retval_buf_size		MAX_NUMBER_SIZE
 #define _f_number_buf			_f_retval_buf  // An alias to show intended usage, and in case the buffer size is changed.
@@ -427,10 +429,9 @@ __int64 pow_ll(__int64 base, __int64 exp); // integer power function
 #define _o_return_FAIL			_f_return_FAIL
 #define _o_return_retval		_f_return_retval
 #define _o_return_empty			_f_return_empty
-#define _o_return_unset_blank	_o__ret(aResultToken.Unset(UnsetKind::Blank)) // Reverts to "" in v2.0 mode.
 #define _o_return_unset_(K)		_o__ret(ASSERT(aResultToken.symbol == SYM_MISSING); aResultToken.unset_kind = (K))
-#define _o_return_unset			_o_return_unset_(UnsetKind::Unset) // ExpandExpression throws UnsetError if unset is not permitted.
-#define _o_return_unset_item	_o_return_unset_(UnsetKind::UnsetItem) // ExpandExpression throws UnsetItemError if unset is not permitted.
+#define _o_return_unset_blank	_o_return_unset_(UnsetKind::Blank) // Reverts to "" in v2.0 mode.
+#define _o_return_unset			_o_return_unset_(UnsetKind::Unset) // Follows v2.1 rules.
 
 
 struct LoopFilesStruct : WIN32_FIND_DATA
@@ -1503,9 +1504,12 @@ public:
 	int mClosureCount = 0;
 
 	// Keep small members adjacent to each other to save space and improve perf. due to byte alignment:
-	FuncDefType mIsFuncExpression; // Whether this function was defined *within* an expression and is therefore allowed under a control flow statement.
+	FuncDefType mIsFuncExpression;
+	inline bool IsInExpression() { return mIsFuncExpression >= FuncDefFatArrow; } // Whether this function was defined *within* an expression and is therefore allowed under a control flow statement.
+	inline bool IsFatArrow() { return mIsFuncExpression == FuncDefFatArrow || mIsFuncExpression == FuncDefFatArrowStandalone; }
 	bool mIsStatic = false; // Whether the "static" keyword was used with a function (not method); this prevents a nested function from becoming a closure.
 	bool mBackCompatMode; // true = requires v2.0, false = requires v2.1
+	bool mHasExplicitReturn = false;
 #define VAR_DECLARE_GLOBAL (VAR_DECLARED | VAR_GLOBAL)
 #define VAR_DECLARE_LOCAL  (VAR_DECLARED | VAR_LOCAL)
 #define VAR_DECLARE_STATIC (VAR_DECLARED | VAR_LOCAL | VAR_LOCAL_STATIC)

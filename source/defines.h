@@ -179,7 +179,7 @@ enum SymbolType // For use with ExpandExpression() and IsNumeric().
 	, PURE_INTEGER, PURE_FLOAT
 	, SYM_STRING = PURE_NOT_NUMERIC, SYM_INTEGER = PURE_INTEGER, SYM_FLOAT = PURE_FLOAT // Specific operand types.
 #define IS_NUMERIC(symbol) ((symbol) == SYM_INTEGER || (symbol) == SYM_FLOAT) // Ordered for short-circuit performance.
-	, SYM_MISSING // Only used in parameter lists.
+	, SYM_MISSING
 	, SYM_VAR // An operand that is a variable's contents.
 	, SYM_OBJECT // L31: Represents an IObject interface pointer.
 	, SYM_DYNAMIC // A dynamic variable reference/double-deref.  Also used in Object::Variant to identify dynamic properties.
@@ -209,7 +209,7 @@ enum SymbolType // For use with ExpandExpression() and IsNumeric().
 	, SYM_OR_MAYBE, SYM_OR, SYM_AND // MUST BE KEPT IN THIS ORDER AND ADJACENT TO THE ABOVE for the range checks below.
 #define IS_SHORT_CIRCUIT_OPERATOR(symbol) ((symbol) <= SYM_AND && ((symbol) >= SYM_IFF_THEN || (symbol) == SYM_MAYBE)) // Excludes SYM_IFF_ELSE, which acts as a simple jump after the THEN branch is evaluated.
 #define SYM_USES_CIRCUIT_TOKEN(symbol) ((symbol) <= SYM_AND && ((symbol) >= SYM_IFF_ELSE || (symbol) == SYM_MAYBE))
-#define SYM_MAYBE_IGNORES_ON_STACK(symbol) (SYM_USES_CIRCUIT_TOKEN(symbol) && (symbol) != SYM_IFF_THEN || (symbol) == SYM_ASSIGN)
+#define SYM_MAYBE_IGNORES_ON_STACK(symbol) (SYM_USES_CIRCUIT_TOKEN(symbol) && (symbol) != SYM_IFF_THEN || (symbol) == SYM_ASSIGN || (symbol) == SYM_MISSING)
 	, SYM_IS
 	, SYM_EQUAL, SYM_EQUALCASE, SYM_NOTEQUAL, SYM_NOTEQUALCASE // =, ==, !=, !==... Keep this in sync with IS_RELATIONAL_OPERATOR() below.
 #define IS_EQUALITY_OPERATOR(symbol) (symbol >= SYM_EQUAL && symbol <= SYM_NOTEQUALCASE)
@@ -250,9 +250,8 @@ enum SymbolType // For use with ExpandExpression() and IsNumeric().
 enum class UnsetKind
 {
 	Blank, // Reverts to "" in v2.0 mode.
-	Unset, // Throws UnsetError.
-	UnsetItem, // Throws UnsetItemError.
-	Unspecified // Throws UnsetError or UnsetItemError depending on how the function was called.
+	Unset, // Throws UnsetError or UnsetItemError depending on how the function was called.
+	OpenChain // Used only during ExpressionToPostfix.
 };
 
 // This should include all operators which can produce SYM_VAR for a subsequent assignment:
@@ -385,6 +384,7 @@ struct ExprTokenType  // Something in the compiler hates the name TokenType, so 
 				LPCTSTR error_reporting_marker; // Used by ExpressionToPostfix() for binary and unary operators.
 				size_t marker_length;
 				VarRefUsageType var_usage; // for SYM_DYNAMIC and SYM_VAR (at load time)
+				int pop_count; // for SYM_MAYBE (after infix-to-postfix completion)
 			};
 		};  
 	};
@@ -397,6 +397,7 @@ struct ExprTokenType  // Something in the compiler hates the name TokenType, so 
 	ExprTokenType(double aValue) { SetValue(aValue); }
 	ExprTokenType(IObject *aValue) { SetValue(aValue); }
 	ExprTokenType(LPTSTR aValue, size_t aLength = -1) { SetValue(aValue, aLength); }
+	ExprTokenType(UnsetKind aValue) { Unset(aValue); }
 	
 	void SetValue(__int64 aValue)
 	{
@@ -433,7 +434,7 @@ struct ExprTokenType  // Something in the compiler hates the name TokenType, so 
 		object = aValue;
 	}
 
-	void Unset(UnsetKind aKind = UnsetKind::Unspecified)
+	void Unset(UnsetKind aKind = UnsetKind::Unset)
 	{
 		symbol = SYM_MISSING;
 		unset_kind = aKind;
@@ -517,7 +518,7 @@ struct ResultToken : public ExprTokenType
 		ExprTokenType::Unset(UnsetKind::Blank);
 	}
 
-	void Unset(UnsetKind aKind = UnsetKind::Unspecified)
+	void Unset(UnsetKind aKind = UnsetKind::Unset)
 	{
 		ASSERT(!mem_to_free && symbol != SYM_OBJECT);
 		ExprTokenType::Unset(aKind);

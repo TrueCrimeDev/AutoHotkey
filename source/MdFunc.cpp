@@ -582,8 +582,10 @@ void TypedPtrToToken(MdType aType, void *aPtr, ExprTokenType &aToken)
 	case MdType::Object:
 		if (auto obj = *(IObject**)aPtr)
 			aToken.SetValue(obj);
-		else
+		else if (g_script.BackCompatMode()) // UnsetKind::Blank isn't used because aToken isn't always a return value.
 			aToken.SetValue(_T(""), 0);
+		else
+			aToken.Unset();
 		break;
 	}
 }

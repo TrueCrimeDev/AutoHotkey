@@ -281,7 +281,7 @@ ObjectMemberMd GuiType::sMembers[] =
 	md_member(GuiType, Show, CALL, (In_Opt, String, Options)),
 	md_member(GuiType, Submit, CALL, (In_Opt, Bool32, Hide), (Ret, Object, RetVal)),
 	
-	md_member		(GuiType, __Item, GET, (In, Variant, Index), (Ret, Object, RetVal)),
+	md_member		(GuiType, __Item, GET, (In, Variant, Index), (Ret, Variant, RetVal)),
 	md_property_get	(GuiType, Hwnd, UInt32),
 	md_property		(GuiType, Title, String),
 	md_property		(GuiType, Name, String),
@@ -289,7 +289,7 @@ ObjectMemberMd GuiType::sMembers[] =
 	md_property		(GuiType, BackColor, Variant),
 	md_property		(GuiType, MarginX, Int32),
 	md_property		(GuiType, MarginY, Int32),
-	md_property		(GuiType, MenuBar, Variant)
+	md_property_opt	(GuiType, MenuBar, Variant)
 };
 
 int GuiType::sMemberCount = _countof(sMembers);
@@ -424,7 +424,7 @@ FResult GuiType::set_Title(StrArg aValue)
 }
 
 
-FResult GuiType::get___Item(ExprTokenType &aIndex, IObject *&aRetVal)
+FResult GuiType::get___Item(ExprTokenType &aIndex, ResultToken &aRetVal)
 {
 	GUI_MUST_HAVE_HWND; // Seems clearer than relying on the error below.
 	GuiControlType* ctrl = NULL;
@@ -441,10 +441,14 @@ FResult GuiType::get___Item(ExprTokenType &aIndex, IObject *&aRetVal)
 			ctrl = mControl[u];
 	}
 	if (!ctrl)
-		return FError(_T("The specified control does not exist."), nullptr, ErrorPrototype::UnsetItem);
+	{
+		if (g_script.BackCompatMode())
+			return FError(_T("The specified control does not exist."), nullptr, ErrorPrototype::UnsetItem);
+		return OK; // Leave aRetVal unset.
+	}
 
 	ctrl->AddRef();
-	aRetVal = ctrl;
+	aRetVal.Return(ctrl);
 	return OK;
 }
 
@@ -1127,15 +1131,15 @@ FResult GuiType::get_MenuBar(ResultToken &aResultToken)
 }
 
 
-FResult GuiType::set_MenuBar(ExprTokenType &aParam)
+FResult GuiType::set_MenuBar(ExprTokenType *aParam)
 {
 	GUI_MUST_HAVE_HWND;
 	UserMenu *menu = NULL;
-	if (!TokenIsBlank(aParam))
+	if (aParam && !TokenIsBlank(*aParam))
 	{
-		menu = dynamic_cast<UserMenu *>(TokenToObject(aParam));
+		menu = dynamic_cast<UserMenu *>(TokenToObject(*aParam));
 		if (!menu || menu->mMenuType != MENU_TYPE_BAR)
-			return FTypeError(_T("MenuBar"), aParam);
+			return FTypeError(_T("MenuBar"), *aParam);
 		menu->CreateHandle(); // Ensure the menu bar physically exists.
 		menu->AddRef();
 	}

@@ -166,7 +166,7 @@ BIF_DECL(BIF_Base)
 		}
 		// Otherwise, could be Object::sAnyPrototype or SYM_MISSING (via a variadic call).
 	}
-	_f_return_empty;
+	_f_return_unset_blank;
 }
 
 
@@ -257,8 +257,12 @@ BIF_DECL(BIF_GetMethod)
 	}
 	if (_f_callee_id == FID_HasMethod)
 		_f_return_b(method != nullptr);
-	if (!method) // No method for GetMethod to return: throw MethodError().
-		_f__ret(aResultToken.UnknownMemberError(*aParam[0], IT_CALL, method_name));
+	if (!method)
+	{
+		if (g_script.BackCompatMode())
+			_f__ret(aResultToken.UnknownMemberError(*aParam[0], IT_CALL, method_name));
+		_f_return_unset;
+	}
 	method->AddRef();
 	_f_return(method);
 }

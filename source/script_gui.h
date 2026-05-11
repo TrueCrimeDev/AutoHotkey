@@ -486,8 +486,8 @@ public:
 	FResult get_Title(StrRet &aRetVal);
 	FResult set_Title(StrArg aValue);
 	FResult get_MenuBar(ResultToken &aRetVal);
-	FResult set_MenuBar(ExprTokenType &aValue);
-	FResult get___Item(ExprTokenType &aIndex, IObject *&aRetVal);
+	FResult set_MenuBar(ExprTokenType *aValue);
+	FResult get___Item(ExprTokenType &aIndex, ResultToken &aRetVal);
 	FResult get_FocusedCtrl(IObject *&aRetVal);
 	FResult get_MarginX(int &aRetVal) { return get_Margin(aRetVal, mMarginX); }
 	FResult get_MarginY(int &aRetVal) { return get_Margin(aRetVal, mMarginY); }

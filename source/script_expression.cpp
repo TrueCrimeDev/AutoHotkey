@@ -277,9 +277,16 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 					}
 					else if (this_token.var_usage == VARREF_LVALUE_MAYBE)
 					{
-						// Skip the short-circuit operator and push the variable onto the stack for assignment.
-						++this_postfix;
-						ASSERT(this_postfix->symbol == SYM_OR_MAYBE);
+						if (this_postfix[1].symbol == SYM_OR_MAYBE)
+						{
+							// Skip the short-circuit operator and push the variable onto the stack for assignment.
+							++this_postfix;
+						}
+						else
+						{
+							ASSERT(this_postfix[1].symbol == SYM_MAYBE);
+							this_token.Unset();
+						}
 					}
 				}
 			}
@@ -417,32 +424,32 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 				goto push_this_token;
 			}
 
+			done = EXPR_IS_DONE;
+
 			if (result_token.symbol != SYM_STRING)
 			{
-				if (result_token.symbol == SYM_MISSING && !(flags & EIF_UNSET_RETURN))
+				if (result_token.symbol == SYM_MISSING && !(flags & EIF_UNSET_RETURN)) // Result is unset and not marked with ?/??.
 				{
-					Object *err;
-					LPCTSTR msg;
-					if (result_token.unset_kind == UnsetKind::Unspecified)
-						result_token.unset_kind = (flags & IT_BITMASK) == IT_GET && !member ? UnsetKind::UnsetItem : UnsetKind::Unset;
-					switch (result_token.unset_kind)
+					if (result_token.unset_kind == UnsetKind::Blank)
 					{
-					case UnsetKind::Blank:
 						if (g_script.BackCompatMode())
 						{
 							this_token.SetValue(_T(""), 0);
 							goto push_this_token;
 						}
-						// Fall through:
-					default:
-						err = ErrorPrototype::Unset;
-						msg = _T("No value was returned.");
-						break;
-					case UnsetKind::UnsetItem:
-						err = ErrorPrototype::UnsetItem;
-						msg = ERR_ITEM_UNSET;
-						break;
+						if (done && mActionType == ACT_RETURN && (flags & IT_CALL)
+							&& g->CurrentFunc && g->CurrentFunc->IsFatArrow())
+						{
+							this_token.Unset(UnsetKind::Blank);
+							goto push_this_token;
+						}
 					}
+					Object *err;
+					LPCTSTR msg;
+					if ((flags & IT_BITMASK) == IT_GET && !member)
+						err = ErrorPrototype::UnsetItem, msg = ERR_ITEM_UNSET;
+					else
+						err = ErrorPrototype::Unset, msg = _T("No value was returned.");
 					result_token.Error(msg, this_token.error_reporting_marker, err);
 					aResult = result_token.Result(); // FAIL to abort, OK if user or OnError requested continuation.
 					goto abort_if_result;
@@ -458,8 +465,6 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 				goto push_this_token;
 			}
 			
-			done = EXPR_IS_DONE;
-
 			// v1.0.45: If possible, take a shortcut for performance.  Doing it this way saves at least
 			// two memcpy's (one into deref buffer and then another back into the output_var by
 			// ACT_ASSIGNEXPR itself).  In some cases is also saves from having to expand the deref
@@ -694,8 +699,9 @@ LPTSTR Line::ExpandExpression(int aArgIndex, ResultType &aResult, ResultToken *a
 				continue; // Continue on to evaluate the right branch.
 			if (this_token.symbol == SYM_MAYBE)
 			{
-				++stack_count; // Put unset back on the stack.
 				this_postfix = this_token.circuit_token;
+				stack_count -= this_token.pop_count;
+				STACK_PUSH(&right); // Put unset back on the stack.
 				continue;
 			}
 			if (this_token.symbol != SYM_ASSIGN) // Anything other than := is not permitted.
