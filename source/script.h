@@ -2240,10 +2240,14 @@ public:
 	// Parse a single AHK expression string into a heap-allocated scratch Line whose
 	// mArg[0].postfix is ready for Line::ExpandExpression. Variable identifiers
 	// resolve against aResolveScope first, then globals. The Line is NOT linked
-	// into mLineList. Caller owns the returned Line and must `delete` it.
-	// Returns OK on success; FAIL on parse failure (error propagates as AHK exception).
-	ResultType ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope,
-	                              Line *&aOutLine, LPTSTR &aErrMsg, int &aErrColumn);
+	// into mLineList. Caller owns the returned Line (its `delete` is a SimpleHeap
+	// no-op, but call it for clarity).
+	//
+	// Returns OK on success; FAIL on parse failure. NOTE: parse errors in execute
+	// mode may propagate as AHK exceptions via ScriptError/LineError rather than a
+	// FAIL return — the caller must be prepared for either path and ensure any
+	// state it cares about is rolled back along the exception route.
+	ResultType ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Line *&aOutLine);
 private:
 
 	ResultType PreparseExpressions();

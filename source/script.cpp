@@ -5444,20 +5444,20 @@ ResultType DerefList::Push()
 
 
 
-ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope,
-                                      Line *&aOutLine, LPTSTR &aErrMsg, int &aErrColumn)
+ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Line *&aOutLine)
 // Wraps the tokenizer/postfix-conversion pipeline so BIF_Eval can get a runnable
 // scratch Line from an arbitrary expression string.  The Line is heap-allocated via
 // SimpleHeap and is never linked into mLineList.
 //
 // Returns OK on success with aOutLine set to the scratch Line (caller must `delete`
 // it, though the delete is a no-op since Line uses SimpleHeap).  Returns FAIL on
-// parse failure; any error is reported via the normal AHK exception mechanism.
+// parse failure. NOTE: parse errors in execute mode may propagate as AHK exceptions
+// via ScriptError/LineError rather than a FAIL return — the caller must be prepared
+// for either path and ensure any state it cares about is rolled back along the
+// exception route.
 // Rolls back newly-created local variables in aResolveScope on failure.
 {
-	aOutLine   = nullptr;
-	aErrMsg    = nullptr;
-	aErrColumn = 0;
+	aOutLine = nullptr;
 
 	// 1) Snapshot the local-var count so a failed parse leaks no new implicit vars.
 	//    Variables created during expression parsing are added to g->CurrentFunc->mVars
@@ -5504,6 +5504,16 @@ ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope,
 		arg->deref = SimpleHeap::Alloc<DerefType>(deref.count + 1);
 		memcpy(arg->deref, deref.items, deref.count * sizeof(DerefType));
 		arg->deref[deref.count].marker = nullptr; // NULL-terminate
+
+		// Rebase each deref marker from the _alloca scratch buffer (expr_buf) to the
+		// SimpleHeap copy (arg->text). Both buffers hold identical content, so any
+		// marker at byte offset N in expr_buf corresponds to offset N in arg->text.
+		// Without this rebase, ExpressionToPostfix would compare pointers from two
+		// different allocations — undefined behaviour that mis-parses variable refs.
+		ptrdiff_t rebase = arg->text - expr_buf;
+		for (int i = 0; i < deref.count; ++i)
+			if (arg->deref[i].marker)
+				arg->deref[i].marker += rebase;
 	}
 	else
 	{
