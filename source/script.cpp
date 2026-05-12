@@ -3885,6 +3885,11 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 		g_WinActivateForce = true;
 		return CONDITION_TRUE;
 	}
+	if (IS_DIRECTIVE_MATCH(_T("#EnableEval")))
+	{
+		g_AllowEval = true;
+		return CONDITION_TRUE;
+	}
 	if (IS_DIRECTIVE_MATCH(_T("#ErrorStdOut")))
 	{
 		// Permit quote marks around the parameter.  In future, quote marks might be required,
