@@ -36,7 +36,11 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <WarningLevel>Level3</WarningLevel>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      
+
+      <!-- Conformant preprocessor required by __VA_OPT__ in script_func_impl.h
+           (matches the mingw build's gnu++20 behaviour without changing the C++ language standard). -->
+      <AdditionalOptions>/Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
+
       <!-- default -->
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       
