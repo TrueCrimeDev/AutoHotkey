@@ -2236,6 +2236,14 @@ private:
 	ResultType AddLabel(LPTSTR aLabelName, bool aAllowDupe);
 	ResultType AddLine(ActionTypeType aActionType, LPTSTR aArg[] = NULL, int aArgc = 0, bool aAllArgsAreExpressions = false);
 
+	// Parse a single AHK expression string into a heap-allocated scratch Line whose
+	// mArg[0].postfix is ready for Line::ExpandExpression. Variable identifiers
+	// resolve against aResolveScope first, then globals. The Line is NOT linked
+	// into mLineList. Caller owns the returned Line and must `delete` it.
+	// Returns OK on success; FAIL on parse failure (error propagates as AHK exception).
+	ResultType ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope,
+	                              Line *&aOutLine, LPTSTR &aErrMsg, int &aErrColumn);
+
 	ResultType PreparseExpressions();
 	ResultType PreparseExpressions(Line *aStartingLine);
 	ResultType PreparseExpressions(FuncList &aFuncs);

@@ -5444,6 +5444,109 @@ ResultType DerefList::Push()
 
 
 
+ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope,
+                                      Line *&aOutLine, LPTSTR &aErrMsg, int &aErrColumn)
+// Wraps the tokenizer/postfix-conversion pipeline so BIF_Eval can get a runnable
+// scratch Line from an arbitrary expression string.  The Line is heap-allocated via
+// SimpleHeap and is never linked into mLineList.
+//
+// Returns OK on success with aOutLine set to the scratch Line (caller must `delete`
+// it, though the delete is a no-op since Line uses SimpleHeap).  Returns FAIL on
+// parse failure; any error is reported via the normal AHK exception mechanism.
+// Rolls back newly-created local variables in aResolveScope on failure.
+{
+	aOutLine   = nullptr;
+	aErrMsg    = nullptr;
+	aErrColumn = 0;
+
+	// 1) Snapshot the local-var count so a failed parse leaks no new implicit vars.
+	//    Variables created during expression parsing are added to g->CurrentFunc->mVars
+	//    (locals) when a scope is active, or to the current module's global list otherwise.
+	const int saved_local_var_count  = aResolveScope ? aResolveScope->mVars.mCount : 0;
+	const int saved_global_var_count = aResolveScope ? 0 : GlobalVars()->mCount;
+
+	// 2) Install aResolveScope as the active function so FindVar/FindOrAddVar use it.
+	UserFunc *saved_current_func = g->CurrentFunc;
+	g->CurrentFunc = aResolveScope;
+
+	// 3) Duplicate the expression text into a modifiable buffer on the C++ stack.
+	//    ParseOperands writes into the buffer (e.g. replaces \n with space) so we
+	//    cannot pass a read-only literal, and we want a local copy rather than a
+	//    SimpleHeap allocation that we cannot free.
+	size_t expr_len = _tcslen(aExpr);
+	LPTSTR expr_buf = (LPTSTR)_alloca((expr_len + 1) * sizeof(TCHAR));
+	_tcscpy(expr_buf, aExpr);
+
+	// 4) Build the deref list (pre-parse operands: variable/function markers).
+	DerefList deref;
+	if (!ParseOperands(expr_buf, deref))
+	{
+		g->CurrentFunc = saved_current_func;
+		// Roll back any local vars that ParseOperands created (rare but possible for
+		// fat-arrow functions embedded in the expression).
+		if (aResolveScope)
+			aResolveScope->mVars.mCount = saved_local_var_count;
+		else
+			GlobalVars()->mCount = saved_global_var_count;
+		return FAIL;
+	}
+
+	// 5) Build the ArgStruct in SimpleHeap (mirrors what AddLine() does).
+	ArgStruct *arg = SimpleHeap::Alloc<ArgStruct>(1);
+	arg->postfix      = nullptr;
+	arg->type         = ARG_TYPE_NORMAL;
+	arg->is_expression = true;
+	arg->length       = (ArgLengthType)expr_len;
+	arg->text         = SimpleHeap::Alloc(expr_buf, expr_len); // persistent copy
+
+	if (deref.count)
+	{
+		arg->deref = SimpleHeap::Alloc<DerefType>(deref.count + 1);
+		memcpy(arg->deref, deref.items, deref.count * sizeof(DerefType));
+		arg->deref[deref.count].marker = nullptr; // NULL-terminate
+	}
+	else
+	{
+		arg->deref = nullptr;
+	}
+
+	// 6) Allocate the scratch Line in SimpleHeap.  operator delete is a no-op, so
+	//    the Line lives until process exit — acceptable for a runtime eval scratch line.
+	Line *scratch = new Line(mCurrFileIndex, 0 /*line number*/, ACT_EXPRESSION, arg, 1);
+
+	// 7) Convert text to postfix via the existing pipeline.
+	if (!scratch->ExpressionToPostfix(*arg))
+	{
+		// Roll back any implicit vars that ExpressionToPostfix created.
+		if (aResolveScope)
+			aResolveScope->mVars.mCount = saved_local_var_count;
+		else
+			GlobalVars()->mCount = saved_global_var_count;
+		g->CurrentFunc = saved_current_func;
+		// delete scratch is intentionally a no-op (Line uses SimpleHeap).
+		delete scratch;
+		return FAIL;
+	}
+
+	// 8) Finalize (resolve variable references, optimize, validate).
+	if (!scratch->FinalizeExpression(*arg))
+	{
+		if (aResolveScope)
+			aResolveScope->mVars.mCount = saved_local_var_count;
+		else
+			GlobalVars()->mCount = saved_global_var_count;
+		g->CurrentFunc = saved_current_func;
+		delete scratch;
+		return FAIL;
+	}
+
+	g->CurrentFunc = saved_current_func;
+	aOutLine = scratch;
+	return OK;
+}
+
+
+
 ResultType Script::ParseOperands(LPTSTR aArgText, DerefList &aDeref, int *aPos, TCHAR aEndChar)
 {
 	LPTSTR op_begin, op_end;
