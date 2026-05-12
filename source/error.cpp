@@ -1428,6 +1428,15 @@ bif_impl FResult _ScriptGetLines(StrArg aFilename, int aLineNumber, optl<int> aR
 
 
 
+bif_impl FResult _Eval(StrArg aExpression, ResultToken &aRetVal)
+{
+	if (!g_AllowEval)
+		return FError(_T("_Eval is disabled (pass /Eval to enable)"));
+	return FError(_T("_Eval not yet implemented"));
+}
+
+
+
 ResultType Script::UnhandledException(Line* aLine, ResultType aErrorType)
 {
 	global_struct &g = *::g;

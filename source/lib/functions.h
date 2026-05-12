@@ -6,6 +6,7 @@
 #endif
 
 md_func(_ScriptGetLines, (In, String, Filename), (In, Int32, LineNumber), (In_Opt, Int32, Range), (Ret, Object, RetVal))
+md_func(_Eval, (In, String, Expression), (Ret, Variant, RetVal))
 
 md_func_x(BlockInput, ScriptBlockInput, FResult, (In, String, Mode))
 
