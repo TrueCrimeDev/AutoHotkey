@@ -5465,6 +5465,11 @@ ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Lin
 	const int saved_local_var_count  = aResolveScope ? aResolveScope->mVars.mCount : 0;
 	const int saved_global_var_count = aResolveScope ? 0 : GlobalVars()->mCount;
 
+	// 1b) Snapshot mFuncs.mCount so we can preparse any fat-arrow functions that
+	//     ParseOperands adds (fat-arrow bodies are parsed lazily at load-time; at
+	//     runtime ParseExprToPostfix must do the work PreparseExpressions normally does).
+	const int saved_func_count = mFuncs.mCount;
+
 	// 2) Install aResolveScope as the active function so FindVar/FindOrAddVar use it.
 	UserFunc *saved_current_func = g->CurrentFunc;
 	g->CurrentFunc = aResolveScope;
@@ -5538,6 +5543,45 @@ ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Lin
 		return FAIL;
 	}
 
+	// 7b) Resolve SYM_VAR read-refs: replace var_deref with the actual Var* (and
+	//     optionally inline global constants as SYM_OBJECT).  This mirrors the work
+	//     that PreparseVarRefs() does for ordinary lines.  FinalizeExpression() calls
+	//     TokenToObject() on callee tokens and therefore requires var to be set.
+	for (ExprTokenType *tok = arg->postfix; tok->symbol != SYM_INVALID; ++tok)
+	{
+		if (tok->symbol != SYM_VAR || VARREF_IS_WRITE(tok->var_usage))
+			continue; // WRITE refs are resolved by ExpressionToPostfix.
+		if (tok->var_deref->type == DT_FUNCREF)
+		{
+			tok->var = tok->var_deref->var;
+			continue;
+		}
+		// DT_VAR: look up (or create) the variable by name.
+		tok->var = FindOrAddVar(tok->var_deref->marker, tok->var_deref->length, FINDVAR_FOR_READ);
+		if (!tok->var)
+		{
+			if (aResolveScope)
+				aResolveScope->mVars.mCount = saved_local_var_count;
+			else
+				GlobalVars()->mCount = saved_global_var_count;
+			g->CurrentFunc = saved_current_func;
+			delete scratch;
+			return FAIL;
+		}
+		// Inline non-local, non-uninitialized constants (e.g. built-in functions) for efficiency.
+		if (tok->var->Type() == VAR_CONSTANT
+			&& !tok->var->IsLocal()
+			&& VARREF_IS_READ(tok->var_usage)
+			&& !tok->var->IsUninitialized())
+		{
+			tok->var->ToToken(*tok);
+		}
+		else if (tok->var->Type() == VAR_VIRTUAL && VARREF_IS_READ(tok->var_usage))
+		{
+			++arg->max_alloc; // Reserve a to_free[] slot for virtual var reads.
+		}
+	}
+
 	// 8) Finalize (resolve variable references, optimize, validate).
 	if (!scratch->FinalizeExpression(*arg))
 	{
@@ -5548,6 +5592,27 @@ ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Lin
 		g->CurrentFunc = saved_current_func;
 		delete scratch;
 		return FAIL;
+	}
+
+	// 9) Preparse any fat-arrow function bodies that ParseOperands added at runtime.
+	//    During normal script loading, PreparseExpressions() converts each line's arg
+	//    text to postfix after the full script has been parsed.  At runtime those bodies
+	//    land in mFuncs with is_expression=true but postfix==nullptr, so we must do the
+	//    equivalent work here before the scratch Line is executed.
+	for (int fi = saved_func_count; fi < mFuncs.mCount; ++fi)
+	{
+		UserFunc *func = mFuncs.mItem[fi];
+		g->CurrentFunc = func;
+		if (!PreparseExpressions(func->mJumpToLine))
+		{
+			if (aResolveScope)
+				aResolveScope->mVars.mCount = saved_local_var_count;
+			else
+				GlobalVars()->mCount = saved_global_var_count;
+			g->CurrentFunc = saved_current_func;
+			delete scratch;
+			return FAIL;
+		}
 	}
 
 	g->CurrentFunc = saved_current_func;

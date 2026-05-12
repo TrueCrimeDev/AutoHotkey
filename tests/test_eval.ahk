@@ -23,5 +23,11 @@ Assert(_Eval is Func,    "A.2 _Eval is a function")
 Assert(IsSet(SyntaxError),                                          "B.1 SyntaxError exists")
 Assert(HasBase(SyntaxError.Prototype, Error.Prototype),             "B.2 SyntaxError extends Error")
 
+; --- Section C: basic expressions ---
+Assert(_Eval("1 + 2") = 3,                       "C.1 arithmetic")
+Assert(_Eval("'hi ' . 'there'") = "hi there",    "C.2 string concat")
+Assert(_Eval("[1,2,3].Length") = 3,              "C.3 method call")
+Assert(_Eval("(()=> 7)()") = 7,                  "C.4 fat-arrow IIFE")
+
 PrintLine "all checks passed"
 ExitApp 0

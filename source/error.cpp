@@ -1432,7 +1432,93 @@ bif_impl FResult _Eval(StrArg aExpression, ResultToken &aRetVal)
 {
 	if (!g_AllowEval)
 		return FError(_T("_Eval is disabled (pass /Eval to enable)"));
-	return FError(_T("_Eval not yet implemented"));
+
+	// Resolve scope: use the caller's UserFunc (if any) so that local
+	// variables referenced in the expression are resolved correctly.
+	UserFunc *caller = g ? g->CurrentFunc : nullptr;
+
+	// ParseExprToPostfix writes into the buffer (e.g. normalises whitespace),
+	// so we pass a modifiable copy. The function also makes its own internal
+	// copy onto SimpleHeap, so this stack buffer is only needed for the call.
+	size_t len = _tcslen(aExpression);
+	LPTSTR buf = (LPTSTR)_alloca((len + 1) * sizeof(TCHAR));
+	_tcscpy(buf, aExpression);
+
+	Line *scratch = nullptr;
+	if (g_script.ParseExprToPostfix(buf, caller, scratch) != OK)
+		return FError(_T("Invalid expression"));
+
+	// ACT_EXPRESSION causes ExpandExpression to discard the final result (it's designed
+	// for stand-alone side-effect expressions). Use ACT_SWITCH instead: it has no special
+	// handling in ExpandExpression, so the result flows through into aResultToken.
+	scratch->mActionType = ACT_SWITCH;
+
+	// Privatize Line::sDerefBuf so that any function calls made during evaluation
+	// (e.g. StrLen(), user-defined functions) can safely allocate their own deref
+	// buffers without corrupting the outer evaluation layer's buffer.  This mirrors
+	// what ExecUntil's ACT_SWITCH handler does before calling ExpandSingleArg().
+	PRIVATIZE_S_DEREF_BUF;
+
+	// Evaluate the scratch Line's mArg[0] postfix using ExpandSingleArg,
+	// which is the same thin wrapper used by the Switch/For machinery.
+	ResultToken eval_result;
+	eval_result.mem_to_free = nullptr;
+
+	ResultType eval_status = scratch->ExpandSingleArg(0, eval_result, our_deref_buf, our_deref_buf_size);
+
+	if (eval_status != OK)
+	{
+		DEPRIVATIZE_S_DEREF_BUF;
+		if (eval_result.mem_to_free)
+			free(eval_result.mem_to_free);
+		return FR_FAIL; // AHK exception already propagated (e.g. thrown object).
+	}
+
+	// Transfer the result into aRetVal BEFORE calling DEPRIVATIZE, because a
+	// string result with mem_to_free==nullptr may point into our_deref_buf, which
+	// DEPRIVATIZE may free or return to the outer layer (making the pointer stale).
+	FResult fret = OK;
+	if (eval_result.symbol == SYM_OBJECT)
+	{
+		// ExpandSingleArg already AddRef'd the object for eval_result.
+		// Transfer ownership to aRetVal (no extra AddRef, no Release).
+		aRetVal.symbol = SYM_OBJECT;
+		aRetVal.object = eval_result.object;
+		// eval_result.mem_to_free is always nullptr for objects.
+	}
+	else if (eval_result.symbol == SYM_STRING)
+	{
+		if (eval_result.mem_to_free)
+		{
+			// The string is already in heap memory. Transfer ownership to aRetVal
+			// so it will be freed by the caller via the normal ResultToken::Free path.
+			aRetVal.AcceptMem(eval_result.mem_to_free, eval_result.marker_length);
+			eval_result.mem_to_free = nullptr; // ownership transferred
+		}
+		else
+		{
+			// The string may be in our_deref_buf (not yet freed) or in persistent
+			// storage (variable contents, literal). Copy it into aRetVal now,
+			// while our_deref_buf is still valid.
+			size_t slen = (eval_result.marker_length != (size_t)-1)
+				? eval_result.marker_length
+				: _tcslen(eval_result.marker);
+			if (!aRetVal.Malloc(eval_result.marker, slen))
+				fret = FR_FAIL; // MemoryError already set; free buffer below.
+		}
+	}
+	else
+	{
+		// Integer, float, unset, etc. — a plain value copy is sufficient.
+		aRetVal.CopyValueFrom(eval_result);
+	}
+
+	// Restore the outer deref buffer now that we've copied everything we need
+	// out of our_deref_buf. DEPRIVATIZE frees any inner buffer and restores the
+	// saved outer one (or keeps a new buffer if the original was NULL).
+	DEPRIVATIZE_S_DEREF_BUF;
+
+	return fret;
 }
 
 
