@@ -1447,12 +1447,49 @@ bif_impl FResult _Eval(StrArg aExpression, ResultToken &aRetVal)
 	Line *scratch = nullptr;
 	if (g_script.ParseExprToPostfix(buf, caller, scratch) != OK)
 	{
-		// ParseExprToPostfix may have already raised a specific AHK exception via
-		// ScriptError/LineError (e.g., a precise syntax-error message). If so, let it
-		// propagate; only emit a generic error when the parser failed without setting one.
+		// Convert any parser exception into a SyntaxError so `catch SyntaxError` works.
+		// The parser raises a generic Error via ScriptError/LineError; we replace it with
+		// a SyntaxError that preserves the Message and adds a Column property.
+
+		// 1) Extract message from any pre-existing thrown exception.
+		LPCTSTR msg_src = _T("Invalid expression");
+		LPTSTR msg_copy = nullptr;
+		if (g->ThrownToken && g->ThrownToken->symbol == SYM_OBJECT)
+		{
+			auto *prev = dynamic_cast<Object*>(g->ThrownToken->object);
+			if (prev)
+			{
+				LPTSTR prev_msg = prev->GetOwnPropString(_T("Message"));
+				if (prev_msg && *prev_msg)
+				{
+					// Copy into a local stack buffer before freeing the exception.
+					size_t mlen = _tcslen(prev_msg);
+					msg_copy = (LPTSTR)_alloca((mlen + 1) * sizeof(TCHAR));
+					_tcscpy(msg_copy, prev_msg);
+					msg_src = msg_copy;
+				}
+			}
+		}
+
+		// 2) Free the old exception (clears g->ThrownToken).
 		if (g->ThrownToken)
-			return FR_FAIL;
-		return FError(_T("Invalid expression"));
+			g_script.FreeExceptionToken(g->ThrownToken);
+
+		// 3) Build a new SyntaxError object with Message, File, Line, Column.
+		auto *err = Object::Create();
+		err->SetBase(ErrorPrototype::Syntax);
+		err->SetOwnProp(_T("Message"), const_cast<LPTSTR>(msg_src));
+		err->SetOwnProp(_T("File"),    _T("_Eval"));
+		err->SetOwnProp(_T("Line"),    (__int64)0);
+		err->SetOwnProp(_T("Column"),  (__int64)0);
+
+		// 4) Throw it (mirrors BIF_Throw pattern).
+		ResultToken *token = new ResultToken;
+		token->symbol = SYM_OBJECT;
+		token->object = err; // Object::Create() returns refcount=1; token owns it.
+		token->mem_to_free = nullptr;
+		g_script.mCurrLine->SetThrownToken(*g, token, FAIL);
+		return FR_FAIL;
 	}
 
 	// ACT_EXPRESSION causes ExpandExpression to discard the final result (it's designed

@@ -52,5 +52,17 @@ arr := [1, , 3]
 removed := _Eval("arr.RemoveAt(2)") ?? "<unset>"
 Assert(removed = "<unset>",                         "F.2 unset propagates")
 
+; --- Section G: SyntaxError ---
+threw := false
+caught := unset
+try _Eval("1 + + +")
+catch SyntaxError as e {
+    threw := true
+    caught := e
+}
+Assert(threw,                              "G.1 bad input throws SyntaxError")
+Assert(caught.Message != "",               "G.2 message is non-empty")
+Assert(caught.HasProp("Column"),           "G.3 has Column property")
+
 PrintLine "all checks passed"
 ExitApp 0
