@@ -4503,7 +4503,7 @@ namespace ErrorPrototype
 	Object *Error, *Memory, *Type, *Value, *OS, *ZeroDivision;
 	Object *Target, *Unset, *Member, *Property, *Method, *Index, *UnsetItem;
 	Object *Timeout;
-	Object *Syntax = nullptr;
+	Object *Syntax;
 }
 
 Object *Object::sVarRefPrototype;

@@ -1040,7 +1040,7 @@ namespace ErrorPrototype
 	extern Object *Error, *Memory, *Type, *Value, *OS, *ZeroDivision;
 	extern Object *Target, *Unset, *Member, *Property, *Method, *Index, *UnsetItem;
 	extern Object *Timeout;
-	extern Object *Syntax; // New: thrown by _Eval on parse failure.
+	extern Object *Syntax;
 }
 
 
