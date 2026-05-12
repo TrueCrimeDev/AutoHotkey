@@ -64,5 +64,11 @@ Assert(threw,                              "G.1 bad input throws SyntaxError")
 Assert(caught.Message != "",               "G.2 message is non-empty")
 Assert(caught.HasProp("Column"),           "G.3 has Column property")
 
+; --- Section H: reentrancy ---
+h1_expr := '_Eval("1 + 1") + _Eval("2 + 2")'
+Assert(_Eval(h1_expr) = 6, "H.1 nested _Eval")
+h2_expr := '_Eval("_Eval(' . "'" . '3 * 3' . "'" . ')")'
+Assert(_Eval(h2_expr) = 9,       "H.2 deeply nested")
+
 PrintLine "all checks passed"
 ExitApp 0
