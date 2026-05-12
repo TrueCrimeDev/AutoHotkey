@@ -2404,6 +2404,8 @@ public:
 
 	// Alias to improve clarity and reduce code size (if compiler chooses not to inline; due to how parameter defaults work):
 	Var *FindGlobalVar(LPCTSTR aVarName, size_t aVarNameLength = 0) { return FindVar(aVarName, aVarNameLength, FINDVAR_GLOBAL); }
+	// For runtime parse (_Eval): look in aFunc's locals/statics first, then globals. Never creates.
+	Var *FindVarInScope(LPCTSTR aName, UserFunc *aFunc);
 
 	VarList *GlobalVars() { return &CurrentModule()->mVars; }
 

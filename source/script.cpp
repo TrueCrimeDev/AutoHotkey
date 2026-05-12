@@ -7340,6 +7340,27 @@ Var *Script::FindVar(LPCTSTR aVarName, size_t aVarNameLength, int aScope
 
 
 
+Var *Script::FindVarInScope(LPCTSTR aName, UserFunc *aFunc)
+// For runtime parse (_Eval): resolve aName against aFunc's locals/statics first, then globals.
+// Never creates a variable; returns nullptr if the name is not found anywhere.
+// UserFunc stores locals in mVars (non-static) and mStaticVars (static/closure vars), both VarLists.
+// mLazyVar/mLazyVarCount do not exist in this codebase; mVars + mStaticVars cover all local vars.
+{
+	if (aFunc)
+	{
+		// 1) Non-static locals and parameters.
+		if (Var *v = aFunc->mVars.Find(aName))
+			return v;
+		// 2) Static and closure vars on the function.
+		if (Var *v = aFunc->mStaticVars.Find(aName))
+			return v;
+	}
+	// 3) Globals — reuse FindGlobalVar which calls FindVar with FINDVAR_GLOBAL (never creates).
+	return FindGlobalVar(aName);
+}
+
+
+
 Var *Script::FindUpVar(LPCTSTR aVarName, size_t aVarNameLength, UserFunc &aInner, ResultType *aDisplayError)
 {
 	// Do not search outer if inner is *explicitly* assume-global, since in that case a
