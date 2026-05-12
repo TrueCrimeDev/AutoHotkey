@@ -16,7 +16,7 @@ threw := false
 err   := unset
 try
     _Eval("1 + 1")
-catch Any as e {
+catch Error as e {
     threw := true
     err := e
 }
