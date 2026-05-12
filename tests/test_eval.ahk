@@ -35,5 +35,12 @@ y := 20
 Assert(_Eval("x + y") = 30,           "D.1 reads caller locals")
 Assert(_Eval("A_AhkVersion") != "",   "D.2 reads built-in globals")
 
+; --- Section E: caller-scope write ---
+x := 10
+_Eval("x := 99")
+Assert(x = 99,                                "E.1 mutates caller local")
+_Eval("x += 1")
+Assert(x = 100,                               "E.2 compound assignment")
+
 PrintLine "all checks passed"
 ExitApp 0
