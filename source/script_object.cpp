@@ -4343,6 +4343,7 @@ void Object::CreateRootPrototypes()
 		{_T("Error"), &ErrorPrototype::Error, no_ctor, sErrorMembers, {
 			{_T("MemoryError"), &ErrorPrototype::Memory},
 			{_T("OSError"), &ErrorPrototype::OS, no_ctor, sOSErrorMembers},
+			{_T("SyntaxError"), &ErrorPrototype::Syntax},
 			{_T("TargetError"), &ErrorPrototype::Target},
 			{_T("TimeoutError"), &ErrorPrototype::Timeout},
 			{_T("TypeError"), &ErrorPrototype::Type},
@@ -4502,6 +4503,7 @@ namespace ErrorPrototype
 	Object *Error, *Memory, *Type, *Value, *OS, *ZeroDivision;
 	Object *Target, *Unset, *Member, *Property, *Method, *Index, *UnsetItem;
 	Object *Timeout;
+	Object *Syntax = nullptr;
 }
 
 Object *Object::sVarRefPrototype;

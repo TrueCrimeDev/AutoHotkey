@@ -19,5 +19,9 @@ PrintLine "=== _Eval test (with /Eval enabled) ==="
 Assert(IsSet(_Eval),     "A.1 _Eval is defined")
 Assert(_Eval is Func,    "A.2 _Eval is a function")
 
+; --- Section B: SyntaxError class exists ---
+Assert(IsSet(SyntaxError),                                          "B.1 SyntaxError exists")
+Assert(HasBase(SyntaxError.Prototype, Error.Prototype),             "B.2 SyntaxError extends Error")
+
 PrintLine "all checks passed"
 ExitApp 0
