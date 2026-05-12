@@ -83,6 +83,7 @@ bool g_NoTrayIcon = false;
 #else
 	bool g_AllowMainWindow = true;
 #endif
+bool g_AllowEval = false;
 bool g_MainTimerExists = false;
 bool g_InputTimerExists = false;
 bool g_DerefTimerExists = false;

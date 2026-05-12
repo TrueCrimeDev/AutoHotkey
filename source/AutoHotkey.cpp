@@ -203,6 +203,10 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 			g_script.mTestMode = true;
 			g_script.SetHeadless();
 		}
+		else if (!_tcsicmp(param, _T("/Eval")) || !_tcsicmp(param, _T("--eval")))
+		{
+			g_AllowEval = true;
+		}
 		else if (!_tcsicmp(param, _T("/include")))
 		{
 			++i; // Consume the next parameter too, because it's associated with this one.
