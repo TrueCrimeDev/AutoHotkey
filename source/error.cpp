@@ -1435,7 +1435,7 @@ bif_impl FResult _Eval(StrArg aExpression, ResultToken &aRetVal)
 
 	// Resolve scope: use the caller's UserFunc (if any) so that local
 	// variables referenced in the expression are resolved correctly.
-	UserFunc *caller = g ? g->CurrentFunc : nullptr;
+	UserFunc *caller = g->CurrentFunc;
 
 	// ParseExprToPostfix writes into the buffer (e.g. normalises whitespace),
 	// so we pass a modifiable copy. The function also makes its own internal
@@ -1446,7 +1446,14 @@ bif_impl FResult _Eval(StrArg aExpression, ResultToken &aRetVal)
 
 	Line *scratch = nullptr;
 	if (g_script.ParseExprToPostfix(buf, caller, scratch) != OK)
+	{
+		// ParseExprToPostfix may have already raised a specific AHK exception via
+		// ScriptError/LineError (e.g., a precise syntax-error message). If so, let it
+		// propagate; only emit a generic error when the parser failed without setting one.
+		if (g->ThrownToken)
+			return FR_FAIL;
 		return FError(_T("Invalid expression"));
+	}
 
 	// ACT_EXPRESSION causes ExpandExpression to discard the final result (it's designed
 	// for stand-alone side-effect expressions). Use ACT_SWITCH instead: it has no special

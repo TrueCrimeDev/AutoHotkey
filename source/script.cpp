@@ -5580,6 +5580,10 @@ ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Lin
 		{
 			++arg->max_alloc; // Reserve a to_free[] slot for virtual var reads.
 		}
+		// Suppress VarUnset warnings for IsSet(var) so it can check optionally-set
+		// variables (mirrors PreparseVarRefs' default branch).
+		if (tok->var_usage == VARREF_ISSET)
+			tok->var->MarkAlreadyWarned();
 	}
 
 	// 8) Finalize (resolve variable references, optimize, validate).
