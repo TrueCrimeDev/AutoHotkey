@@ -29,5 +29,11 @@ Assert(_Eval("'hi ' . 'there'") = "hi there",    "C.2 string concat")
 Assert(_Eval("[1,2,3].Length") = 3,              "C.3 method call")
 Assert(_Eval("(()=> 7)()") = 7,                  "C.4 fat-arrow IIFE")
 
+; --- Section D: caller-scope read ---
+x := 10
+y := 20
+Assert(_Eval("x + y") = 30,           "D.1 reads caller locals")
+Assert(_Eval("A_AhkVersion") != "",   "D.2 reads built-in globals")
+
 PrintLine "all checks passed"
 ExitApp 0
