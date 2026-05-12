@@ -42,5 +42,11 @@ Assert(x = 99,                                "E.1 mutates caller local")
 _Eval("x += 1")
 Assert(x = 100,                               "E.2 compound assignment")
 
+; --- Section F: alpha.29 features ---
+Assert(_Eval("(missing? > 0) ?? 'fb'") = "fb",     "F.1 maybe operator")
+arr := [1, , 3]
+removed := _Eval("arr.RemoveAt(2)") ?? "<unset>"
+Assert(removed = "<unset>",                         "F.2 unset propagates")
+
 PrintLine "all checks passed"
 ExitApp 0
