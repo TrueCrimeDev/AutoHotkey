@@ -76,6 +76,11 @@ int WINAPI _tWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmd
 {
 	g_hInstance = hInstance;
 
+	// Install the SEH filter as early as possible so it catches crashes during init.
+	// The filter writes [FATAL] + [EXIT] to the crash log before returning
+	// EXCEPTION_CONTINUE_SEARCH (letting Windows perform its normal crash handling).
+	CrashLog::InstallExceptionFilter();
+
 	EarlyAppInit();
 
 	LPTSTR script_filespec; // Script path as originally specified, or NULL if omitted/defaulted.

@@ -177,7 +177,35 @@ void CrashLog::LogError(LPCTSTR aType, LPCTSTR aMode, LPCTSTR aMessage,
     LeaveCriticalSection(&s_lock);
 }
 
-void CrashLog::LogFatal(DWORD, PVOID, LPCTSTR, int, LPCTSTR) {}
+void CrashLog::LogFatal(DWORD aExceptionCode, PVOID aAddress,
+                        LPCTSTR aLastFile, int aLastLine, LPCTSTR aLastHotkey)
+{
+    EnsureLock();
+    if (!s_crash_path) return;
+    EnterCriticalSection(&s_lock);
+
+    char file_u8[1024] = {}, hotkey_u8[256] = {};
+    TToUtf8(aLastFile,   file_u8,   sizeof(file_u8));
+    TToUtf8(aLastHotkey, hotkey_u8, sizeof(hotkey_u8));
+
+    char rest[256];
+    _snprintf_s(rest, sizeof(rest), _TRUNCATE,
+        "pid=%lu code=0x%08lX address=%p",
+        GetCurrentProcessId(), (unsigned long)aExceptionCode, aAddress);
+
+    char header[1024];
+    DWORD n = FormatHeader(header, sizeof(header), "FATAL", rest);
+    AppendRaw(s_crash_path, header, n);
+
+    char body[2048];
+    int bn = _snprintf_s(body, sizeof(body), _TRUNCATE,
+        "  LastFile: %s\n  LastLine: %d\n  LastHotkey: %s\n",
+        file_u8, aLastLine, hotkey_u8);
+    if (bn > 0)
+        AppendRaw(s_crash_path, body, (DWORD)bn);
+
+    LeaveCriticalSection(&s_lock);
+}
 
 void CrashLog::LogExit(int aCode, LPCTSTR aReason)
 {
@@ -222,5 +250,47 @@ void CrashLog::LogExitWithCode(int aCode)
 
 void CrashLog::MirrorStderr(const void *, size_t) {}
 
-void CrashLog::InstallExceptionFilter() {}
+namespace
+{
+    LONG WINAPI UnhandledExceptionFilter_Impl(EXCEPTION_POINTERS *pInfo)
+    {
+        // Defensive: wrap everything in __try so our filter can't itself become a crash.
+        // DEADLOCK RISK (v1 known limitation): LogFatal/LogExit each call
+        // EnterCriticalSection(&s_lock). If the main thread crashed while holding s_lock,
+        // this filter will block indefinitely. TryEnterCriticalSection would mitigate this
+        // but would require refactoring the internal locking in both functions. Accepted for
+        // v1 — crashes-while-holding-the-lock are an extreme edge case.
+        __try
+        {
+            DWORD code = pInfo ? pInfo->ExceptionRecord->ExceptionCode    : 0;
+            PVOID addr = pInfo ? pInfo->ExceptionRecord->ExceptionAddress : nullptr;
+
+            // Script-context fields (LastFile/LastLine/LastHotkey): left empty for v1.
+            // Pulling g_script accessors here would require including script.h, which
+            // creates circular include chains through globaldata.h. Even with extern
+            // declarations, reading these globals inside an SEH filter is risky — the
+            // script state may be partially corrupt. A future task can expose safe
+            // accessor function pointers for this purpose.
+            LPCTSTR last_file = _T("");
+            int     last_line = 0;
+            LPCTSTR last_hk   = _T("");
+
+            CrashLog::LogFatal(code, addr, last_file, last_line, last_hk);
+            CrashLog::LogExit(11, _T("Fatal"));
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            // Our own filter faulted — swallow and proceed.
+        }
+        // Return CONTINUE_SEARCH so Windows performs its normal crash handling
+        // (WER dialog, JIT debugger, etc.).
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+}
+
+void CrashLog::InstallExceptionFilter()
+{
+    SetUnhandledExceptionFilter(UnhandledExceptionFilter_Impl);
+}
+
 void CrashLog::InstallConsoleHandler() {}
