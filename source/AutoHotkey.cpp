@@ -108,6 +108,9 @@ int WINAPI _tWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmd
 	if (!InitForExecution())
 		return AHK_EXIT_CRITICAL_ERROR;
 
+	if (CrashLog::IsCrashLogEnabled())
+		CrashLog::LogStart(g_script.mFileSpec, GetCommandLineW());
+
 	return MainExecuteScript();
 }
 

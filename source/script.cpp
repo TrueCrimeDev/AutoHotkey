@@ -1418,6 +1418,8 @@ void Script::TerminateApp(ExitReasons aExitReason, int aExitCode)
 	// at the time the user exits (in which case our main event loop would be "buried" underneath
 	// the event loops of the dialogs themselves), this is the only reliable way I've found to exit
 	// so far.
+	if (CrashLog::IsCrashLogEnabled())
+		CrashLog::LogExitWithCode(aExitCode);
 	exit(aExitCode); // exit() is insignificant in code size.  It does more than ExitProcess(), but perhaps nothing more that this application actually requires.
 }
 

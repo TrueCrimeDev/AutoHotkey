@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "crashlog.h"
 #include "globaldata.h"
+#include "ahkversion.h"
 
 namespace
 {
@@ -78,12 +79,76 @@ void CrashLog::SetStdErrFilePath(LPCTSTR aPath)
 bool CrashLog::IsCrashLogEnabled()  { return s_crash_path != nullptr; }
 bool CrashLog::IsStdErrFileEnabled(){ return s_stderr_path != nullptr; }
 
-// All recorders are stubs in this task; real bodies come in later tasks.
-void CrashLog::LogStart(LPCTSTR, LPCTSTR) {}
+void CrashLog::LogStart(LPCTSTR aScriptPath, LPCTSTR aCmdLine)
+{
+    EnsureLock();
+    if (!s_crash_path) return;
+    EnterCriticalSection(&s_lock);
+
+    char script_u8[1024] = {};
+    char cmdline_u8[2048] = {};
+    TToUtf8(aScriptPath, script_u8, sizeof(script_u8));
+    TToUtf8(aCmdLine,    cmdline_u8, sizeof(cmdline_u8));
+
+    char rest[3500];
+    _snprintf_s(rest, sizeof(rest), _TRUNCATE,
+        "pid=%lu ahk=%s script=%s cmdline=\"%s\"",
+        GetCurrentProcessId(),
+        RAW_AHK_VERSION,
+        script_u8, cmdline_u8);
+
+    char header[4096];
+    DWORD n = FormatHeader(header, sizeof(header), "START", rest);
+    AppendRaw(s_crash_path, header, n);
+
+    LeaveCriticalSection(&s_lock);
+}
+
 void CrashLog::LogParse(LPCTSTR, int, LPCTSTR) {}
 void CrashLog::LogError(LPCTSTR, LPCTSTR, LPCTSTR, LPCTSTR, int, LPCTSTR, LPCTSTR, LPCTSTR) {}
 void CrashLog::LogFatal(DWORD, PVOID, LPCTSTR, int, LPCTSTR) {}
-void CrashLog::LogExit(int, LPCTSTR) {}
+
+void CrashLog::LogExit(int aCode, LPCTSTR aReason)
+{
+    EnsureLock();
+    if (!s_crash_path) return;
+    EnterCriticalSection(&s_lock);
+
+    char reason_u8[256] = {};
+    TToUtf8(aReason, reason_u8, sizeof(reason_u8));
+
+    char rest[512];
+    _snprintf_s(rest, sizeof(rest), _TRUNCATE,
+        "pid=%lu code=%d reason=%s",
+        GetCurrentProcessId(), aCode, reason_u8);
+
+    char header[1024];
+    DWORD n = FormatHeader(header, sizeof(header), "EXIT", rest);
+    AppendRaw(s_crash_path, header, n);
+
+    LeaveCriticalSection(&s_lock);
+}
+
+void CrashLog::LogExitWithCode(int aCode)
+{
+    LPCTSTR reason;
+    TCHAR buf[32];
+    switch (aCode) {
+        case 0:  reason = _T("Normal");   break;
+        case 10: reason = _T("Error");    break;
+        case 11: reason = _T("Critical"); break;
+        case 12: reason = _T("Parse");    break;
+        case 13: reason = _T("Check");    break;
+        case 14: reason = _T("Test");     break;
+        case 64: reason = _T("Usage");    break;
+        default:
+            _stprintf_s(buf, _countof(buf), _T("ExitApp(%d)"), aCode);
+            reason = buf;
+            break;
+    }
+    LogExit(aCode, reason);
+}
+
 void CrashLog::MirrorStderr(const void *, size_t) {}
 
 void CrashLog::InstallExceptionFilter() {}

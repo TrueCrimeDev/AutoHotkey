@@ -21,6 +21,9 @@ namespace CrashLog
     void LogFatal(DWORD aExceptionCode, PVOID aAddress,
                   LPCTSTR aLastFile, int aLastLine, LPCTSTR aLastHotkey);
     void LogExit(int aCode, LPCTSTR aReason);
+    // Like LogExit but maps the integer exit code to the canonical reason name
+    // (Normal/Error/Critical/Parse/Check/Test/Usage/ExitApp(n)).
+    void LogExitWithCode(int aCode);
 
     // StdErr tee: forward raw bytes that were already written to stderr.
     void MirrorStderr(const void *aBytes, size_t aLen);
