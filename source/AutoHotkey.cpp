@@ -19,6 +19,7 @@ GNU General Public License for more details.
 #include "application.h" // for MsgSleep()
 #include "window.h" // For MsgBox()
 #include "TextIO.h"
+#include "crashlog.h"
 
 // General note:
 // The use of Sleep() should be avoided *anywhere* in the code.  Instead, call MsgSleep().
@@ -206,6 +207,26 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 		else if (!_tcsicmp(param, _T("/Eval")) || !_tcsicmp(param, _T("--eval")))
 		{
 			g_AllowEval = true;
+		}
+		else if ((!_tcsnicmp(param, _T("/CrashLog="), 10)) || (!_tcsnicmp(param, _T("--crashlog="), 11)))
+		{
+			LPTSTR path = param + (!_tcsnicmp(param, _T("/CrashLog="), 10) ? 10 : 11);
+			if (*path)
+			{
+				free(g_CrashLogPath);
+				g_CrashLogPath = _tcsdup(path);
+				CrashLog::SetCrashLogPath(path);
+			}
+		}
+		else if ((!_tcsnicmp(param, _T("/StdErrFile="), 12)) || (!_tcsnicmp(param, _T("--stderrfile="), 13)))
+		{
+			LPTSTR path = param + (!_tcsnicmp(param, _T("/StdErrFile="), 12) ? 12 : 13);
+			if (*path)
+			{
+				free(g_StdErrFilePath);
+				g_StdErrFilePath = _tcsdup(path);
+				CrashLog::SetStdErrFilePath(path);
+			}
 		}
 		else if (!_tcsicmp(param, _T("/include")))
 		{
