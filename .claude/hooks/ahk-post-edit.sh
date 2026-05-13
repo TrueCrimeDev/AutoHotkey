@@ -29,6 +29,11 @@ fi
 
 filename=$(basename "$file_path")
 
+# Skip validation for intentional parse-error test fixtures
+if [[ "$filename" == test_crashlog_parse*.ahk || "$filename" == test_parse_error*.ahk ]]; then
+    exit 0
+fi
+
 # Convert WSL path to Windows path for the AHK engine
 if [[ "$file_path" == /mnt/* ]]; then
     win_path=$(wslpath -w "$file_path" 2>/dev/null)

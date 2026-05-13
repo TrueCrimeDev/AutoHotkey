@@ -450,12 +450,21 @@ ResultType Line::LineError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR aE
 	{
 		return g_script.RuntimeError(aErrorText, aExtraInfo, aErrorType, this);
 	}
-	
+
+	// Emit [PARSE] crash-log record for load-time syntax errors.
+	if (aErrorType != WARN && CrashLog::IsCrashLogEnabled())
+	{
+		LPCTSTR err_file = (mFileIndex >= 0 && mFileIndex < Line::sSourceFileCount)
+		                   ? Line::sSourceFile[mFileIndex]
+		                   : _T("");
+		CrashLog::LogParse(err_file, mLineNumber, aErrorText);
+	}
+
 #ifdef CONFIG_DLL
 	if (LibNotifyProblem(aErrorText, aExtraInfo, this))
 		return aErrorType;
 #endif
-	
+
 	if (g_script.mErrorStdOut && aErrorType != WARN)
 	{
 		// JdeB said:
@@ -1010,7 +1019,16 @@ ResultType Script::ScriptError(LPCTSTR aErrorText, LPCTSTR aExtraInfo)
 		aErrorText = _T("Unk"); // Placeholder since it shouldn't be NULL.
 	if (!aExtraInfo) // In case the caller explicitly called it with NULL.
 		aExtraInfo = _T("");
-	
+
+	// Emit [PARSE] crash-log record for load-time syntax errors.
+	if (!mIsReadyToExecute && CrashLog::IsCrashLogEnabled())
+	{
+		LPCTSTR err_file = (mCurrFileIndex >= 0 && mCurrFileIndex < Line::sSourceFileCount)
+		                   ? Line::sSourceFile[mCurrFileIndex]
+		                   : _T("");
+		CrashLog::LogParse(err_file, mCombinedLineNumber, aErrorText);
+	}
+
 #ifdef CONFIG_DLL
 	if (LibNotifyProblem(aErrorText, aExtraInfo, nullptr))
 		return FAIL;

@@ -104,7 +104,33 @@ void CrashLog::LogStart(LPCTSTR aScriptPath, LPCTSTR aCmdLine)
     LeaveCriticalSection(&s_lock);
 }
 
-void CrashLog::LogParse(LPCTSTR, int, LPCTSTR) {}
+void CrashLog::LogParse(LPCTSTR aFile, int aLine, LPCTSTR aMessage)
+{
+    EnsureLock();
+    if (!s_crash_path) return;
+    EnterCriticalSection(&s_lock);
+
+    char file_u8[1024] = {}, msg_u8[2048] = {};
+    TToUtf8(aFile, file_u8, sizeof(file_u8));
+    TToUtf8(aMessage, msg_u8, sizeof(msg_u8));
+
+    char rest[1280];
+    _snprintf_s(rest, sizeof(rest), _TRUNCATE,
+        "pid=%lu file=%s line=%d",
+        GetCurrentProcessId(), file_u8, aLine);
+
+    char header[1536];
+    DWORD n = FormatHeader(header, sizeof(header), "PARSE", rest);
+    AppendRaw(s_crash_path, header, n);
+
+    char body[2560];
+    int bn = _snprintf_s(body, sizeof(body), _TRUNCATE,
+        "  Message: %s\n", msg_u8);
+    if (bn > 0)
+        AppendRaw(s_crash_path, body, (DWORD)bn);
+
+    LeaveCriticalSection(&s_lock);
+}
 
 void CrashLog::LogError(LPCTSTR aType, LPCTSTR aMode, LPCTSTR aMessage,
                         LPCTSTR aFile, int aLine, LPCTSTR aWhat, LPCTSTR aExtra,

@@ -84,7 +84,11 @@ int WINAPI _tWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmd
 
 	UINT load_result = g_script.LoadFromFile(script_filespec);
 	if (load_result == LOADING_FAILED) // Error during load (was already displayed by the function call).
-		return g_script.mCheckMode ? AHK_EXIT_VALIDATE_ERROR : AHK_EXIT_PARSE_ERROR;
+	{
+		int exit_code = g_script.mCheckMode ? AHK_EXIT_VALIDATE_ERROR : AHK_EXIT_PARSE_ERROR;
+		CrashLog::LogExitWithCode(exit_code);
+		return exit_code;
+	}
 	if (!load_result) // LoadFromFile() relies upon us to do this check.  No script was loaded or we're in /iLib mode, so nothing more to do.
 	{
 #ifndef AUTOHOTKEYSC
