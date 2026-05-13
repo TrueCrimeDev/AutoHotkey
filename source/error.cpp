@@ -333,8 +333,9 @@ static int FormatDiagJson(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR
 
 void Script::PrintErrorStdOut(LPCTSTR aErrorText, int aLength, LPCTSTR aFile)
 {
+	bool is_stderr = aFile && !_tcscmp(aFile, _T("**"));
 #ifdef CONFIG_DEBUGGER
-	if (aFile && !_tcscmp(aFile, _T("**")))
+	if (is_stderr)
 	{
 		if (g_Debugger.OutputStdErr(aErrorText))
 			return;
@@ -349,6 +350,29 @@ void Script::PrintErrorStdOut(LPCTSTR aErrorText, int aLength, LPCTSTR aFile)
 	tf.Open(aFile, TextStream::APPEND, mErrorStdOutCP);
 	tf.Write(aErrorText, aLength);
 	tf.Close();
+
+	// Tee stderr output to /StdErrFile= path if configured.
+	if (is_stderr && CrashLog::IsStdErrFileEnabled() && aLength > 0)
+	{
+		if (mErrorStdOutCP == CP_UTF16)
+		{
+			// Write raw UTF-16LE bytes (same as what went to stderr).
+			CrashLog::MirrorStderr(aErrorText, (size_t)aLength * sizeof(TCHAR));
+		}
+		else
+		{
+			// Convert wide chars to the target codepage, same as TextStream::Write does.
+			UINT cp = (mErrorStdOutCP == 0) ? CP_ACP : (UINT)mErrorStdOutCP;
+			int byte_count = WideCharToMultiByte(cp, 0, aErrorText, aLength, nullptr, 0, nullptr, nullptr);
+			if (byte_count > 0)
+			{
+				char *buf = (char *)_alloca((size_t)byte_count);
+				byte_count = WideCharToMultiByte(cp, 0, aErrorText, aLength, buf, byte_count, nullptr, nullptr);
+				if (byte_count > 0)
+					CrashLog::MirrorStderr(buf, (size_t)byte_count);
+			}
+		}
+	}
 }
 
 int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraInfo,

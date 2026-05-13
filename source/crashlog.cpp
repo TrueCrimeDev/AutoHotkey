@@ -248,7 +248,14 @@ void CrashLog::LogExitWithCode(int aCode)
     LogExit(aCode, reason);
 }
 
-void CrashLog::MirrorStderr(const void *, size_t) {}
+void CrashLog::MirrorStderr(const void *aBytes, size_t aLen)
+{
+    EnsureLock();
+    if (!s_stderr_path || aLen == 0) return;
+    EnterCriticalSection(&s_lock);
+    AppendRaw(s_stderr_path, (const char *)aBytes, (DWORD)aLen);
+    LeaveCriticalSection(&s_lock);
+}
 
 namespace
 {
