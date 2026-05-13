@@ -17,6 +17,48 @@ namespace
             s_lock_initialized = true;
         }
     }
+
+    // Append a complete UTF-8 record to the path specified. Open-write-flush-close.
+    // Silent no-op if path is null or open fails. NOT reentrant; caller holds s_lock.
+    void AppendRaw(LPCTSTR aPath, const char *aBytes, DWORD aLen)
+    {
+        if (!aPath || aLen == 0) return;
+        HANDLE h = CreateFile(aPath,
+                              FILE_APPEND_DATA,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              nullptr,
+                              OPEN_ALWAYS,
+                              FILE_ATTRIBUTE_NORMAL,
+                              nullptr);
+        if (h == INVALID_HANDLE_VALUE) return;
+        DWORD written = 0;
+        WriteFile(h, aBytes, aLen, &written, nullptr);
+        FlushFileBuffers(h);
+        CloseHandle(h);
+    }
+
+    // Format a [TAG] line with timestamp + kv pairs. Returns bytes written into aBuf.
+    // aBuf must be UTF-8 sized; caller picks (4 KB is plenty for one event header).
+    DWORD FormatHeader(char *aBuf, size_t aBufSize, const char *aTag, const char *aRest)
+    {
+        SYSTEMTIME st;
+        GetLocalTime(&st);
+        int n = _snprintf_s(aBuf, aBufSize, _TRUNCATE,
+            "[%04d-%02d-%02d %02d:%02d:%02d] [%s] %s\n",
+            st.wYear, st.wMonth, st.wDay,
+            st.wHour, st.wMinute, st.wSecond,
+            aTag, aRest);
+        return n > 0 ? (DWORD)n : 0;
+    }
+
+    // Convert a TCHAR string to a UTF-8 buffer the caller provides.
+    // Returns number of bytes written (incl. trailing NUL) or 0 on failure / null input.
+    int TToUtf8(LPCTSTR aSrc, char *dst_buf, int dst_cap)
+    {
+        if (!aSrc) { if (dst_cap > 0) dst_buf[0] = 0; return 0; }
+        int n = WideCharToMultiByte(CP_UTF8, 0, aSrc, -1, dst_buf, dst_cap, nullptr, nullptr);
+        return n > 0 ? n : 0;
+    }
 }
 
 void CrashLog::SetCrashLogPath(LPCTSTR aPath)
