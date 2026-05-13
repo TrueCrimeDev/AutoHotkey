@@ -81,6 +81,9 @@ int WINAPI _tWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmd
 	// EXCEPTION_CONTINUE_SEARCH (letting Windows perform its normal crash handling).
 	CrashLog::InstallExceptionFilter();
 
+	// Install console handler so Ctrl+C / close / shutdown writes [EXIT] code=130.
+	CrashLog::InstallConsoleHandler();
+
 	EarlyAppInit();
 
 	LPTSTR script_filespec; // Script path as originally specified, or NULL if omitted/defaulted.

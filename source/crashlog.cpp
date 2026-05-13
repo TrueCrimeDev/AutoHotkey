@@ -293,4 +293,26 @@ void CrashLog::InstallExceptionFilter()
     SetUnhandledExceptionFilter(UnhandledExceptionFilter_Impl);
 }
 
-void CrashLog::InstallConsoleHandler() {}
+namespace
+{
+    BOOL WINAPI ConsoleCtrlHandler_Impl(DWORD aSignal)
+    {
+        switch (aSignal)
+        {
+        case CTRL_C_EVENT:
+        case CTRL_BREAK_EVENT:
+        case CTRL_CLOSE_EVENT:
+        case CTRL_LOGOFF_EVENT:
+        case CTRL_SHUTDOWN_EVENT:
+            CrashLog::LogExit(130, _T("ExternalSignal"));
+            return FALSE; // let other handlers / default run
+        default:
+            return FALSE;
+        }
+    }
+}
+
+void CrashLog::InstallConsoleHandler()
+{
+    SetConsoleCtrlHandler(ConsoleCtrlHandler_Impl, TRUE);
+}
