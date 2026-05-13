@@ -79,7 +79,7 @@ extern SingleInstanceType g_AllowOnlyOneInstance;
 extern bool g_persistent;
 extern bool g_NoTrayIcon;
 extern bool g_AllowMainWindow;
-extern bool g_AllowEval; // Set by /Eval CLI flag or #EnableEval directive; when false, _Eval throws "_Eval is disabled".
+extern bool g_AllowEval; // Set by /Eval CLI flag or #EnableEval directive; when false, Eval throws "Eval is disabled".
 extern bool g_DeferMessagesForUnderlyingPump;
 extern bool g_MainTimerExists;
 extern bool g_InputTimerExists;

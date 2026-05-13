@@ -1428,10 +1428,10 @@ bif_impl FResult _ScriptGetLines(StrArg aFilename, int aLineNumber, optl<int> aR
 
 
 
-bif_impl FResult _Eval(StrArg aExpression, ResultToken &aRetVal)
+bif_impl FResult Eval(StrArg aExpression, ResultToken &aRetVal)
 {
 	if (!g_AllowEval)
-		return FError(_T("_Eval is disabled (add #EnableEval to your script or pass /Eval)"));
+		return FError(_T("Eval is disabled (add #EnableEval to your script or pass /Eval)"));
 
 	// Resolve scope: use the caller's UserFunc (if any) so that local
 	// variables referenced in the expression are resolved correctly.
@@ -1563,6 +1563,30 @@ bif_impl FResult _Eval(StrArg aExpression, ResultToken &aRetVal)
 	DEPRIVATIZE_S_DEREF_BUF;
 
 	return fret;
+}
+
+
+
+bif_impl void Print(optl<StrArg> aText)
+{
+	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (hOut == INVALID_HANDLE_VALUE || hOut == NULL)
+		return; // No stdout attached (e.g. GUI app without a console); silently do nothing.
+
+	LPCTSTR text = aText.value_or_empty();
+	int wlen = (int)_tcslen(text);
+
+	// Convert the wide string to UTF-8.
+	int u8len = wlen > 0 ? WideCharToMultiByte(CP_UTF8, 0, text, wlen, nullptr, 0, nullptr, nullptr) : 0;
+
+	// +1 byte for the trailing newline.
+	char *buf = (char *)_alloca(u8len + 1);
+	if (u8len > 0)
+		WideCharToMultiByte(CP_UTF8, 0, text, wlen, buf, u8len, nullptr, nullptr);
+	buf[u8len] = '\n';
+
+	DWORD written;
+	WriteFile(hOut, buf, (DWORD)(u8len + 1), &written, nullptr);
 }
 
 

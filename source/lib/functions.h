@@ -6,7 +6,6 @@
 #endif
 
 md_func(_ScriptGetLines, (In, String, Filename), (In, Int32, LineNumber), (In_Opt, Int32, Range), (Ret, Object, RetVal))
-md_func(_Eval, (In, String, Expression), (Ret, Variant, RetVal))
 
 md_func_x(BlockInput, ScriptBlockInput, FResult, (In, String, Mode))
 
@@ -96,6 +95,7 @@ md_func(EditPaste, (In, String, Value), MD_CONTROL_ARGS)
 
 md_func(EnvGet, (In, String, VarName), (Ret, String, RetVal))
 md_func(EnvSet, (In, String, VarName), (In_Opt, String, Value))
+md_func(Eval, (In, String, Expression), (Ret, Variant, RetVal))
 
 md_func_x(Exit, Exit, ResultType, (In_Opt, Int32, ExitCode))
 md_func_x(ExitApp, ExitApp, ResultType, (In_Opt, Int32, ExitCode))
@@ -226,6 +226,7 @@ md_func(PixelSearch, (Ret, Bool32, Found), (Out_Opt, Variant, X), (Out_Opt, Vari
 
 #undef PostMessage
 md_func_x(PostMessage, ScriptPostMessage, FResult, (In, UInt32, Msg), (In_Opt, Variant, wParam), (In_Opt, Variant, lParam), MD_CONTROL_ARGS_OPT)
+md_func_v(Print, (In_Opt, String, Text))
 
 md_func(ProcessClose, (In, String, Process), (Ret, UInt32, ClosedPID))
 md_func_x(ProcessExist, ProcessExist, UInt32, (In_Opt, String, Process))
