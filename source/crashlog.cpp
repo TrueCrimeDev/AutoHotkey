@@ -105,7 +105,52 @@ void CrashLog::LogStart(LPCTSTR aScriptPath, LPCTSTR aCmdLine)
 }
 
 void CrashLog::LogParse(LPCTSTR, int, LPCTSTR) {}
-void CrashLog::LogError(LPCTSTR, LPCTSTR, LPCTSTR, LPCTSTR, int, LPCTSTR, LPCTSTR, LPCTSTR) {}
+
+void CrashLog::LogError(LPCTSTR aType, LPCTSTR aMode, LPCTSTR aMessage,
+                        LPCTSTR aFile, int aLine, LPCTSTR aWhat, LPCTSTR aExtra,
+                        LPCTSTR aStack)
+{
+    EnsureLock();
+    if (!s_crash_path) return;
+    EnterCriticalSection(&s_lock);
+
+    char type_u8[128] = {}, mode_u8[64] = {};
+    char msg_u8[2048] = {}, file_u8[1024] = {};
+    char what_u8[256] = {}, extra_u8[2048] = {};
+    char stack_u8[8192] = {};
+    TToUtf8(aType,    type_u8,   sizeof(type_u8));
+    TToUtf8(aMode,    mode_u8,   sizeof(mode_u8));
+    TToUtf8(aMessage, msg_u8,    sizeof(msg_u8));
+    TToUtf8(aFile,    file_u8,   sizeof(file_u8));
+    TToUtf8(aWhat,    what_u8,   sizeof(what_u8));
+    TToUtf8(aExtra,   extra_u8,  sizeof(extra_u8));
+    TToUtf8(aStack,   stack_u8,  sizeof(stack_u8));
+
+    char rest[256];
+    _snprintf_s(rest, sizeof(rest), _TRUNCATE,
+        "pid=%lu type=%s mode=%s",
+        GetCurrentProcessId(), type_u8, mode_u8);
+
+    char header[1024];
+    DWORD n = FormatHeader(header, sizeof(header), "ERROR", rest);
+    AppendRaw(s_crash_path, header, n);
+
+    // Indented continuation lines.
+    char body[16384];
+    int bn = _snprintf_s(body, sizeof(body), _TRUNCATE,
+        "  Message: %s\n"
+        "  File: %s\n"
+        "  Line: %d\n"
+        "  What: %s\n"
+        "  Extra: %s\n"
+        "  Stack:\n%s",
+        msg_u8, file_u8, aLine, what_u8, extra_u8, stack_u8);
+    if (bn > 0)
+        AppendRaw(s_crash_path, body, (DWORD)bn);
+
+    LeaveCriticalSection(&s_lock);
+}
+
 void CrashLog::LogFatal(DWORD, PVOID, LPCTSTR, int, LPCTSTR) {}
 
 void CrashLog::LogExit(int aCode, LPCTSTR aReason)

@@ -20,6 +20,7 @@ GNU General Public License for more details.
 #include "window.h"
 #include "TextIO.h"
 #include "abi.h"
+#include "crashlog.h"
 #include <richedit.h>
 
 
@@ -1651,6 +1652,45 @@ ResultType Script::UnhandledException(Line* aLine, ResultType aErrorType)
 		return FAIL;
 	}
 #endif
+
+	// The error was not consumed by OnError — log it before showing the dialog.
+	if (CrashLog::IsCrashLogEnabled())
+	{
+		Object *ex = dynamic_cast<Object *>(TokenToObject(*token));
+		// Type() walks the base chain for __Class (instance doesn't own it; prototype does).
+		LPCTSTR cl_type  = ex ? ex->Type()                          : nullptr;
+		LPCTSTR cl_file  = ex ? ex->GetOwnPropString(_T("File"))    : nullptr;
+		LPCTSTR cl_what  = ex ? ex->GetOwnPropString(_T("What"))    : nullptr;
+		LPCTSTR cl_stack = ex ? ex->GetOwnPropString(_T("Stack"))   : nullptr;
+		int     cl_line  = ex ? (int)ex->GetOwnPropInt64(_T("Line")): 0;
+
+		// Message and Extra require a conversion buffer (may be a number).
+		TCHAR cl_msg_buf[MAX_NUMBER_SIZE], cl_extra_buf[MAX_NUMBER_SIZE];
+		LPCTSTR cl_msg   = _T(""), cl_extra = _T("");
+		if (ex)
+		{
+			ExprTokenType cl_t;
+			if (ex->GetOwnProp(cl_t, _T("Message")))
+				cl_msg   = TokenToString(cl_t, cl_msg_buf);
+			if (ex->GetOwnProp(cl_t, _T("Extra")))
+				cl_extra = TokenToString(cl_t, cl_extra_buf);
+		}
+
+		LPCTSTR cl_mode = aErrorType == CRITICAL_ERROR ? _T("ExitApp")
+		                : aErrorType == FAIL_OR_OK     ? _T("Return")
+		                :                                _T("Exit");
+
+		CrashLog::LogError(
+			cl_type  ? cl_type  : _T("Error"),
+			cl_mode,
+			cl_msg,
+			cl_file  ? cl_file  : _T(""),
+			cl_line,
+			cl_what  ? cl_what  : _T(""),
+			cl_extra,
+			cl_stack ? cl_stack : _T("")
+		);
+	}
 
 	if (ShowError(aLine, aErrorType, token) == OK)
 	{
