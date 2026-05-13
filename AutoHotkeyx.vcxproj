@@ -217,6 +217,7 @@
     <ClCompile Include="source\AutoHotkey.cpp" />
     <ClCompile Include="source\MdFunc.cpp" />
     <ClCompile Include="source\clipboard.cpp" />
+    <ClCompile Include="source\crashlog.cpp" />
     <ClCompile Include="source\Debugger.cpp">
       <Optimization>MinSpace</Optimization>
     </ClCompile>
@@ -292,6 +293,7 @@
     <ClInclude Include="source\MdFunc.h" />
     <ClInclude Include="source\clipboard.h" />
     <ClInclude Include="source\config.h" />
+    <ClInclude Include="source\crashlog.h" />
     <ClInclude Include="source\debug.h" />
     <ClInclude Include="source\Debugger.h" />
     <ClInclude Include="source\defines.h" />

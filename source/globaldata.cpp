@@ -84,6 +84,8 @@ bool g_NoTrayIcon = false;
 	bool g_AllowMainWindow = true;
 #endif
 bool g_AllowEval = false;
+LPTSTR g_CrashLogPath = nullptr;
+LPTSTR g_StdErrFilePath = nullptr;
 bool g_MainTimerExists = false;
 bool g_InputTimerExists = false;
 bool g_DerefTimerExists = false;

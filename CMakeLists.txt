@@ -58,6 +58,7 @@ set(AHK_SOURCES
     source/AutoHotkey.cpp
     source/MdFunc.cpp
     source/clipboard.cpp
+    source/crashlog.cpp
     source/Debugger.cpp
     source/error.cpp
     source/globaldata.cpp
