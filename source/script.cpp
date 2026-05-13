@@ -22,6 +22,7 @@ GNU General Public License for more details.
 #include "window.h" // for a lot of things
 #include "application.h" // for MsgSleep()
 #include "TextIO.h"
+#include "crashlog.h"
 #include <utility>
 #include <algorithm>
 
@@ -3883,6 +3884,18 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 	if (IS_DIRECTIVE_MATCH(_T("#WinActivateForce")))
 	{
 		g_WinActivateForce = true;
+		return CONDITION_TRUE;
+	}
+	if (IS_DIRECTIVE_MATCH(_T("#CrashLog")))
+	{
+		if (!parameter)
+			return ScriptError(_T("#CrashLog requires a path."));
+		parameter = strip_quote_marks(parameter);
+		if (!*parameter)
+			return ScriptError(_T("#CrashLog requires a path."));
+		free(g_CrashLogPath);
+		g_CrashLogPath = _tcsdup(parameter);
+		CrashLog::SetCrashLogPath(parameter);
 		return CONDITION_TRUE;
 	}
 	if (IS_DIRECTIVE_MATCH(_T("#EnableEval")))
