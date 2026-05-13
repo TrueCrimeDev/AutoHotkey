@@ -267,8 +267,14 @@ namespace
         // this filter will block indefinitely. TryEnterCriticalSection would mitigate this
         // but would require refactoring the internal locking in both functions. Accepted for
         // v1 — crashes-while-holding-the-lock are an extreme edge case.
+        //
+        // __try/__except is MSVC SEH syntax; GCC/MinGW does not support it.
+        // On non-MSVC compilers the inner body runs unguarded — acceptable since
+        // the double-fault scenario is an extreme edge case.
+#ifdef _MSC_VER
         __try
         {
+#endif
             DWORD code = pInfo ? pInfo->ExceptionRecord->ExceptionCode    : 0;
             PVOID addr = pInfo ? pInfo->ExceptionRecord->ExceptionAddress : nullptr;
 
@@ -284,11 +290,13 @@ namespace
 
             CrashLog::LogFatal(code, addr, last_file, last_line, last_hk);
             CrashLog::LogExit(11, _T("Fatal"));
+#ifdef _MSC_VER
         }
         __except (EXCEPTION_EXECUTE_HANDLER)
         {
             // Our own filter faulted — swallow and proceed.
         }
+#endif
         // Return CONTINUE_SEARCH so Windows performs its normal crash handling
         // (WER dialog, JIT debugger, etc.).
         return EXCEPTION_CONTINUE_SEARCH;
