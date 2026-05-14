@@ -24,18 +24,16 @@ Run: bin\AutoHotkey64.exe Alpha29_Example.ahk
 */
 #Requires AutoHotkey v2.1-alpha.29
 
-stdout := FileOpen("*", "w", "UTF-8")
-Print(text) => stdout.Write(text)
-PrintLine(text := "") => stdout.Write(text "`n")
+; Uses the fork's built-in Print(text) BIF — writes text + newline to stdout, UTF-8.
 
-PrintLine "=== AutoHotkey v2.1-alpha.29 Feature Showcase ==="
-PrintLine Format("Version: {}", A_AhkVersion)
-PrintLine ""
+Print "=== AutoHotkey v2.1-alpha.29 Feature Showcase ==="
+Print Format("Version: {}", A_AhkVersion)
+Print ""
 
 ; ─────────────────────────────────────────────────────
 ; 1. Tail-call unset propagation:  X() => Y()
 ; ─────────────────────────────────────────────────────
-PrintLine "── 1. `X() => Y()` propagates blank-unset return ──"
+Print "── 1. `X() => Y()` propagates blank-unset return ──"
 
 ; A fat-arrow function that tail-calls another function/method now
 ; transparently propagates Y's "no value returned" state.
@@ -58,14 +56,14 @@ try
 catch
     got_value := false
 
-PrintLine Format("  result := PassThrough() raised because no value? {}", !got_value)
-PrintLine "  -> alpha.29 propagated the missing return value across the tail call."
-PrintLine ""
+Print Format("  result := PassThrough() raised because no value? {}", !got_value)
+Print "  -> alpha.29 propagated the missing return value across the tail call."
+Print ""
 
 ; ─────────────────────────────────────────────────────
 ; 2. Maybe operator `?` short-circuits more operators
 ; ─────────────────────────────────────────────────────
-PrintLine "── 2. Maybe operator (?) short-circuits ──"
+Print "── 2. Maybe operator (?) short-circuits ──"
 
 ; The `?` suffix turns an unset variable into the `unset` sentinel
 ; rather than throwing. Alpha.29 lets that sentinel short-circuit
@@ -83,20 +81,20 @@ try
     boxed := (() => unsetLocal? || 42)()
 catch
     iife_propagated_unset := true
-PrintLine Format("  (() => a? || 42)() short-circuited cleanly (unset propagated)? {}",
+Print Format("  (() => a? || 42)() short-circuited cleanly (unset propagated)? {}",
     iife_propagated_unset)
 
 ; Comparisons short-circuit too -- comparing the maybe-sentinel with
 ; a number no longer raises inside `>`; the comparison just falls
 ; through. (Result captured but unused.)
 cmp_result := (missingVar? > 0)
-PrintLine "  (missing? > 0) evaluated without raising inside the operator"
-PrintLine ""
+Print "  (missing? > 0) evaluated without raising inside the operator"
+Print ""
 
 ; ─────────────────────────────────────────────────────
 ; 3. v2.1 mode default return is `unset` when any `return expr` present
 ; ─────────────────────────────────────────────────────
-PrintLine "── 3. v2.1 default return is `unset` (was blank) ──"
+Print "── 3. v2.1 default return is `unset` (was blank) ──"
 
 ; In v2.1 mode (set by `#Requires AutoHotkey v2.1-...`), if a function
 ; contains any `return <expr>` then the implicit fall-through return
@@ -110,14 +108,14 @@ EvenOrUnset(n) {
 
 a := EvenOrUnset(4) ?? "<unset>"
 b := EvenOrUnset(5) ?? "<unset>"
-PrintLine Format("  EvenOrUnset(4) = {}", a)
-PrintLine Format("  EvenOrUnset(5) = {}", b)
-PrintLine ""
+Print Format("  EvenOrUnset(4) = {}", a)
+Print Format("  EvenOrUnset(5) = {}", b)
+Print ""
 
 ; ─────────────────────────────────────────────────────
 ; 4. Array.Pop / Array.RemoveAt / Array.Delete return unset on hole
 ; ─────────────────────────────────────────────────────
-PrintLine "── 4. Array remove operations return `unset` for holes ──"
+Print "── 4. Array remove operations return `unset` for holes ──"
 
 ; In v2.1 mode, these built-ins now return unset (no value) when
 ; the slot they touch had no value -- previously they returned "".
@@ -125,66 +123,66 @@ PrintLine "── 4. Array remove operations return `unset` for holes ──"
 
 arr := [1, , 3]                          ; element 2 is a hole
 removed := arr.RemoveAt(2) ?? "<unset>"
-PrintLine Format("  arr.RemoveAt(hole) = {}", removed)
+Print Format("  arr.RemoveAt(hole) = {}", removed)
 
 arr2 := [10, 20, 30]
 popped := arr2.Pop() ?? "<unset>"
-PrintLine Format("  arr2.Pop() = {}", popped)
+Print Format("  arr2.Pop() = {}", popped)
 
 arr3 := [100, , 300]
 deleted := arr3.Delete(2) ?? "<unset>"   ; deleting an existing hole
-PrintLine Format("  arr3.Delete(hole) = {}", deleted)
-PrintLine ""
+Print Format("  arr3.Delete(hole) = {}", deleted)
+Print ""
 
 ; ─────────────────────────────────────────────────────
 ; 5. Object.DeleteProp / GetMethod / GetOwnPropDesc return unset
 ; ─────────────────────────────────────────────────────
-PrintLine "── 5. Object reflection returns `unset` for missing ──"
+Print "── 5. Object reflection returns `unset` for missing ──"
 
 obj := { a: 1 }
 
 gone := obj.DeleteProp("nope") ?? "<unset>"
-PrintLine Format("  DeleteProp('nope') = {}", gone)
+Print Format("  DeleteProp('nope') = {}", gone)
 
 m := obj.GetMethod("nonexistent") ?? "<unset>"
-PrintLine Format("  GetMethod('nonexistent') = {}", m)
+Print Format("  GetMethod('nonexistent') = {}", m)
 
 desc := obj.GetOwnPropDesc("b") ?? "<unset>"
-PrintLine Format("  GetOwnPropDesc('b') = {}", desc)
-PrintLine ""
+Print Format("  GetOwnPropDesc('b') = {}", desc)
+Print ""
 
 ; ─────────────────────────────────────────────────────
 ; 6. RegExMatch OutputVar is unset on no-match
 ; ─────────────────────────────────────────────────────
-PrintLine "── 6. RegExMatch OutputVar is `unset` on no-match ──"
+Print "── 6. RegExMatch OutputVar is `unset` on no-match ──"
 
 ; Previously OutputVar would be set to "" when the regex didn't match.
 ; Now it's left unset, so IsSet(match) distinguishes match vs miss.
 
 RegExMatch("hello", "x",  &match1)
 RegExMatch("hello", "l+", &match2)
-PrintLine Format("  No-match: IsSet(match1) = {}", IsSet(match1))
-PrintLine Format("  Match:    IsSet(match2) = {}, match = '{}'",
+Print Format("  No-match: IsSet(match1) = {}", IsSet(match1))
+Print Format("  Match:    IsSet(match2) = {}, match = '{}'",
     IsSet(match2), IsSet(match2) ? match2[0] : "")
-PrintLine ""
+Print ""
 
 ; ─────────────────────────────────────────────────────
 ; 7. GuiFromHwnd / GuiCtrlFromHwnd / MenuFromHandle return unset
 ; ─────────────────────────────────────────────────────
-PrintLine "── 7. Hwnd/Handle lookups return `unset` for unknown IDs ──"
+Print "── 7. Hwnd/Handle lookups return `unset` for unknown IDs ──"
 
 g_lookup  := GuiFromHwnd(0)     ?? "<unset>"
 gc_lookup := GuiCtrlFromHwnd(0) ?? "<unset>"
 mn_lookup := MenuFromHandle(0)  ?? "<unset>"
-PrintLine Format("  GuiFromHwnd(0)     = {}", g_lookup)
-PrintLine Format("  GuiCtrlFromHwnd(0) = {}", gc_lookup)
-PrintLine Format("  MenuFromHandle(0)  = {}", mn_lookup)
-PrintLine ""
+Print Format("  GuiFromHwnd(0)     = {}", g_lookup)
+Print Format("  GuiCtrlFromHwnd(0) = {}", gc_lookup)
+Print Format("  MenuFromHandle(0)  = {}", mn_lookup)
+Print ""
 
 ; ─────────────────────────────────────────────────────
 ; 8. ObjGetBase / .Base at the top of a chain
 ; ─────────────────────────────────────────────────────
-PrintLine "── 8. ObjGetBase returns `unset` past the chain top ──"
+Print "── 8. ObjGetBase returns `unset` past the chain top ──"
 
 ; When you walk a base chain, the topmost prototype's base used to come
 ; back as "". It's now `unset`, which lets you cleanly stop iterating.
@@ -201,13 +199,13 @@ loop {
     p := nextBase
     walked++
 }
-PrintLine Format("  Walked {} bases before ObjGetBase returned unset.", walked)
-PrintLine ""
+Print Format("  Walked {} bases before ObjGetBase returned unset.", walked)
+Print ""
 
 ; ─────────────────────────────────────────────────────
 ; 9. Alpha-only fix: Struct.Array.Prototype is sealed
 ; ─────────────────────────────────────────────────────
-PrintLine "── 9. Struct.Array.Prototype no longer takes typed props ──"
+Print "── 9. Struct.Array.Prototype no longer takes typed props ──"
 
 Struct Point29 {
     x: i32
@@ -217,20 +215,20 @@ Struct Point29 {
 pts := Point29[4]()
 loop 4
     pts[A_Index].x := A_Index * 11, pts[A_Index].y := A_Index * 13
-PrintLine Format("  Point29[4]() size: {} bytes", pts.Size)
-PrintLine Format("  pts[2] = ({}, {})", pts[2].x, pts[2].y)
-PrintLine "  Struct.Array.Prototype is sealed against new typed props"
-PrintLine ""
+Print Format("  Point29[4]() size: {} bytes", pts.Size)
+Print Format("  pts[2] = ({}, {})", pts[2].x, pts[2].y)
+Print "  Struct.Array.Prototype is sealed against new typed props"
+Print ""
 
 ; ─────────────────────────────────────────────────────
 ; Summary
 ; ─────────────────────────────────────────────────────
-PrintLine "═══════════════════════════════════════════════"
-PrintLine "Alpha.29 sharpens v2.1's `unset` story:"
-PrintLine "  • Tail-call functions propagate blank-unset returns"
-PrintLine "  • Maybe operator (?) short-circuits most operators"
-PrintLine "  • v2.1-mode default return is `unset` (not '')"
-PrintLine "  • Array/Object/Gui/RegEx built-ins return `unset` for miss"
-PrintLine "  • Struct.Array.Prototype is now sealed"
-PrintLine "  • Class.Prototype.Base writable when no typed properties"
-PrintLine "═══════════════════════════════════════════════"
+Print "═══════════════════════════════════════════════"
+Print "Alpha.29 sharpens v2.1's `unset` story:"
+Print "  • Tail-call functions propagate blank-unset returns"
+Print "  • Maybe operator (?) short-circuits most operators"
+Print "  • v2.1-mode default return is `unset` (not '')"
+Print "  • Array/Object/Gui/RegEx built-ins return `unset` for miss"
+Print "  • Struct.Array.Prototype is now sealed"
+Print "  • Class.Prototype.Base writable when no typed properties"
+Print "═══════════════════════════════════════════════"
