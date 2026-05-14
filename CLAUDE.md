@@ -103,6 +103,7 @@ AutoHotkey_custom.exe /include include/cloudahk-error-handler-enhanced.ahk scrip
 - ByRef uses `&var` syntax
 - GUI uses object syntax: `Gui()` not commands
 - Escape backslashes in paths: `\\` or use `/`
+- **Always use parentheses on every function call**: `Print("text")` not `Print "text"`, `MsgBox("hi")` not `MsgBox "hi"`, `Eval(expr)` not `Eval expr`. Applies to ALL functions — built-ins, BIFs, user-defined, fork additions. No command-style calls.
 
 ## Design Documents
 
