@@ -30,11 +30,11 @@
  * expression propagates unchanged.
  *
  * @example
- *   #EnableEval
- *   x := 10
- *   y := 20
- *   Eval("x + y")          ; -> 30
- *   Eval("x := 99")        ; mutates caller's x
+ * #EnableEval
+ * x := 10
+ * y := 20
+ * Eval("x + y")          ; -> 30
+ * Eval("x := 99")        ; mutates caller's x
  *
  * @since 2.1-alpha.29+Console
  */
