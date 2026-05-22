@@ -193,7 +193,6 @@ private:
 
 	// Caller has verified mType == VAR_VIRTUAL.
 	bool HasSetter() { return mVV->Set; }
-	// Caller has verified VarTypeIsVirtual(mType).
 	ResultType AssignVirtual(ExprTokenType &aValue);
 
 	// Unconditionally accepts new memory, bypassing the usual redirection to Assign() for VAR_VIRTUAL.

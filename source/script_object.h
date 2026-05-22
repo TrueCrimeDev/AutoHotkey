@@ -269,7 +269,6 @@ struct TypedProperty
 	Object *pointed_proto;
 	size_t data_offset;
 	size_t object_offset;
-	size_t item_count;
 	TypedProperty *next_field, *prev_field;
 	~TypedProperty();
 };
@@ -564,7 +563,7 @@ public:
 	
 	Property *DefineProperty(name_t aName, bool aEnumerable = true);
 	TypedProperty *DefineTypedProperty(name_t aName);
-	FResult DefineTypedProperty(name_t aName, MdType aType, Object *aClass, size_t aCount, size_t aPack, size_t aOffset);
+	FResult DefineTypedProperty(name_t aName, Object *aClass, size_t aPack, size_t aOffset);
 	bool DefineMethod(name_t aName, IObject *aFunc);
 	void DefineClass(name_t aName, Object *aClass, bool aIsStructPtrClass = false);
 	

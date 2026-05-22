@@ -651,7 +651,7 @@ Object::~Object()
 		if (si.array_class_map)
 			si.array_class_map->Release();
 	}
-	else if (mFlags & (DataIsSuffix | DataIsSuffixPtr))
+	else if (mFlags & (DataIsSuffix | DataIsSuffixPtr | ObjectIsClass))
 	{
 		// Call native destructor for each nested object and release any pointer held for a Ptr field.
 		auto si = mBase->GetStructInfo();
@@ -1039,11 +1039,6 @@ ResultType Object::GetTypedValue(ResultToken &aResultToken, int aFlags, TypedPro
 		}
 		aResultToken.SetValue(nested);
 	}
-	else if (aProp.item_count)
-	{
-		ASSERT(aProp.type == MdType::Void); // Untyped buffer.
-		aResultToken.SetValue(ptr);
-	}
 	else
 	{
 		TypedPtrToToken(aProp.type, (void*)ptr, aResultToken);
@@ -1108,8 +1103,6 @@ ResultType Object::SetTypedValue(ResultToken &aResultToken, int aFlags, name_t a
 			return result;
 		return aResultToken.Error(_T("Assignment to struct is not supported."));
 	}
-	if (aProp.item_count)
-		return aResultToken.Error(ERR_PROPERTY_READONLY, aName);
 	return SetValueOfTypeAtPtr(aProp.type, (void*)ptr, aValue, aResultToken);
 }
 
@@ -1570,7 +1563,7 @@ LPTSTR Object::Type()
 
 Object *Object::CreateClass(Object *aPrototype, Object *aBase)
 {
-	auto cls = new (sizeof(Object*)) Object(ObjectIsClass | DataIsSuffix);
+	auto cls = new (sizeof(Object*)) Object(ObjectIsClass);
 	cls->SetBase(aBase);
 	if (!sStructPrototype || !aPrototype->IsDerivedFrom(sStructPrototype))
 		cls->SetOwnProp(_T("Prototype"), aPrototype);
@@ -2149,9 +2142,10 @@ TypedProperty *Object::DefineTypedProperty(name_t aName)
 	return tprop;
 }
 
-FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, size_t aCount, size_t aPack, size_t aOffset)
+FResult Object::DefineTypedProperty(name_t aName, Object *aClass, size_t aPack, size_t aOffset)
 {
 	size_t psize = 0, palign = 0;
+	MdType native_type = MdType::Void;
 	StructInfo *psi = nullptr;
 	if (aClass)
 	{
@@ -2162,22 +2156,12 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 			if (psi->native_type != MdType::Void && !psi->item_count)
 			{
 				aClass = nullptr;
-				aType = psi->native_type;
+				native_type = psi->native_type;
 			}
 			psize = psi->size;
 			palign = psi->align;
 		}
 	}
-	else if (aCount)
-	{
-		if (aType == MdType::Void)
-		{
-			psize = aCount;
-			palign = aPack ? aPack : 1;
-		}
-	}
-	else
-		palign = psize = TypeSize(aType);
 	if (!psize)
 		return FR_E_ARGS;
 	auto si = (mFlags & (StructInfoLocked | ClassPrototype)) != ClassPrototype ? nullptr
@@ -2187,7 +2171,7 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 	auto tprop = DefineTypedProperty(aName);
 	if (!tprop)
 		return FR_E_OUTOFMEM;
-	tprop->type = aType;
+	tprop->type = native_type;
 	tprop->pointed_proto = nullptr;
 	if (tprop->class_object = aClass)
 	{
@@ -2200,7 +2184,6 @@ FResult Object::DefineTypedProperty(name_t aName, MdType aType, Object *aClass, 
 			tprop->pointed_proto->AddRef();
 		}
 	}
-	tprop->item_count = aCount;
 	if (aPack && palign > aPack)
 		palign = aPack;
 	if (palign > si->align)
@@ -2346,8 +2329,6 @@ void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 	if (desc && desc->GetOwnProp(value, _T("Type"))) // TODO: make this properly mutually exclusive with the others
 	{
 		Object *pclass = dynamic_cast<Object*>(TokenToObject(value));
-		MdType ptype = pclass ? MdType::Void : TypeCode(TokenToString(value));
-		size_t pcount = (ptype == MdType::Void) ? (size_t)TokenToInt64(value) : 0;
 		size_t pack = desc->GetOwnProp(value, _T("Pack")) ? (size_t)TokenToInt64(value) : 0;
 		size_t offset = -1;
 		if (desc->GetOwnProp(value, _T("Offset")))
@@ -2365,7 +2346,7 @@ void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 			if (offset == -1)
 				_o_throw_value(aID ? ERR_PARAM3_INVALID : ERR_PARAM2_INVALID);
 		}
-		switch (DefineTypedProperty(name, ptype, pclass, pcount, pack, offset))
+		switch (DefineTypedProperty(name, pclass, pack, offset))
 		{
 		case OK:
 			AddRef();
@@ -2442,14 +2423,11 @@ void Object::GetOwnPropDesc(ResultToken &aResultToken, int aID, int aFlags, Expr
 	{
 		if (field->tprop->class_object)
 			desc->SetOwnProp(_T("Type"), field->tprop->class_object);
-		else if (field->tprop->type != MdType::Void
-			&& (int)field->tprop->type <= (int)MdType::LastSupportedPropertyType
+		else if ((int)field->tprop->type <= (int)MdType::LastSupportedPropertyType
 			&& sPrimitiveClass[(int)field->tprop->type-1])
 			desc->SetOwnProp(_T("Type"), sPrimitiveClass[(int)field->tprop->type-1]);
-		else if (field->tprop->type != MdType::Void)
-			desc->SetOwnProp(_T("Type"), TypeName(field->tprop->type));
 		else
-			desc->SetOwnProp(_T("Type"), (__int64)field->tprop->item_count);
+			desc->SetOwnProp(_T("Type"), TypeName(field->tprop->type));
 		desc->SetOwnProp(_T("Offset"), field->tprop->data_offset);
 	}
 	else
@@ -4251,7 +4229,7 @@ ObjectMember Object::sStructMembers[]
 
 ObjectMember Object::sPtrMembers[]
 {
-	Object_Member(__Value, StructPtrInvoke, 0, IT_SET)
+	Object_Member(__Value, StructPtrInvoke, 0, IT_SET | BIMF_UNSET_ARG_1)
 };
 
 ObjectMember Object::sCArrayMembers[]
@@ -4419,11 +4397,11 @@ void Object::CreateRootPrototypes()
 		tp.type = MdType::IntPtr;
 		tp.class_object = nullptr;
 		tp.pointed_proto = nullptr;
-		tp.item_count = 0;
 		tp.data_offset = 0;
 		auto &psi = *(StructInfo*)(sPtrPrototype + 1);
 		psi.align = psi.size = sizeof(void*);
 		psi.pointed_class = sStructClass; // This is not a counted reference.
+		psi.nested_object_size = sizeof(Object*);
 		psi.object_size = sizeof(Object);
 		auto &ssi = *(StructInfo*)(sStructPrototype + 1);
 		ssi.align = 1;
@@ -4456,7 +4434,6 @@ void Object::CreateRootPrototypes()
 		tp->type = type_codes[i];
 		tp->class_object = nullptr;
 		tp->pointed_proto = nullptr;
-		tp->item_count = 0;
 		tp->data_offset = 0;
 		auto c = CreateClass(type_names[i], sStructClass, p, nullptr);
 		//CreatePtrClass(c, p, si);

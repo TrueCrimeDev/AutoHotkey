@@ -646,28 +646,6 @@ size_t TypeSize(MdType aType)
 }
 
 
-static LPCTSTR sTypeNames[] = { MDTYPE_NAMES };
-
-
-MdType TypeCode(LPCTSTR aName)
-{
-	for (int i = 1; i < _countof(sTypeNames); ++i)
-		if (!_tcsicmp(sTypeNames[i], aName))
-			return (MdType)i;
-	if (!_tcsicmp(_T("uptr"), aName))
-		return MdType::UIntPtr;
-	return MdType::Void;
-}
-
-
-LPCTSTR TypeName(MdType aType)
-{
-	if ((int)aType > 0 && (int)aType < _countof(sTypeNames))
-		return sTypeNames[(int)aType];
-	return nullptr;
-}
-
-
 bool MdFunc::ArgIsOutputVar(int aIndex)
 {
 	if (mPrototype)

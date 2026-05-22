@@ -945,6 +945,14 @@ ResultType Script::SetTrayIcon(LPCTSTR aIconFile, int aIconNumber, ToggleValueTy
 		new_icon_small = (HICON)(UINT_PTR)ATOI64(aIconFile + 6);
 		new_icon = new_icon_small; // DestroyIconsIfUnused() handles this case by calling DestroyIcon() only once.
 	}
+	else if (!_tcsnicmp(aIconFile, _T("HBITMAP:"), 8) && aIconFile[8] != '*')
+	{
+		// This case must be handled for the same reasons as above.
+		ICONINFO iconinfo;
+		iconinfo.fIcon = TRUE;
+		iconinfo.hbmColor = iconinfo.hbmMask = (HBITMAP)(UINT_PTR)ATOI64(aIconFile + 8);
+		new_icon_small = new_icon = CreateIconIndirect(&iconinfo);
+	}
 	else if ( new_icon_small = (HICON)LoadPicture(aIconFile, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), image_type, aIconNumber, false) ) // Called with icon_number > 0, it guarantees return of an HICON/HCURSOR, never an HBITMAP.
 		if ( !(new_icon = (HICON)LoadPicture(aIconFile, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), image_type, aIconNumber, false, NULL, &icon_module)) )
 			DestroyIcon(new_icon_small);
@@ -4523,9 +4531,8 @@ ResultType Script::ParseAndAddLine(LPTSTR aLineText, ActionTypeType aActionType)
 				for (;;) // L35: Loop to fix x.y.z() and similar.
 				{
 					id_end = find_identifier_end(id_begin);
-					if (  id_end == id_begin // No identifier.
-						&& *id_end != g_DerefChar // It's not a.%b%
-						&& !(id_begin[-2] == '?' && (*id_end == '(' || *id_end == '['))  ) // It's not a?.() or a?.[b]
+					if (id_end == id_begin // No identifier.
+						&& *id_end != g_DerefChar) // It's not a.%b%
 						break; // Invalid.
 					if (*id_end == '(' // Allow function/method Call as standalone expression.
 						|| *id_end == g_DerefChar) // Allow dynamic property/method access (too hard to validate what's to the right of %).
@@ -6739,11 +6746,8 @@ ResultType Script::DefineClassVars(LPTSTR aBuf, bool aStatic)
 					//    the current point in the script.
 					auto type_end_char = *type_name_end;
 					*type_name_end = '\0';
-					TCHAR qu[2] { 0 };
-					if (TypeCode(type_name) != MdType::Void)
-						qu[0] = '\'';
-					_sntprintf(type_buf, _countof(type_buf), _T("DefineProp(this.Prototype,'%s',{Type:%s%s%s,Pack:%i})")
-						, item, qu, type_name, qu, mClassStructPack[mClassObjectCount]);
+					_sntprintf(type_buf, _countof(type_buf), _T("DefineProp(this.Prototype,'%s',{Type:%s,Pack:%i})")
+						, item, type_name, mClassStructPack[mClassObjectCount]);
 					if (!DefineClassVarInit(type_buf, true, class_object, ACT_EXPRESSION))
 						return FAIL;
 					*type_name_end = type_end_char;
@@ -7983,22 +7987,23 @@ ResultType Script::PreparseCommands(ScriptModule *aModule)
 				Line *block_begin = line->mParentLine;
 				Line *parent = block_begin->mParentLine;
 
-				if (func.IsInExpression()
-					&& block_begin->mParentLine
-					&& block_begin->mParentLine->mActionType != ACT_BLOCK_BEGIN)
+				if (func.mIsFuncExpression == FuncDefFatArrow)
 				{
-					if (line->mNextLine->mActionType == ACT_BLOCK_BEGIN) // It could only be a fat arrow block-begin under these conditions.
-						// There's another =>function after this one (defined within the same
-						// expression), so just continue until the last =>function is found.
-						continue;
-					// This fat arrow function's parent line is a statement with a single-line
-					// action, but that action is currently separated from its parent by one or
+					// If this fat arrow function's parent line is a statement with a single-line
+					// action, that action is currently separated from its parent by one or
 					// more fat arrow functions.  It won't work that way because If/Else/Loop/etc.
 					// all skip an initial ACT_BLOCK_BEGIN (to avoid an extra ExecUntil call),
 					// which would result in executing the function's body instead of skipping it.
-					Line *body = line->mNextLine;
-					// Remove the fat arrow functions to allow the correct body to execute.
-					parent->mNextLine = body, body->mPrevLine = parent;
+					// If the parent is a block, this is needed only to let breakpoints work on the
+					// line which contains the arrow function.
+					Line *next = line->mNextLine;
+					Line *prev = block_begin->mPrevLine;
+					// Remove the fat arrow function from the outer Line list.
+					if (prev)
+						prev->mNextLine = next;
+					else
+						mCurrentModule->mFirstLine = next;
+					next->mPrevLine = prev;
 					// If this wasn't unset, an error dialog would walk upward to find a previous line,
 					// then step forward and fail to find the original target line.  Instead, it will
 					// display from the function's block-begin downward, usually including the expression
@@ -8803,27 +8808,7 @@ ResultType Line::ExpressionToPostfix(ArgStruct &aArg, ExprTokenType *&aInfix)
 					}
 					bool maybe;
 					op_end = omit_leading_whitespace(cp + 1);
-					if (*op_end == '.' && (op_end[1] == '(' || op_end[1] == '[')) // fun?.() or arr?.[i]
-					{
-						// Prohibit x.y?.(z) for now since it's probably ideal to have it short-circuit over (z)
-						// if the method doesn't exist, and call with `this == x` (like JavaScript in both cases).
-						// This can only work with objects which allow checking for the presence of the method.
-						// To implement it that way we would need special handling, perhaps like:
-						//  1. x
-						//     stack: [x]
-						//  2. FUNC {member: 'y', flags: EIF_MAYBE_GET_METHOD}
-						//     stack: [x.GetMethod('y'), x] or [unset]
-						//  3. MAYBE
-						//     goto 6 if unset
-						//  4. z
-						//     stack: [x.y, x, z]
-						//  5. FUNC {flags: IT_CALL}  ; calls (x.y)(x, z)
-						if (op_end[1] == '(' && infix_count && infix[infix_count-1].symbol == SYM_DOT)
-							return LineError(_T("Optional method calls are not supported."), FAIL, cp);
-						maybe = true;
-						cp = op_end; // The loop will skip over '.' itself.
-					}
-					else if (*op_end == '.' && IS_IDENTIFIER_CHAR(op_end[1])) // x?.y or x?.123
+					if (*op_end == '.' && (IS_IDENTIFIER_CHAR(op_end[1]) || op_end[1] == g_DerefChar)) // x?.y or x?.123 or x?.%y%
 					{
 						// Do some extra checks to allow an optional chain enclosed in parentheses to use numeric
 						// property names without breaking expressions like a?.123:b, for backward-compatibility.
@@ -9618,7 +9603,7 @@ unquoted_literal:
 							//  (v := ...a?...)?  ; circuit_token must be reset in this case.
 							this_infix->circuit_token = nullptr; // Reset for next phase.
 						}
-						else
+						else if (sym_postfix == SYM_FUNC || sym_postfix == sym_prev) // Exclude cases like !a.b ?? c, which would need a short-circuit SYM_MAYBE between a.b and !, i.e. !(a.b?) ?? c
 						{
 							if (sym_prev == SYM_VAR || sym_prev == SYM_DYNAMIC)
 							{
@@ -9630,7 +9615,7 @@ unquoted_literal:
 								this_infix[-1].callsite->flags |= EIF_UNSET_RETURN | EIF_UNSET_PROP;
 								applied = true;
 							}
-							else if ((sym_prev == SYM_CPAREN || sym_prev == SYM_CBRACKET) && this_infix[-1].callsite) // x()?, x[]?, x.y[z]?, x?.[]?
+							else if ((sym_prev == SYM_CPAREN || sym_prev == SYM_CBRACKET) && this_infix[-1].callsite) // x()?, x[]?, x.y[z]?
 							{
 								this_infix[-1].callsite->flags |= EIF_UNSET_RETURN;
 								applied = true;

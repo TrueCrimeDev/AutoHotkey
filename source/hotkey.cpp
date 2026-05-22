@@ -93,7 +93,7 @@ void SetHotIfReturnValue(ResultToken &aResultToken)
 	{
 		// "" seems more in line with the intended use than unset (and consistent with
 		// the other hotkey-related variables); e.g. old := HotIf(new) ... HotIf(old).
-		// A minor drawback is that A_HotIf?.() won't work.
+		// A minor drawback is that (A_HotIf?)() won't work.
 		_f_return_empty;
 	}
 	if (!g->HotCriterion->Callback)

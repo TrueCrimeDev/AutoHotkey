@@ -934,7 +934,7 @@ FResult RegExSearch::Replace(ExprTokenType *aReplacement, int *aOutCount, optl<i
 					fresult = CreateMatchArray(offset, captured_pattern_count, matchobj_token.object);
 					if (FAILED(fresult))
 						goto abort;
-					result_token.SetValue(_T(""));
+					result_token.InitInvokeRetVal();
 					{
 						ExprTokenType _et{ callback_obj };
 						callback_obj->Invoke(result_token, IT_CALL, nullptr, _et, &params, 1);
@@ -943,7 +943,7 @@ FResult RegExSearch::Replace(ExprTokenType *aReplacement, int *aOutCount, optl<i
 					if (result_token.symbol == SYM_OBJECT)
 					{
 						auto obj = result_token.object;
-						result_token.SetValue(_T(""));
+						result_token.InitInvokeRetVal();
 						ExprTokenType _et{ obj };
 						ObjectToString(result_token, _et, obj);
 						obj->Release();

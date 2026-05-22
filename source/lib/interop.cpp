@@ -320,7 +320,7 @@ BIF_DECL(BIF_StrGetPut) // BIF_DECL(BIF_StrGet), BIF_DECL(BIF_StrPut)
 				if (!source_string) // StrGet
 				{
 					if (length == 0)
-						return; // Get 0 chars.
+						_f_return_empty; // Get 0 chars.
 					if (length < 0)
 						length = -length; // Retrieve exactly this many chars, even if there are null chars.
 					else

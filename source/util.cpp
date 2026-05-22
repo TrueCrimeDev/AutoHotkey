@@ -3039,7 +3039,7 @@ int FindExprDelim(LPCTSTR aBuf, TCHAR aDelimiter, int aStartIndex)
 				LPTSTR d_end;
 				auto id = aBuf + mark + 2, id_end = find_identifier_end(id);
 				_tcstod(id, &d_end); // This accounts for scientific notation.
-				if (id_end > d_end || id_end == d_end && (*id_end == '(' || *id_end == '['))
+				if (id_end > d_end || id_end == d_end && (*id_end == '(' || *id_end == '[')) // The second condition detects ?.123() as a method call, not ternary.
 					continue;
 			}
 			do

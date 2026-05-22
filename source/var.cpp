@@ -41,12 +41,9 @@ ResultType Var::Assign(Var &aVar)
 	Var &target_var = *ResolveAlias();
 	Var &source_var = *aVar.ResolveAlias();
 
-	// Caller already handled virtual target_var.
-	ASSERT(!target_var.IsVirtual());
-
 	if (source_var.mAttrib & VAR_ATTRIB_UNINITIALIZED)
 	{
-		target_var.UninitializeNonVirtual();
+		target_var.AssignUnset();
 		return OK;
 	}
 
@@ -70,12 +67,6 @@ ResultType Var::Assign(ExprTokenType &aToken)
 // Writes aToken's value into aOutputVar based on the type of the token.
 // Caller must ensure that aToken.symbol is an operand (not an operator or other symbol).
 {
-	if (VarTypeIsVirtual(mType))
-	{
-		if (aToken.symbol == SYM_MISSING)
-			return g_script.RuntimeError(ERR_INVALID_ASSIGNMENT);
-		return AssignVirtual(aToken);
-	}
 	switch (aToken.symbol)
 	{
 	case SYM_STRING:  return Assign(aToken.marker, aToken.marker_length);
@@ -86,8 +77,7 @@ ResultType Var::Assign(ExprTokenType &aToken)
 	default:
 		ASSERT(!"Unhandled symbol");
 	case SYM_MISSING:
-		UninitializeNonVirtual();
-		return OK;
+		return AssignUnset();
 	}
 	// Since above didn't return, it can only be SYM_STRING.
 	return Assign(aToken.marker, aToken.marker_length);
@@ -97,11 +87,16 @@ ResultType Var::Assign(ExprTokenType &aToken)
 
 ResultType Var::AssignVirtual(ExprTokenType &aValue)
 {
+	if (mType == VAR_ALIAS)
+		return mAliasFor->AssignVirtual(aValue);
+
 	FuncResult result_token;
 	if (mType == VAR_VIRTUAL)
 	{
 		if (!mVV->Set) // Might be impossible due to prior validation of assignments/output vars.
 			return g_script.VarIsReadOnlyError(this);
+		if (aValue.symbol == SYM_MISSING)
+			return g_script.RuntimeError(ERR_INVALID_ASSIGNMENT);
 		mVV->Set(result_token, mName, aValue);
 	}
 	else

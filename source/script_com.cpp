@@ -1389,7 +1389,7 @@ FResult ComObject::SafeArray_Enum(optl<int> n, IObject *&aRetVal)
 	ComArrayEnum *enm;
 	if (SUCCEEDED(hr = ComArrayEnum::Begin(this, enm, n.value_or(2))))
 		aRetVal = enm;
-	return OK;
+	return hr;
 }
 
 

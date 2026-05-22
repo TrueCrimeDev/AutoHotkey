@@ -2046,6 +2046,7 @@ BIF_DECL(BIF_String)
 	case SYM_VAR:
 		if (aParam[0]->var->HasObject())
 		{
+			aResultToken.InitInvokeRetVal();
 			ObjectToString(aResultToken, *aParam[0], aParam[0]->var->Object());
 			break;
 		}
@@ -2060,6 +2061,7 @@ BIF_DECL(BIF_String)
 		aResultToken.marker_length = FTOA(aParam[0]->value_double, aResultToken.marker, _f_retval_buf_size);
 		break;
 	case SYM_OBJECT:
+		aResultToken.InitInvokeRetVal();
 		ObjectToString(aResultToken, *aParam[0], aParam[0]->object);
 		break;
 	// Impossible due to parameter count validation:
