@@ -424,6 +424,33 @@ source/clipboard.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/clipboard.cpp.s
 .PHONY : source/clipboard.cpp.s
 
+source/crashlog.obj: source/crashlog.cpp.obj
+.PHONY : source/crashlog.obj
+
+# target to build an object file
+source/crashlog.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/crashlog.cpp.obj
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.obj
+.PHONY : source/crashlog.cpp.obj
+
+source/crashlog.i: source/crashlog.cpp.i
+.PHONY : source/crashlog.i
+
+# target to preprocess a source file
+source/crashlog.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/crashlog.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.i
+.PHONY : source/crashlog.cpp.i
+
+source/crashlog.s: source/crashlog.cpp.s
+.PHONY : source/crashlog.s
+
+# target to generate assembly for a file
+source/crashlog.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64.dir\build.make CMakeFiles/AutoHotkey64.dir/source/crashlog.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\AutoHotkey64Harness.dir\build.make CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.s
+.PHONY : source/crashlog.cpp.s
+
 source/error.obj: source/error.cpp.obj
 .PHONY : source/error.obj
 
@@ -2031,6 +2058,9 @@ help:
 	@echo ... source/clipboard.obj
 	@echo ... source/clipboard.i
 	@echo ... source/clipboard.s
+	@echo ... source/crashlog.obj
+	@echo ... source/crashlog.i
+	@echo ... source/crashlog.s
 	@echo ... source/error.obj
 	@echo ... source/error.i
 	@echo ... source/error.s

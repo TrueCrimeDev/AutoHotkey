@@ -1,0 +1,6 @@
+C:\Users\uphol\Documents\Design\Coding\AutoHotkey\tests\test_crashlog_stderrfile.ahk (2) : ==> stderr file tee test
+     Specifically: extra-info
+          2| throw(Error("stderr file tee test", "TestFn", "extra-info"))
+     Call stack:
+          C:\Users\uphol\Documents\Design\Coding\AutoHotkey\tests\test_crashlog_stderrfile.ahk (2) : [] throw(Error("stderr file tee test", "TestFn", "extra-info"))
+          > Auto-execute

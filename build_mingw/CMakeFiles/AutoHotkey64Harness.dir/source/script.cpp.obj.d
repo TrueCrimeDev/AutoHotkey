@@ -352,5 +352,6 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.obj: \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\application.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\TextIO.h \
  C:/msys64/mingw64/include/locale.h \
+ C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\crashlog.h \
  C:/msys64/mingw64/include/c++/15.2.0/utility \
  C:/msys64/mingw64/include/c++/15.2.0/bits/stl_relops.h

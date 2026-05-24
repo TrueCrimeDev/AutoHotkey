@@ -2423,11 +2423,8 @@ void Object::GetOwnPropDesc(ResultToken &aResultToken, int aID, int aFlags, Expr
 	{
 		if (field->tprop->class_object)
 			desc->SetOwnProp(_T("Type"), field->tprop->class_object);
-		else if ((int)field->tprop->type <= (int)MdType::LastSupportedPropertyType
-			&& sPrimitiveClass[(int)field->tprop->type-1])
-			desc->SetOwnProp(_T("Type"), sPrimitiveClass[(int)field->tprop->type-1]);
 		else
-			desc->SetOwnProp(_T("Type"), TypeName(field->tprop->type));
+			desc->SetOwnProp(_T("Type"), sPrimitiveClass[(int)field->tprop->type-1]);
 		desc->SetOwnProp(_T("Offset"), field->tprop->data_offset);
 	}
 	else

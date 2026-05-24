@@ -111,25 +111,39 @@ Run it with `bin\AutoHotkey64.exe test tests\test_eval.ahk` (the `#EnableEval` d
 
 ---
 
-## 2. `Print(text)` — stdout println built-in
+## 2. `Print(fmt, args*)` — stdout println built-in (variadic, Format-aware)
 
-A no-frills BIF that writes `text` followed by a newline to stdout, UTF-8 encoded. Replaces the common boilerplate of opening `FileOpen("*", "w", "UTF-8")` and calling `.Write(text "`n")`.
+A no-frills BIF that writes text plus a newline to stdout, UTF-8 encoded. Replaces the common boilerplate of opening `FileOpen("*", "w", "UTF-8")` and calling `.Write(text "`n")`. Since 2026-05-22, `Print` is also variadic and accepts Format-style placeholders directly, so the common `Print(Format("...", x))` idiom collapses to `Print("...", x)`.
 
 ### Signature
 
 ```
-Print(Text := "")
+Print()                  ; blank line
+Print(Text)              ; write Text as-is (no Format pass)
+Print(Fmt, Values*)      ; Format(Fmt, Values*) then write
 ```
 
-- `Text` (String, optional) — defaults to empty. The literal text plus `\n` is written to stdout.
-- Returns nothing.
+- Zero args: writes a blank line (just `\n`).
+- One arg: writes the value plus `\n` as-is — **never goes through `Format`**. Literal `{` and `}` in the string survive (e.g. JSON snippets).
+- Two or more args: the first arg is the format string; remaining args are the placeholder values. Internally delegates to the existing `Format` BIF, so all `Format` placeholder syntax works (`{}`, `{1}`, `{:08X}`, `{1:08X}`, `{{`, `}}`, etc.). Returns nothing.
 
 ### Examples
 
 ```ahk
-Print("hello")          ; writes:  hello\n
-Print()                 ; writes:  \n  (just a newline)
-Print("a" . " " . "b")  ; writes:  a b\n
+Print("hello")                        ; hello
+Print()                               ; (blank line)
+
+x := 42
+y := "world"
+Print("x={}, y={}", x, y)             ; x=42, y=world
+Print("first {1}, again {1}", "AA")   ; first AA, again AA
+Print("0x{:08X}", 0xDEAD)             ; 0x0000DEAD
+
+; Literal braces survive in the single-arg form:
+Print("{ok: true}")                   ; {ok: true}
+
+; The old wrapper still works (Print just consumes the formatted string):
+Print(Format("x={}", 42))             ; x=42
 ```
 
 If the process has no console attached (GUI app run from Explorer), the call silently does nothing — no crash, no error.
@@ -141,16 +155,26 @@ The old idiom:
 ```ahk
 stdout := FileOpen("*", "w", "UTF-8")
 PrintLine(text := "") => stdout.Write(text "`n")
-PrintLine "hello"
+PrintLine("hello")
 ```
 
 is now:
 
 ```ahk
-Print "hello"
+Print("hello")
 ```
 
-That's it. No setup, no global, no helper definition. Tests and examples are easier to write.
+The variadic `Format` dispatch removes the next layer of friction — instead of:
+
+```ahk
+Print(Format("processing {} of {} files...", n, total))
+```
+
+you write:
+
+```ahk
+Print("processing {} of {} files...", n, total)
+```
 
 `Print` is always available (no gate, no directive). It does not exist upstream; it's a fork-only addition.
 
@@ -382,7 +406,7 @@ Both directives must appear at top-of-script scope, alongside `#Requires`, `#Sin
 | Function | Signature | Effect |
 |---|---|---|
 | `Eval` | `Eval(Expression)` | Evaluate an AHK expression string in the caller's scope. Gated. |
-| `Print` | `Print(Text := "")` | Write `Text` plus a newline to stdout, UTF-8. Always on. |
+| `Print` | `Print()` / `Print(Text)` / `Print(Fmt, Values*)` | Write text plus a newline to stdout, UTF-8. 2+ args dispatch through `Format(Fmt, Values*)`; 1 arg is written as-is so literal `{` / `}` survive. Always on. |
 | `_ScriptGetLines` | `_ScriptGetLines(File, Line, Range?)` | (Pre-existing fork addition.) Read source-text lines around a given position. |
 
 ---

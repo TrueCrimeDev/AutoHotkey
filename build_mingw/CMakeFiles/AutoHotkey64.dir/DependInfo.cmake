@@ -61,6 +61,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/ahkversion.cpp" "CMakeFiles/AutoHotkey64.dir/source/ahkversion.cpp.obj" "gcc" "CMakeFiles/AutoHotkey64.dir/source/ahkversion.cpp.obj.d"
   "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/application.cpp" "CMakeFiles/AutoHotkey64.dir/source/application.cpp.obj" "gcc" "CMakeFiles/AutoHotkey64.dir/source/application.cpp.obj.d"
   "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/clipboard.cpp" "CMakeFiles/AutoHotkey64.dir/source/clipboard.cpp.obj" "gcc" "CMakeFiles/AutoHotkey64.dir/source/clipboard.cpp.obj.d"
+  "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/crashlog.cpp" "CMakeFiles/AutoHotkey64.dir/source/crashlog.cpp.obj" "gcc" "CMakeFiles/AutoHotkey64.dir/source/crashlog.cpp.obj.d"
   "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/error.cpp" "CMakeFiles/AutoHotkey64.dir/source/error.cpp.obj" "gcc" "CMakeFiles/AutoHotkey64.dir/source/error.cpp.obj.d"
   "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/globaldata.cpp" "CMakeFiles/AutoHotkey64.dir/source/globaldata.cpp.obj" "gcc" "CMakeFiles/AutoHotkey64.dir/source/globaldata.cpp.obj.d"
   "C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/hook.cpp" "CMakeFiles/AutoHotkey64.dir/source/hook.cpp.obj" "gcc" "CMakeFiles/AutoHotkey64.dir/source/hook.cpp.obj.d"

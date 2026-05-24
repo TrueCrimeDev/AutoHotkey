@@ -106,6 +106,7 @@ FuncEntry g_BIF[] =
 	BIFn(ObjSetBase, 2, 2, BIF_Base),
 	BIFn(ObjSetCapacity, 2, 2, BIF_ObjXXX),
 	BIF1(Ord, 1, 1),
+	BIF1(Print, 0, NA),
 	BIF1(Props, 1, 1),
 	BIF1(Random, 0, 2),
 	BIFn(RegCreateKey, 0, 1, BIF_Reg),

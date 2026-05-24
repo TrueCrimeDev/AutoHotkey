@@ -226,7 +226,6 @@ md_func(PixelSearch, (Ret, Bool32, Found), (Out_Opt, Variant, X), (Out_Opt, Vari
 
 #undef PostMessage
 md_func_x(PostMessage, ScriptPostMessage, FResult, (In, UInt32, Msg), (In_Opt, Variant, wParam), (In_Opt, Variant, lParam), MD_CONTROL_ARGS_OPT)
-md_func_v(Print, (In_Opt, String, Text))
 
 md_func(ProcessClose, (In, String, Process), (Ret, UInt32, ClosedPID))
 md_func_x(ProcessExist, ProcessExist, UInt32, (In_Opt, String, Process))

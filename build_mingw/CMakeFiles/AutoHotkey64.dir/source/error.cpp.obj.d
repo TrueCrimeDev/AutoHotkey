@@ -349,4 +349,6 @@ CMakeFiles/AutoHotkey64.dir/source/error.cpp.obj: \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\input_object.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\window.h \
  C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\TextIO.h \
- C:/msys64/mingw64/include/locale.h C:/msys64/mingw64/include/richedit.h
+ C:/msys64/mingw64/include/locale.h \
+ C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\crashlog.h \
+ C:/msys64/mingw64/include/richedit.h

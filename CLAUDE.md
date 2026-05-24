@@ -104,6 +104,22 @@ AutoHotkey_custom.exe /include include/cloudahk-error-handler-enhanced.ahk scrip
 - GUI uses object syntax: `Gui()` not commands
 - Escape backslashes in paths: `\\` or use `/`
 - **Always use parentheses on every function call**: `Print("text")` not `Print "text"`, `MsgBox("hi")` not `MsgBox "hi"`, `Eval(expr)` not `Eval expr`. Applies to ALL functions — built-ins, BIFs, user-defined, fork additions. No command-style calls.
+- **Backticks are escape characters inside double-quoted strings.** `"`a"` is alert/bell, not a literal backtick. To quote code/identifiers inside Print strings, use single quotes: `Print("'i32' is removed")`. Backticks in `;` comments and `/* */` blocks are fine.
+
+## Fork-only BIFs (always available)
+
+These do not exist in upstream AutoHotkey. Use them directly — no `#include`, no helpers.
+
+- **`Print(Fmt?, Values*)`** — stdout println with built-in `Format` dispatch.
+  - `Print()` → blank line
+  - `Print("plain text")` → write as-is (single-arg form never goes through Format, so literal `{ }` survive)
+  - `Print("x={}, y={}", x, y)` → calls `Format(Fmt, Values*)` then writes
+  - **Don't write `Print(Format("...", x))`** — pass the args directly to `Print` instead.
+  - Silent no-op when no console is attached.
+- **`Eval(Expression)`** — runtime expression eval. Gated by `#EnableEval` directive or `/Eval` CLI flag. Throws `SyntaxError` on parse failure. See `updates.md` section 1.
+- **`SyntaxError`** — exception class for parse errors. Has `Message`, `What`, `Extra`, `Line`, `Column`.
+
+Full reference: `updates.md` in the repo root.
 
 ## Design Documents
 

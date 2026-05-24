@@ -36,23 +36,34 @@
  * Eval("x + y")          ; -> 30
  * Eval("x := 99")        ; mutates caller's x
  *
- * @since 2.1-alpha.29+Console
+ * @since 2.1-alpha.30+Console
  */
 Eval(Expression) => Any
 
 /**
- * Writes `Text` followed by a newline to stdout, UTF-8 encoded.
+ * Writes text followed by a newline to stdout, UTF-8 encoded.
+ *
+ * Three call shapes:
+ *   - Print()                  -- write a blank line
+ *   - Print(Text)              -- write Text as-is (no Format pass)
+ *   - Print(Fmt, Values*)      -- Format(Fmt, Values*) then write
+ *
+ * The second form is preserved for back-compat: a single argument is
+ * never run through Format, so literal `{` / `}` in the string survive.
+ * Pass two or more arguments to trigger Format-style placeholders.
  *
  * No-op if the process has no console attached (e.g., a GUI app launched
  * from Explorer).
  *
  * @example
- *   Print "hello"         ; writes:  hello\n
- *   Print()               ; writes:  \n  (just a newline)
+ * Print("hello")                  ; hello
+ * Print()                         ; (blank line)
+ * Print("x={}, y={}", x, y)       ; positional placeholders
+ * Print("first {1}, again {1}", "x")
  *
- * @since 2.1-alpha.29+Console
+ * @since 2.1-alpha.30+Console (variadic Format dispatch added 2026-05-22)
  */
-Print(Text := '') => void
+Print(Fmt := '', Values*) => void
 
 ;@endregion
 
@@ -63,7 +74,7 @@ Print(Text := '') => void
  * Thrown when `Eval()` cannot parse its input expression. May also be thrown
  * by user code that wraps its own parser.
  *
- * @since 2.1-alpha.29+Console
+ * @since 2.1-alpha.30+Console
  */
 class SyntaxError extends Error {
 	/**

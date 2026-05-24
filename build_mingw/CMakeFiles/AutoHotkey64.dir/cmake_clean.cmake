@@ -22,6 +22,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/AutoHotkey64.dir/source/application.cpp.obj.d"
   "CMakeFiles/AutoHotkey64.dir/source/clipboard.cpp.obj"
   "CMakeFiles/AutoHotkey64.dir/source/clipboard.cpp.obj.d"
+  "CMakeFiles/AutoHotkey64.dir/source/crashlog.cpp.obj"
+  "CMakeFiles/AutoHotkey64.dir/source/crashlog.cpp.obj.d"
   "CMakeFiles/AutoHotkey64.dir/source/error.cpp.obj"
   "CMakeFiles/AutoHotkey64.dir/source/error.cpp.obj.d"
   "CMakeFiles/AutoHotkey64.dir/source/globaldata.cpp.obj"

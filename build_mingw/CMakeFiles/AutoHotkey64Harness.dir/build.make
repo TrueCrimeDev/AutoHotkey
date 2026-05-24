@@ -146,11 +146,26 @@ CMakeFiles/AutoHotkey64Harness.dir/source/clipboard.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/AutoHotkey64Harness.dir/source/clipboard.cpp.s"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\clipboard.cpp -o CMakeFiles\AutoHotkey64Harness.dir\source\clipboard.cpp.s
 
+CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/flags.make
+CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
+CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/crashlog.cpp
+CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.obj"
+	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\crashlog.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\crashlog.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\crashlog.cpp
+
+CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.i"
+	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\crashlog.cpp > CMakeFiles\AutoHotkey64Harness.dir\source\crashlog.cpp.i
+
+CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.s"
+	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\crashlog.cpp -o CMakeFiles\AutoHotkey64Harness.dir\source\crashlog.cpp.s
+
 CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/flags.make
 CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/Debugger.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\Debugger.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\Debugger.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\Debugger.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.i: cmake_force
@@ -165,7 +180,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.obj: CMakeFiles/AutoHotkey64
 CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/error.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\error.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\error.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\error.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.i: cmake_force
@@ -180,7 +195,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.obj: CMakeFiles/AutoHot
 CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/globaldata.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\globaldata.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\globaldata.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\globaldata.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.i: cmake_force
@@ -195,7 +210,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/hook.cpp.obj: CMakeFiles/AutoHotkey64H
 CMakeFiles/AutoHotkey64Harness.dir/source/hook.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/hook.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/hook.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/hook.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/hook.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/hook.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/hook.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\hook.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\hook.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\hook.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/hook.cpp.i: cmake_force
@@ -210,7 +225,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/hotkey.cpp.obj: CMakeFiles/AutoHotkey6
 CMakeFiles/AutoHotkey64Harness.dir/source/hotkey.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/hotkey.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/hotkey.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/hotkey.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/hotkey.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/hotkey.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/hotkey.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\hotkey.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\hotkey.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\hotkey.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/hotkey.cpp.i: cmake_force
@@ -225,7 +240,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/input_object.cpp.obj: CMakeFiles/AutoH
 CMakeFiles/AutoHotkey64Harness.dir/source/input_object.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/input_object.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/input_object.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/input_object.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/input_object.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/input_object.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/input_object.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\input_object.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\input_object.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\input_object.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/input_object.cpp.i: cmake_force
@@ -240,7 +255,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/keyboard_mouse.cpp.obj: CMakeFiles/Aut
 CMakeFiles/AutoHotkey64Harness.dir/source/keyboard_mouse.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/keyboard_mouse.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/keyboard_mouse.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/keyboard_mouse.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/keyboard_mouse.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/keyboard_mouse.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/keyboard_mouse.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\keyboard_mouse.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\keyboard_mouse.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\keyboard_mouse.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/keyboard_mouse.cpp.i: cmake_force
@@ -255,7 +270,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/os_version.cpp.obj: CMakeFiles/AutoHot
 CMakeFiles/AutoHotkey64Harness.dir/source/os_version.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/os_version.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/os_version.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/os_version.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/os_version.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/os_version.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/os_version.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\os_version.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\os_version.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\os_version.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/os_version.cpp.i: cmake_force
@@ -270,7 +285,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.obj: CMakeFiles/AutoHotkey6
 CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/script.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\script.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\script.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/script.cpp.i: cmake_force
@@ -285,7 +300,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script2.cpp.obj: CMakeFiles/AutoHotkey
 CMakeFiles/AutoHotkey64Harness.dir/source/script2.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/script2.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/script2.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/script2.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script2.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script2.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/script2.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\script2.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\script2.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script2.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/script2.cpp.i: cmake_force
@@ -300,7 +315,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script_autoit.cpp.obj: CMakeFiles/Auto
 CMakeFiles/AutoHotkey64Harness.dir/source/script_autoit.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_autoit.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/script_autoit.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_autoit.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_autoit.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_autoit.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/script_autoit.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\script_autoit.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\script_autoit.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_autoit.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/script_autoit.cpp.i: cmake_force
@@ -315,7 +330,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script_com.cpp.obj: CMakeFiles/AutoHot
 CMakeFiles/AutoHotkey64Harness.dir/source/script_com.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_com.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/script_com.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_com.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_com.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_com.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/script_com.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\script_com.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\script_com.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_com.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/script_com.cpp.i: cmake_force
@@ -330,7 +345,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script_expression.cpp.obj: CMakeFiles/
 CMakeFiles/AutoHotkey64Harness.dir/source/script_expression.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_expression.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/script_expression.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_expression.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_expression.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_expression.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/script_expression.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\script_expression.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\script_expression.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_expression.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/script_expression.cpp.i: cmake_force
@@ -345,7 +360,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script_gui.cpp.obj: CMakeFiles/AutoHot
 CMakeFiles/AutoHotkey64Harness.dir/source/script_gui.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_gui.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/script_gui.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_gui.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_gui.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_20) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_gui.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/script_gui.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\script_gui.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\script_gui.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_gui.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/script_gui.cpp.i: cmake_force
@@ -360,7 +375,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script_menu.cpp.obj: CMakeFiles/AutoHo
 CMakeFiles/AutoHotkey64Harness.dir/source/script_menu.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_menu.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/script_menu.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_menu.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_20) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_menu.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_21) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_menu.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/script_menu.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\script_menu.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\script_menu.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_menu.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/script_menu.cpp.i: cmake_force
@@ -375,7 +390,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script_module.cpp.obj: CMakeFiles/Auto
 CMakeFiles/AutoHotkey64Harness.dir/source/script_module.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_module.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/script_module.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_module.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_21) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_module.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_22) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_module.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/script_module.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\script_module.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\script_module.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_module.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/script_module.cpp.i: cmake_force
@@ -390,7 +405,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script_object.cpp.obj: CMakeFiles/Auto
 CMakeFiles/AutoHotkey64Harness.dir/source/script_object.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_object.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/script_object.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_object.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_22) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_object.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_23) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_object.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/script_object.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\script_object.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\script_object.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_object.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/script_object.cpp.i: cmake_force
@@ -405,7 +420,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script_object_bif.cpp.obj: CMakeFiles/
 CMakeFiles/AutoHotkey64Harness.dir/source/script_object_bif.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_object_bif.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/script_object_bif.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_object_bif.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_23) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_object_bif.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_24) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_object_bif.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/script_object_bif.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\script_object_bif.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\script_object_bif.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_object_bif.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/script_object_bif.cpp.i: cmake_force
@@ -420,7 +435,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/script_registry.cpp.obj: CMakeFiles/Au
 CMakeFiles/AutoHotkey64Harness.dir/source/script_registry.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_registry.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/script_registry.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/script_registry.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_24) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_registry.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_25) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/script_registry.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/script_registry.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\script_registry.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\script_registry.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\script_registry.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/script_registry.cpp.i: cmake_force
@@ -435,7 +450,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/SimpleHeap.cpp.obj: CMakeFiles/AutoHot
 CMakeFiles/AutoHotkey64Harness.dir/source/SimpleHeap.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/SimpleHeap.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/SimpleHeap.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/SimpleHeap.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_25) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/SimpleHeap.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/SimpleHeap.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/SimpleHeap.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\SimpleHeap.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\SimpleHeap.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\SimpleHeap.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/SimpleHeap.cpp.i: cmake_force
@@ -450,7 +465,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/StringConv.cpp.obj: CMakeFiles/AutoHot
 CMakeFiles/AutoHotkey64Harness.dir/source/StringConv.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/StringConv.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/StringConv.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/StringConv.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/StringConv.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/StringConv.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/StringConv.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\StringConv.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\StringConv.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\StringConv.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/StringConv.cpp.i: cmake_force
@@ -465,7 +480,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/TextIO.cpp.obj: CMakeFiles/AutoHotkey6
 CMakeFiles/AutoHotkey64Harness.dir/source/TextIO.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/TextIO.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/TextIO.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/TextIO.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/TextIO.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_28) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/TextIO.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/TextIO.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\TextIO.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\TextIO.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\TextIO.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/TextIO.cpp.i: cmake_force
@@ -480,7 +495,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/util.cpp.obj: CMakeFiles/AutoHotkey64H
 CMakeFiles/AutoHotkey64Harness.dir/source/util.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/util.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/util.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/util.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_28) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/util.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_29) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/util.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/util.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\util.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\util.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\util.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/util.cpp.i: cmake_force
@@ -495,7 +510,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/var.cpp.obj: CMakeFiles/AutoHotkey64Ha
 CMakeFiles/AutoHotkey64Harness.dir/source/var.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/var.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/var.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/var.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_29) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/var.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_30) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/var.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/var.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\var.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\var.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\var.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/var.cpp.i: cmake_force
@@ -510,7 +525,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/window.cpp.obj: CMakeFiles/AutoHotkey6
 CMakeFiles/AutoHotkey64Harness.dir/source/window.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/window.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/window.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/window.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_30) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/window.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_31) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/window.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/window.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\window.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\window.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\window.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/window.cpp.i: cmake_force
@@ -525,7 +540,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/WinGroup.cpp.obj: CMakeFiles/AutoHotke
 CMakeFiles/AutoHotkey64Harness.dir/source/WinGroup.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/WinGroup.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/WinGroup.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/WinGroup.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_31) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/WinGroup.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_32) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/WinGroup.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/WinGroup.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\WinGroup.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\WinGroup.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\WinGroup.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/WinGroup.cpp.i: cmake_force
@@ -540,7 +555,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/CCallback.cpp.obj: CMakeFiles/Auto
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/CCallback.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/CCallback.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/CCallback.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/CCallback.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_32) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/CCallback.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_33) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/CCallback.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/CCallback.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\CCallback.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\CCallback.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\CCallback.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/CCallback.cpp.i: cmake_force
@@ -555,7 +570,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/DllCall.cpp.obj: CMakeFiles/AutoHo
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/DllCall.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/DllCall.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/DllCall.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/DllCall.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_33) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/DllCall.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/DllCall.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/DllCall.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\DllCall.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\DllCall.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\DllCall.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/DllCall.cpp.i: cmake_force
@@ -570,7 +585,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/drive.cpp.obj: CMakeFiles/AutoHotk
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/drive.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/drive.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/drive.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/drive.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/drive.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/drive.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/drive.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\drive.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\drive.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\drive.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/drive.cpp.i: cmake_force
@@ -585,7 +600,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/env.cpp.obj: CMakeFiles/AutoHotkey
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/env.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/env.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/env.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/env.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/env.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_36) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/env.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/env.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\env.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\env.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\env.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/env.cpp.i: cmake_force
@@ -600,7 +615,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/file.cpp.obj: CMakeFiles/AutoHotke
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/file.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/file.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/file.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/file.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_36) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/file.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_37) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/file.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/file.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\file.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\file.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\file.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/file.cpp.i: cmake_force
@@ -615,7 +630,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.ListView.cpp.obj: CMakeFiles/A
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.ListView.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.ListView.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/Gui.ListView.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.ListView.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_37) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.ListView.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_38) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.ListView.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.ListView.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\Gui.ListView.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\Gui.ListView.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\Gui.ListView.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.ListView.cpp.i: cmake_force
@@ -630,7 +645,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.StatusBar.cpp.obj: CMakeFiles/
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.StatusBar.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.StatusBar.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/Gui.StatusBar.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.StatusBar.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_38) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.StatusBar.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_39) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.StatusBar.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.StatusBar.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\Gui.StatusBar.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\Gui.StatusBar.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\Gui.StatusBar.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.StatusBar.cpp.i: cmake_force
@@ -645,7 +660,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.TreeView.cpp.obj: CMakeFiles/A
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.TreeView.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.TreeView.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/Gui.TreeView.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.TreeView.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_39) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.TreeView.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_40) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.TreeView.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.TreeView.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\Gui.TreeView.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\Gui.TreeView.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\Gui.TreeView.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/Gui.TreeView.cpp.i: cmake_force
@@ -660,7 +675,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/input.cpp.obj: CMakeFiles/AutoHotk
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/input.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/input.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/input.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/input.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_40) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/input.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_41) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/input.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/input.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\input.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\input.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\input.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/input.cpp.i: cmake_force
@@ -675,7 +690,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/InputBox.cpp.obj: CMakeFiles/AutoH
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/InputBox.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/InputBox.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/InputBox.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/InputBox.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_41) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/InputBox.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_42) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/InputBox.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/InputBox.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\InputBox.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\InputBox.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\InputBox.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/InputBox.cpp.i: cmake_force
@@ -690,7 +705,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/interop.cpp.obj: CMakeFiles/AutoHo
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/interop.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/interop.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/interop.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/interop.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_42) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/interop.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_43) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/interop.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/interop.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\interop.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\interop.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\interop.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/interop.cpp.i: cmake_force
@@ -705,7 +720,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/math.cpp.obj: CMakeFiles/AutoHotke
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/math.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/math.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/math.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/math.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_43) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/math.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_44) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/math.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/math.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\math.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\math.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\math.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/math.cpp.i: cmake_force
@@ -720,7 +735,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/pixel.cpp.obj: CMakeFiles/AutoHotk
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/pixel.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/pixel.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/pixel.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/pixel.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_44) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/pixel.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_45) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/pixel.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/pixel.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\pixel.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\pixel.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\pixel.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/pixel.cpp.i: cmake_force
@@ -735,7 +750,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/process.cpp.obj: CMakeFiles/AutoHo
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/process.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/process.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/process.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/process.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_45) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/process.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_46) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/process.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/process.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\process.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\process.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\process.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/process.cpp.i: cmake_force
@@ -750,7 +765,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/regex.cpp.obj: CMakeFiles/AutoHotk
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/regex.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/regex.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/regex.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/regex.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_46) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/regex.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_47) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/regex.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/regex.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\regex.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\regex.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\regex.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/regex.cpp.i: cmake_force
@@ -765,7 +780,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/sound.cpp.obj: CMakeFiles/AutoHotk
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/sound.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/sound.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/sound.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/sound.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_47) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/sound.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_48) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/sound.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/sound.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\sound.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\sound.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\sound.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/sound.cpp.i: cmake_force
@@ -780,7 +795,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/string.cpp.obj: CMakeFiles/AutoHot
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/string.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/string.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/string.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/string.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_48) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/string.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_49) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/string.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/string.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\string.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\string.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\string.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/string.cpp.i: cmake_force
@@ -795,7 +810,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/vars.cpp.obj: CMakeFiles/AutoHotke
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/vars.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/vars.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/vars.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/vars.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_49) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/vars.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_50) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/vars.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/vars.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\vars.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\vars.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\vars.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/vars.cpp.i: cmake_force
@@ -810,7 +825,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/wait.cpp.obj: CMakeFiles/AutoHotke
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/wait.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/wait.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/wait.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/wait.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_50) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/wait.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/wait.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/wait.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\wait.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\wait.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\wait.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/wait.cpp.i: cmake_force
@@ -825,7 +840,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.obj: CMakeFiles/AutoHotkey
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_CXX.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/lib/win.cpp
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.obj: CMakeFiles/AutoHotkey64Harness.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_52) "Building CXX object CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.obj"
 	C:\msys64\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.obj -MF CMakeFiles\AutoHotkey64Harness.dir\source\lib\win.cpp.obj.d -o CMakeFiles\AutoHotkey64Harness.dir\source\lib\win.cpp.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\lib\win.cpp
 
 CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.i: cmake_force
@@ -839,7 +854,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/lib/win.cpp.s: cmake_force
 CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64call.s.obj: CMakeFiles/AutoHotkey64Harness.dir/flags.make
 CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64call.s.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_ASM.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64call.s.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/libx64call/x64call.s
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_52) "Building ASM object CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64call.s.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Building ASM object CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64call.s.obj"
 	C:\msys64\mingw64\bin\gcc.exe $(ASM_DEFINES) $(ASM_INCLUDES) $(ASM_FLAGS) -o CMakeFiles\AutoHotkey64Harness.dir\source\libx64call\x64call.s.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\libx64call\x64call.s
 
 CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64call.s.i: cmake_force
@@ -853,7 +868,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64call.s.s: cmake_force
 CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64stub.s.obj: CMakeFiles/AutoHotkey64Harness.dir/flags.make
 CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64stub.s.obj: CMakeFiles/AutoHotkey64Harness.dir/includes_ASM.rsp
 CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64stub.s.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/libx64call/x64stub.s
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Building ASM object CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64stub.s.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_54) "Building ASM object CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64stub.s.obj"
 	C:\msys64\mingw64\bin\gcc.exe $(ASM_DEFINES) $(ASM_INCLUDES) $(ASM_FLAGS) -o CMakeFiles\AutoHotkey64Harness.dir\source\libx64call\x64stub.s.obj -c C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\libx64call\x64stub.s
 
 CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64stub.s.i: cmake_force
@@ -866,7 +881,7 @@ CMakeFiles/AutoHotkey64Harness.dir/source/libx64call/x64stub.s.s: cmake_force
 
 CMakeFiles/AutoHotkey64Harness.dir/source/resources/AutoHotkey.rc.obj: CMakeFiles/AutoHotkey64Harness.dir/flags.make
 CMakeFiles/AutoHotkey64Harness.dir/source/resources/AutoHotkey.rc.obj: C:/Users/uphol/Documents/Design/Coding/AutoHotkey/source/resources/AutoHotkey.rc
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_54) "Building RC object CMakeFiles/AutoHotkey64Harness.dir/source/resources/AutoHotkey.rc.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_55) "Building RC object CMakeFiles/AutoHotkey64Harness.dir/source/resources/AutoHotkey.rc.obj"
 	C:\msys64\mingw64\bin\windres.exe -O coff $(RC_DEFINES) $(RC_INCLUDES) $(RC_FLAGS) C:\Users\uphol\Documents\Design\Coding\AutoHotkey\source\resources\AutoHotkey.rc CMakeFiles\AutoHotkey64Harness.dir\source\resources\AutoHotkey.rc.obj
 
 # Object files for target AutoHotkey64Harness
@@ -876,6 +891,7 @@ AutoHotkey64Harness_OBJECTS = \
 "CMakeFiles/AutoHotkey64Harness.dir/source/AutoHotkey.cpp.obj" \
 "CMakeFiles/AutoHotkey64Harness.dir/source/MdFunc.cpp.obj" \
 "CMakeFiles/AutoHotkey64Harness.dir/source/clipboard.cpp.obj" \
+"CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.obj" \
 "CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.obj" \
 "CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.obj" \
 "CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.obj" \
@@ -934,6 +950,7 @@ C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harnes
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harness.exe: CMakeFiles/AutoHotkey64Harness.dir/source/AutoHotkey.cpp.obj
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harness.exe: CMakeFiles/AutoHotkey64Harness.dir/source/MdFunc.cpp.obj
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harness.exe: CMakeFiles/AutoHotkey64Harness.dir/source/clipboard.cpp.obj
+C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harness.exe: CMakeFiles/AutoHotkey64Harness.dir/source/crashlog.cpp.obj
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harness.exe: CMakeFiles/AutoHotkey64Harness.dir/source/Debugger.cpp.obj
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harness.exe: CMakeFiles/AutoHotkey64Harness.dir/source/error.cpp.obj
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harness.exe: CMakeFiles/AutoHotkey64Harness.dir/source/globaldata.cpp.obj
@@ -988,7 +1005,7 @@ C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harnes
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harness.exe: CMakeFiles/AutoHotkey64Harness.dir/linkLibs.rsp
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harness.exe: CMakeFiles/AutoHotkey64Harness.dir/objects1.rsp
 C:/Users/uphol/Documents/Design/Coding/AutoHotkey/bin_harness/AutoHotkey64Harness.exe: CMakeFiles/AutoHotkey64Harness.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_55) "Linking CXX executable C:\Users\uphol\Documents\Design\Coding\AutoHotkey\bin_harness\AutoHotkey64Harness.exe"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=C:\Users\uphol\Documents\Design\Coding\AutoHotkey\build_mingw\CMakeFiles --progress-num=$(CMAKE_PROGRESS_56) "Linking CXX executable C:\Users\uphol\Documents\Design\Coding\AutoHotkey\bin_harness\AutoHotkey64Harness.exe"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles\AutoHotkey64Harness.dir\link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
