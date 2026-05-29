@@ -197,30 +197,23 @@ ResultType Script::Win32Error(DWORD aError, ResultType aErrorType)
 }
 
 
+static bool ResolveErrorColor(int aRequest); // defined below, near the formatters
+
 void Script::SetErrorStdOut(LPTSTR aParam, bool aColorMode)
 {
-	// Handle color mode: /ErrorStdOut:color
+	// Determine the color request.  The `:` form carries an explicit token
+	// (/ErrorStdOut:color or :nocolor); the plain and `=encoding` forms request
+	// auto-detection (color when stderr is a real console, unless NO_COLOR is set).
+	int color_request = 0; // 0 = auto
 	if (aColorMode)
 	{
-		mErrorStdOutColor = _tcsicmp(aParam, _T("color")) == 0;
-		if (mErrorStdOutColor)
-		{
-			// Try to enable ANSI escape sequences on stderr (Windows 10+)
-			HANDLE hErr = GetStdHandle(STD_ERROR_HANDLE);
-			DWORD mode;
-			if (GetConsoleMode(hErr, &mode))
-			{
-				// ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
-				SetConsoleMode(hErr, mode | 0x0004);
-			}
-			else
-			{
-				// Not a console (e.g., piped), disable colors
-				mErrorStdOutColor = false;
-			}
-		}
-		aParam = NULL; // Use default encoding
+		if (aParam && (!_tcsicmp(aParam, _T("nocolor")) || !_tcsicmp(aParam, _T("none")) || !_tcsicmp(aParam, _T("off"))))
+			color_request = -1; // explicit off
+		else
+			color_request = 1;  // explicit on (back-compat: any other ':' token meant "color")
+		aParam = NULL; // the ':' form carries no encoding
 	}
+	mErrorStdOutColor = ResolveErrorColor(color_request);
 
 	mErrorStdOutCP = Line::ConvertFileEncoding(aParam);
 	// Seems best not to print errors to stderr if the encoding was invalid.  Current behaviour
@@ -282,16 +275,160 @@ static int EscapeJsonText(LPTSTR aDest, int aDestSize, LPCTSTR aSrc)
 	return n;
 }
 
+// ---- ANSI color codes (shared by the plain-text formatter and source-context rendering) ----
+#define ANSI_RED     _T("\x1b[31m")
+#define ANSI_YELLOW  _T("\x1b[33m")
+#define ANSI_CYAN    _T("\x1b[36m")
+#define ANSI_RESET   _T("\x1b[0m")
+
+// Source-context display tuning.  ERR_CONTEXT_RADIUS lines are shown either side of
+// the error line in plain-text output; lines longer than ERR_CONTEXT_MAXLEN are
+// truncated for display (the structured JSON "source" field keeps the longer line).
+#define ERR_CONTEXT_RADIUS 2
+#define ERR_CONTEXT_MAXLEN 1024
+
+// Assembly buffer size for a single JSON diagnostic record.  Sized to hold every
+// escaped component (each independently capped by EscapeJsonText) plus the template,
+// so the final sntprintf can never truncate mid-record and emit invalid JSON.
+#define DIAG_JSON_BUF_SIZE (LINE_SIZE * 3 + T_MAX_PATH + SCRIPT_STACK_BUF_SIZE * 2 + 1280)
+
+// Read line aLineNumber (1-based) verbatim from the file behind aFileIndex into aBuf
+// (null-terminated, trailing EOL stripped).  Returns false for stdin/embedded sources
+// or unreadable files so the caller can fall back to a decompiled reconstruction.
+static bool GetVerbatimSourceLine(FileIndexType aFileIndex, LineNumberType aLineNumber, LPTSTR aBuf, int aBufSize)
+{
+	if (aBufSize > 0)
+		aBuf[0] = '\0';
+	if (aLineNumber == 0 || aFileIndex >= Line::sSourceFileCount)
+		return false;
+	LPCTSTR path = Line::sSourceFile[aFileIndex];
+	if (!path || !*path || *path == '*') // no real file on disk (stdin / embedded script)
+		return false;
+	TextFile tf;
+	if (!tf.Open(path, DEFAULT_READ_FLAGS, g_DefaultScriptCodepage))
+		return false;
+	TCHAR line_buf[LINE_SIZE + 2];
+	int line_length;
+	LineNumberType current = 0;
+	bool found = false;
+	while (-1 != (line_length = tf.ReadLine(line_buf, LINE_SIZE)))
+	{
+		if (++current != aLineNumber)
+			continue;
+		while (line_length > 0 && (line_buf[line_length - 1] == '\n' || line_buf[line_length - 1] == '\r'))
+			--line_length;
+		line_buf[line_length] = '\0';
+		tcslcpy(aBuf, line_buf, aBufSize);
+		found = true;
+		break;
+	}
+	tf.Close();
+	return found;
+}
+
+// Source text of aLine for display: verbatim file text when available, else the
+// decompiled ToText() reconstruction (which normalizes syntax, e.g. `throw Error(...)`
+// renders as `throw(Error(...))`).
+static void GetErrorSourceText(Line *aLine, LPTSTR aBuf, int aBufSize)
+{
+	if (aBufSize > 0)
+		aBuf[0] = '\0';
+	if (!aLine)
+		return;
+	if (GetVerbatimSourceLine(aLine->mFileIndex, aLine->mLineNumber, aBuf, aBufSize))
+		return;
+	aLine->ToText(aBuf, aBufSize, false, 0, false, false);
+}
+
+// Append a verbatim source-context block (ERR_CONTEXT_RADIUS lines either side of the
+// error line) to aBuf, marking the error line with '>' (and cyan when aUseColor).
+// Returns characters written, or -1 if the file couldn't be read or the error line
+// wasn't found, in which case the caller falls back to a single decompiled line.
+static int AppendSourceContext(LPTSTR aBuf, int aBufSize, FileIndexType aFileIndex,
+	LineNumberType aErrLineNo, bool aUseColor)
+{
+	if (aErrLineNo == 0 || aFileIndex >= Line::sSourceFileCount)
+		return -1;
+	LPCTSTR path = Line::sSourceFile[aFileIndex];
+	if (!path || !*path || *path == '*')
+		return -1;
+	TextFile tf;
+	if (!tf.Open(path, DEFAULT_READ_FLAGS, g_DefaultScriptCodepage))
+		return -1;
+	LineNumberType from = aErrLineNo > (LineNumberType)ERR_CONTEXT_RADIUS ? aErrLineNo - ERR_CONTEXT_RADIUS : 1u;
+	LineNumberType to = aErrLineNo + ERR_CONTEXT_RADIUS;
+	TCHAR line_buf[LINE_SIZE + 2];
+	int line_length, n = 0;
+	LineNumberType current = 0;
+	bool found_err = false;
+	while (-1 != (line_length = tf.ReadLine(line_buf, LINE_SIZE)))
+	{
+		if (++current > to)
+			break;
+		if (current < from)
+			continue;
+		if (aBufSize - n < ERR_CONTEXT_MAXLEN + 64) // out of room; stop cleanly
+			break;
+		while (line_length > 0 && (line_buf[line_length - 1] == '\n' || line_buf[line_length - 1] == '\r'))
+			--line_length;
+		bool truncated = line_length > ERR_CONTEXT_MAXLEN;
+		if (truncated)
+			line_length = ERR_CONTEXT_MAXLEN;
+		line_buf[line_length] = '\0';
+		bool is_err = (current == aErrLineNo);
+		found_err |= is_err;
+		LPCTSTR marker = is_err ? _T(">") : _T(" ");
+		LPCTSTR tail = truncated ? _T(" ...") : _T("");
+		if (aUseColor && is_err)
+			n += sntprintf(aBuf + n, aBufSize - n, _T("        %s ") ANSI_CYAN _T("%d| %s%s") ANSI_RESET _T("\n"),
+				marker, (int)current, line_buf, tail);
+		else
+			n += sntprintf(aBuf + n, aBufSize - n, _T("        %s %d| %s%s\n"),
+				marker, (int)current, line_buf, tail);
+	}
+	tf.Close();
+	return found_err ? n : -1;
+}
+
+// Resolve whether ANSI color should be used on stderr.  aRequest: 1=explicit on,
+// -1=explicit off, 0=auto.  Honors NO_COLOR (disable) and CLICOLOR_FORCE (force),
+// auto-enables when stderr is a real console, and enables VT processing when used.
+static bool ResolveErrorColor(int aRequest)
+{
+	if (aRequest < 0)
+		return false;
+	TCHAR env[2];
+	bool no_color = GetEnvironmentVariable(_T("NO_COLOR"), env, _countof(env)) > 0;       // present & non-empty
+	bool force = GetEnvironmentVariable(_T("CLICOLOR_FORCE"), env, _countof(env)) > 0;
+	HANDLE hErr = GetStdHandle(STD_ERROR_HANDLE);
+	DWORD mode;
+	bool is_console = GetConsoleMode(hErr, &mode) != 0;
+	// Precedence: CLICOLOR_FORCE forces color on; else NO_COLOR forces it off; else an
+	// explicit :color enables it, and auto mode enables it only when stderr is a console.
+	bool want = (aRequest == 1) ? (force || !no_color)
+	                            : (force || (is_console && !no_color));
+	if (!want)
+		return false;
+	if (is_console)
+		SetConsoleMode(hErr, mode | 0x0004); // ENABLE_VIRTUAL_TERMINAL_PROCESSING
+	else if (!force)
+		return false; // colors are meaningless on a non-console unless explicitly forced
+	return true;
+}
+
 static int FormatDiagJson(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraInfo
-	, FileIndexType aFileIndex, LineNumberType aLineNumber, ResultType aErrorType, Line *aLine, bool aIncludeStack)
+	, FileIndexType aFileIndex, LineNumberType aLineNumber, ResultType aErrorType, Line *aLine, bool aIncludeStack
+	, Object *aException = nullptr)
 {
 	if (!aBuf || aBufSize < 1)
 		return 0;
 
-	TCHAR msg[LINE_SIZE * 2];
+	TCHAR msg[LINE_SIZE];
 	TCHAR extra[LINE_SIZE];
-	TCHAR file[T_MAX_PATH * 2];
-	TCHAR source[LINE_SIZE * 2];
+	TCHAR what[256];
+	TCHAR type[128];
+	TCHAR file[T_MAX_PATH];
+	TCHAR source[LINE_SIZE];
 	TCHAR stack[SCRIPT_STACK_BUF_SIZE * 2];
 
 	LPCTSTR file_name = (aFileIndex < Line::sSourceFileCount && Line::sSourceFile[aFileIndex])
@@ -301,10 +438,20 @@ static int FormatDiagJson(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR
 	EscapeJsonText(extra, _countof(extra), aExtraInfo ? aExtraInfo : _T(""));
 	EscapeJsonText(file, _countof(file), file_name);
 
+	// Error class name (e.g. TypeError, OSError, SyntaxError) and the throwing context,
+	// taken from the exception object when one is available (runtime throws).
+	LPCTSTR type_src = aException ? aException->Type() : (aErrorType == WARN ? _T("Warning") : nullptr);
+	LPCTSTR what_src = aException ? aException->GetOwnPropString(_T("What")) : nullptr;
+	EscapeJsonText(type, _countof(type), type_src ? type_src : _T("Error"));
+	EscapeJsonText(what, _countof(what), what_src ? what_src : _T(""));
+
+	// Column within the line, when the exception carries one (e.g. SyntaxError from Eval).
+	int column = aException ? (int)aException->GetOwnPropInt64(_T("Column")) : 0;
+
 	if (aLine)
 	{
 		TCHAR line_buf[LINE_SIZE];
-		aLine->ToText(line_buf, _countof(line_buf), false, 0, false, false);
+		GetErrorSourceText(aLine, line_buf, _countof(line_buf));
 		EscapeJsonText(source, _countof(source), line_buf);
 	}
 	else
@@ -320,12 +467,22 @@ static int FormatDiagJson(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR
 	}
 #endif
 
-	int code = (aErrorType == CRITICAL_ERROR) ? AHK_EXIT_CRITICAL_ERROR
-		: (aErrorType == WARN ? 0 : AHK_EXIT_RUNTIME_ERROR);
+	// Match the actual process exit code (see AutoHotkey.cpp): load-time failures use
+	// the PARSE/VALIDATE codes, runtime failures use RUNTIME/CRITICAL.  mIsReadyToExecute
+	// distinguishes load-time from runtime; mCheckMode distinguishes /check (validate).
+	int code;
+	if (aErrorType == WARN)
+		code = 0;
+	else if (aErrorType == CRITICAL_ERROR)
+		code = AHK_EXIT_CRITICAL_ERROR;
+	else if (!g_script.mIsReadyToExecute)
+		code = g_script.mCheckMode ? AHK_EXIT_VALIDATE_ERROR : AHK_EXIT_PARSE_ERROR;
+	else
+		code = AHK_EXIT_RUNTIME_ERROR;
 
 	int n = sntprintf(aBuf, aBufSize
-		, _T("{\"kind\":\"diagnostic\",\"format\":\"json\",\"severity\":\"%s\",\"code\":%d,\"message\":\"%s\",\"extra\":\"%s\",\"file\":\"%s\",\"line\":%d,\"source\":\"%s\",\"stack\":\"%s\"}\n")
-		, DiagSeverity(aErrorType), code, msg, extra, file, (int)aLineNumber, source, stack);
+		, _T("{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":2,\"severity\":\"%s\",\"type\":\"%s\",\"code\":%d,\"message\":\"%s\",\"extra\":\"%s\",\"what\":\"%s\",\"file\":\"%s\",\"line\":%d,\"column\":%d,\"source\":\"%s\",\"stack\":\"%s\"}\n")
+		, DiagSeverity(aErrorType), type, code, msg, extra, what, file, (int)aLineNumber, column, source, stack);
 	if (n < 0 || n >= aBufSize)
 		return (int)_tcslen(aBuf);
 	return n;
@@ -379,11 +536,7 @@ int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraIn
 	FileIndexType aFileIndex, LineNumberType aLineNumber, bool aWarn = false,
 	Line *aLine = nullptr, bool aIncludeStack = false, bool aUseColor = false)
 {
-	// ANSI color codes
-	#define ANSI_RED     _T("\x1b[31m")
-	#define ANSI_YELLOW  _T("\x1b[33m")
-	#define ANSI_CYAN    _T("\x1b[36m")
-	#define ANSI_RESET   _T("\x1b[0m")
+	// ANSI color codes are defined at file scope (shared with AppendSourceContext).
 
 	int n = 0;
 
@@ -402,17 +555,25 @@ int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraIn
 	if (*aExtraInfo)
 		n += sntprintf(aBuf + n, aBufSize - n, _T("     Specifically: %s\n"), aExtraInfo);
 
-	// Source line display
+	// Source line display: prefer a verbatim context block read from the file; fall
+	// back to the decompiled single line if the file can't be read (stdin, embedded,
+	// deleted, or a line beyond EOF).
 	if (aLine)
 	{
-		TCHAR line_buf[LINE_SIZE];
-		aLine->ToText(line_buf, _countof(line_buf), false, 0, false, false);
-		if (aUseColor)
-			n += sntprintf(aBuf + n, aBufSize - n, _T("          ") ANSI_CYAN _T("%d| %s") ANSI_RESET _T("\n"),
-				(int)aLineNumber, line_buf);
+		int ctx = AppendSourceContext(aBuf + n, aBufSize - n, aFileIndex, aLineNumber, aUseColor);
+		if (ctx >= 0)
+			n += ctx;
 		else
-			n += sntprintf(aBuf + n, aBufSize - n, _T("          %d| %s\n"),
-				(int)aLineNumber, line_buf);
+		{
+			TCHAR line_buf[LINE_SIZE];
+			aLine->ToText(line_buf, _countof(line_buf), false, 0, false, false);
+			if (aUseColor)
+				n += sntprintf(aBuf + n, aBufSize - n, _T("          ") ANSI_CYAN _T("%d| %s") ANSI_RESET _T("\n"),
+					(int)aLineNumber, line_buf);
+			else
+				n += sntprintf(aBuf + n, aBufSize - n, _T("          %d| %s\n"),
+					(int)aLineNumber, line_buf);
+		}
 	}
 
 	// Stack trace (for runtime errors)
@@ -457,7 +618,9 @@ int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraIn
 // For backward compatibility, this actually prints to stderr, not stdout.
 void Script::PrintErrorStdOut(LPCTSTR aErrorText, LPCTSTR aExtraInfo, FileIndexType aFileIndex, LineNumberType aLineNumber, Line *aLine)
 {
-	TCHAR buf[LINE_SIZE * 4 + SCRIPT_STACK_BUF_SIZE];
+	TCHAR buf[DIAG_JSON_BUF_SIZE];
+	// This is the load-time path (mIsReadyToExecute is false here); FormatDiagJson derives
+	// the correct code (PARSE/VALIDATE) from that state rather than from aErrorType.
 	auto n = mDiagJson
 		? FormatDiagJson(buf, _countof(buf), aErrorText, aExtraInfo, aFileIndex, aLineNumber, FAIL, aLine, false)
 		: FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo, aFileIndex, aLineNumber, false, aLine, false, mErrorStdOutColor);
@@ -963,7 +1126,11 @@ ResultType Script::ShowError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR 
 		aExtraInfo = _T("");
 
 #ifdef CONFIG_DEBUGGER
-	if (g_Debugger.HasStdErrHook())
+	// Feed the debugger's stderr stream only when the console/headless path below won't:
+	// that path writes via PrintErrorStdOut("**"), which already routes to OutputStdErr
+	// when a hook is active.  Without this guard the debugger client receives each error
+	// twice (once here, once from the stderr path).
+	if (g_Debugger.HasStdErrHook() && !(mErrorStdOut || mHeadless))
 	{
 		TCHAR buf[LINE_SIZE * 4];
 		Line *line = aLine ? aLine : mCurrLine;
@@ -979,13 +1146,13 @@ ResultType Script::ShowError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR 
 	// This enables headless/console operation where all errors go to the shell.
 	if (mErrorStdOut || mHeadless)
 	{
-		TCHAR buf[LINE_SIZE * 4 + SCRIPT_STACK_BUF_SIZE];
+		TCHAR buf[DIAG_JSON_BUF_SIZE];
 		Line *line = aLine ? aLine : mCurrLine;
 		if (mDiagJson)
 			FormatDiagJson(buf, _countof(buf), aErrorText, aExtraInfo
 				, line ? line->mFileIndex : mCurrFileIndex
 				, line ? line->mLineNumber : mCombinedLineNumber
-				, aErrorType, line, mIsReadyToExecute);
+				, aErrorType, line, mIsReadyToExecute, aException);
 		else
 			FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo
 				, line ? line->mFileIndex : mCurrFileIndex
