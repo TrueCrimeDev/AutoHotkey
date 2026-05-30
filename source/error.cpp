@@ -279,6 +279,7 @@ static int EscapeJsonText(LPTSTR aDest, int aDestSize, LPCTSTR aSrc)
 #define ANSI_RED     _T("\x1b[31m")
 #define ANSI_YELLOW  _T("\x1b[33m")
 #define ANSI_CYAN    _T("\x1b[36m")
+#define ANSI_DIM     _T("\x1b[2m")
 #define ANSI_RESET   _T("\x1b[0m")
 
 // Source-context display tuning.  ERR_CONTEXT_RADIUS lines are shown either side of
@@ -416,6 +417,18 @@ static bool ResolveErrorColor(int aRequest)
 	return true;
 }
 
+// Retrieve the current script call stack into aBuf (empty string if unavailable or not
+// requested).  Shared by both formatters so their stack-gathering can't drift apart.
+static void RetrieveErrorStack(LPTSTR aBuf, int aBufSize, bool aIncludeStack)
+{
+	if (aBufSize > 0)
+		aBuf[0] = '\0';
+#ifdef CONFIG_DEBUGGER
+	if (aIncludeStack && g_Debugger.mStack.Depth() > 0)
+		GetScriptStack(aBuf, aBufSize);
+#endif
+}
+
 static int FormatDiagJson(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraInfo
 	, FileIndexType aFileIndex, LineNumberType aLineNumber, ResultType aErrorType, Line *aLine, bool aIncludeStack
 	, Object *aException = nullptr)
@@ -457,15 +470,9 @@ static int FormatDiagJson(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR
 	else
 		*source = '\0';
 
-	*stack = '\0';
-#ifdef CONFIG_DEBUGGER
-	if (aIncludeStack)
-	{
-		TCHAR stack_buf[SCRIPT_STACK_BUF_SIZE];
-		GetScriptStack(stack_buf, _countof(stack_buf));
-		EscapeJsonText(stack, _countof(stack), stack_buf);
-	}
-#endif
+	TCHAR stack_buf[SCRIPT_STACK_BUF_SIZE];
+	RetrieveErrorStack(stack_buf, _countof(stack_buf), aIncludeStack);
+	EscapeJsonText(stack, _countof(stack), stack_buf);
 
 	// Match the actual process exit code (see AutoHotkey.cpp): load-time failures use
 	// the PARSE/VALIDATE codes, runtime failures use RUNTIME/CRITICAL.  mIsReadyToExecute
@@ -503,15 +510,21 @@ void Script::PrintErrorStdOut(LPCTSTR aErrorText, int aLength, LPCTSTR aFile)
 			return;
 	}
 #endif
+	// Structured JSON diagnostics must be UTF-8 (RFC 8259) regardless of the text
+	// codepage chosen for /ErrorStdOut; plain-text output keeps the configured codepage.
+	// (For pure-ASCII content the two are byte-identical, so this only matters for
+	// non-ASCII messages, paths, or source lines.)
+	UINT out_cp = mDiagJson ? CP_UTF8 : mErrorStdOutCP;
+
 	TextFile tf;
-	tf.Open(aFile, TextStream::APPEND, mErrorStdOutCP);
+	tf.Open(aFile, TextStream::APPEND, out_cp);
 	tf.Write(aErrorText, aLength);
 	tf.Close();
 
 	// Tee stderr output to /StdErrFile= path if configured.
 	if (is_stderr && CrashLog::IsStdErrFileEnabled() && aLength > 0)
 	{
-		if (mErrorStdOutCP == CP_UTF16)
+		if (out_cp == CP_UTF16)
 		{
 			// Write raw UTF-16LE bytes (same as what went to stderr).
 			CrashLog::MirrorStderr(aErrorText, (size_t)aLength * sizeof(TCHAR));
@@ -519,7 +532,7 @@ void Script::PrintErrorStdOut(LPCTSTR aErrorText, int aLength, LPCTSTR aFile)
 		else
 		{
 			// Convert wide chars to the target codepage, same as TextStream::Write does.
-			UINT cp = (mErrorStdOutCP == 0) ? CP_ACP : (UINT)mErrorStdOutCP;
+			UINT cp = (out_cp == 0) ? CP_ACP : (UINT)out_cp;
 			int byte_count = WideCharToMultiByte(cp, 0, aErrorText, aLength, nullptr, 0, nullptr, nullptr);
 			if (byte_count > 0)
 			{
@@ -551,9 +564,14 @@ int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraIn
 	if (aUseColor)
 		n += sntprintf(aBuf + n, aBufSize - n, ANSI_RESET);
 
-	// Extra info (Specifically: ...)
+	// Extra info (Specifically: ...) — the label is dimmed so the value stands out.
 	if (*aExtraInfo)
-		n += sntprintf(aBuf + n, aBufSize - n, _T("     Specifically: %s\n"), aExtraInfo);
+	{
+		if (aUseColor)
+			n += sntprintf(aBuf + n, aBufSize - n, _T("     ") ANSI_DIM _T("Specifically:") ANSI_RESET _T(" %s\n"), aExtraInfo);
+		else
+			n += sntprintf(aBuf + n, aBufSize - n, _T("     Specifically: %s\n"), aExtraInfo);
+	}
 
 	// Source line display: prefer a verbatim context block read from the file; fall
 	// back to the decompiled single line if the file can't be read (stdin, embedded,
@@ -577,14 +595,15 @@ int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraIn
 	}
 
 	// Stack trace (for runtime errors)
-#ifdef CONFIG_DEBUGGER
-	if (aIncludeStack && g_Debugger.mStack.Depth() > 0)
 	{
 		TCHAR stack_buf[SCRIPT_STACK_BUF_SIZE];
-		GetScriptStack(stack_buf, _countof(stack_buf));
+		RetrieveErrorStack(stack_buf, _countof(stack_buf), aIncludeStack);
 		if (*stack_buf)
 		{
-			n += sntprintf(aBuf + n, aBufSize - n, _T("     Call stack:\n"));
+			if (aUseColor)
+				n += sntprintf(aBuf + n, aBufSize - n, _T("     ") ANSI_DIM _T("Call stack:") ANSI_RESET _T("\n"));
+			else
+				n += sntprintf(aBuf + n, aBufSize - n, _T("     Call stack:\n"));
 			// Indent each line of the stack trace
 			LPTSTR line_start = stack_buf;
 			for (LPTSTR p = stack_buf; ; ++p)
@@ -610,7 +629,6 @@ int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraIn
 			}
 		}
 	}
-#endif
 
 	return n;
 }
@@ -2060,8 +2078,13 @@ void Script::ScriptWarning(WarnMode warnMode, LPCTSTR aWarningText, LPCTSTR aExt
 	if (warnMode == WARNMODE_OFF)
 		return;
 
-	TCHAR buf[MSGBOX_TEXT_SIZE];
-	auto n = FormatStdErr(buf, _countof(buf), aWarningText, aExtraInfo, fileIndex, lineNumber, true, line, false, mErrorStdOutColor);
+	// In /Diag=json mode, emit the warning as a JSON record too, so it doesn't corrupt
+	// the structured stream with plain text.  Buffer sized for the JSON path (the
+	// plain-text path needs far less).
+	TCHAR buf[DIAG_JSON_BUF_SIZE];
+	auto n = mDiagJson
+		? FormatDiagJson(buf, _countof(buf), aWarningText, aExtraInfo, fileIndex, lineNumber, WARN, line, false)
+		: FormatStdErr(buf, _countof(buf), aWarningText, aExtraInfo, fileIndex, lineNumber, true, line, false, mErrorStdOutColor);
 
 	if (warnMode == WARNMODE_STDOUT)
 		PrintErrorStdOut(buf, n);
