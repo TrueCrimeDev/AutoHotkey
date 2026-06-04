@@ -164,7 +164,7 @@ function(configure_ahk_executable target_name output_dir)
     )
 
     if(MSVC)
-        target_compile_options(${target_name} PRIVATE /W3 /MP)
+        target_compile_options(${target_name} PRIVATE /W3 /MP $<$<COMPILE_LANGUAGE:CXX>:/Zc:strictStrings->)
         target_compile_definitions(${target_name} PRIVATE _CRT_SECURE_NO_WARNINGS)
         target_link_options(${target_name} PRIVATE /MANIFEST:NO)
         set_property(TARGET ${target_name} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
