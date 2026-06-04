@@ -407,10 +407,8 @@ struct ExprTokenType  // Something in the compiler hates the name TokenType, so 
 	void SetValue(int aValue) { SetValue((__int64)aValue); }
 	void SetValue(UINT aValue) { SetValue((__int64)aValue); }
 	void SetValue(UINT64 aValue) { SetValue((__int64)aValue); }
-	#ifndef _MSC_VER
 	void SetValue(long aValue) { SetValue((__int64)aValue); }
 	void SetValue(unsigned long aValue) { SetValue((__int64)aValue); }
-	#endif
 	void SetValue(double aValue)
 	{
 		symbol = SYM_FLOAT;
