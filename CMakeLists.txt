@@ -136,7 +136,24 @@ set(AHK_RESOURCES
     source/resources/AutoHotkey.rc
 )
 
+set(AHK_GENERATED_MANIFEST "${CMAKE_SOURCE_DIR}/temp/AutoHotkey.exe.manifest")
+add_custom_command(
+    OUTPUT "${AHK_GENERATED_MANIFEST}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/temp"
+    COMMAND cscript.exe //E:JScript //NoLogo
+        "${CMAKE_SOURCE_DIR}/source/scripts/minman.js"
+        "${CMAKE_SOURCE_DIR}/source/resources/AutoHotkey.exe.manifest"
+        "${AHK_GENERATED_MANIFEST}"
+    DEPENDS
+        source/scripts/minman.js
+        source/resources/AutoHotkey.exe.manifest
+    VERBATIM
+)
+add_custom_target(ahk_manifest DEPENDS "${AHK_GENERATED_MANIFEST}")
+
 function(configure_ahk_executable target_name output_dir)
+    add_dependencies(${target_name} ahk_manifest)
+
     target_include_directories(${target_name} PRIVATE
         source
         source/lib_pcre/pcre
