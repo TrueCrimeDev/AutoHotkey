@@ -1,5 +1,0 @@
-C:/Users/uphol/Documents/Design/Coding/AutoHotkey/build_mingw/CMakeFiles/pcre16.dir
-C:/Users/uphol/Documents/Design/Coding/AutoHotkey/build_mingw/CMakeFiles/AutoHotkey64.dir
-C:/Users/uphol/Documents/Design/Coding/AutoHotkey/build_mingw/CMakeFiles/AutoHotkey64Harness.dir
-C:/Users/uphol/Documents/Design/Coding/AutoHotkey/build_mingw/CMakeFiles/edit_cache.dir
-C:/Users/uphol/Documents/Design/Coding/AutoHotkey/build_mingw/CMakeFiles/rebuild_cache.dir

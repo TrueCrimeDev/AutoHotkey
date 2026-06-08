@@ -50,7 +50,5 @@ C:\\*
 # Local workspace-only artifacts
 .claude/worktrees/
 .git_corrupt_*/
-build_debug/
-build_msvc/
-build_ninja/
+build_*/
 cmake -G */

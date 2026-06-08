@@ -1,3 +1,0 @@
-C:\msys64\mingw64\bin\cmake.exe -E rm -f CMakeFiles\AutoHotkey64Harness.dir/objects.a
-C:\msys64\mingw64\bin\ar.exe qc CMakeFiles\AutoHotkey64Harness.dir/objects.a @CMakeFiles\AutoHotkey64Harness.dir\objects1.rsp
-C:\msys64\mingw64\bin\g++.exe -O3 -DNDEBUG -static -static-libgcc -static-libstdc++ -municode -Wl,--subsystem,console -Wl,--whole-archive CMakeFiles\AutoHotkey64Harness.dir/objects.a -Wl,--no-whole-archive -o C:\Users\uphol\Documents\Design\Coding\AutoHotkey\bin_harness\AutoHotkey64Harness.exe -Wl,--out-implib,libAutoHotkey64Harness.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\AutoHotkey64Harness.dir\linkLibs.rsp
