@@ -43,7 +43,7 @@ test('close resolves waiting error consumers', async () => {
 test('command response, timeout and close release pending requests', async () => {
   const client = new DBGpClient(0, 20);
   client.connected = true;
-  client.socket = { write: () => true, end() {}, destroy() {} };
+  client.socket = client.output = { write: () => true, end() {}, destroy() {} };
   const completed = client.getStatus();
   client.handleData(frame('<response command="status" transaction_id="1" status="break"/>'));
   assert.equal((await completed).status, 'break');

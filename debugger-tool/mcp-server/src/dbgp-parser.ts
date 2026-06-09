@@ -1,8 +1,11 @@
 /**
- * DBGp frame parser and packet classifier.
- * Wire framing (both directions, TCP and stdio): <length>\0<xml>\0
- * where <length> is the ASCII decimal byte count of <xml>.
+ * DBGp packet classification for the MCP server.
+ * Wire framing (both directions, TCP and stdio) is <length>\0<xml>\0 and is
+ * implemented once in @ahk/dbgp-protocol; DbgpFrameParser is that framer in
+ * lenient mode, which diverts raw script output that shares a stdio pipe.
  */
+
+import { DBGpFramer } from '@ahk/dbgp-protocol';
 
 export interface DbgpStreamPacket {
   kind: 'stream';
@@ -24,33 +27,16 @@ export interface DbgpResponsePacket {
 export type DbgpPacket = DbgpStreamPacket | DbgpInitPacket | DbgpResponsePacket;
 
 export class DbgpFrameParser {
-  private buffer = Buffer.alloc(0);
+  private framer = new DBGpFramer(undefined, { divertRaw: true });
 
   /** Feed raw bytes; returns any complete XML payloads. */
   feed(chunk: Buffer): string[] {
-    this.buffer = Buffer.concat([this.buffer, chunk]);
-    const messages: string[] = [];
+    return this.framer.push(chunk);
+  }
 
-    for (;;) {
-      const nullPos = this.buffer.indexOf(0);
-      if (nullPos === -1) break;
-
-      const lengthStr = this.buffer.subarray(0, nullPos).toString('ascii');
-      const dataLength = parseInt(lengthStr, 10);
-      if (isNaN(dataLength) || dataLength < 0 || String(dataLength) !== lengthStr) {
-        // Corrupted framing — drop one byte and resync.
-        this.buffer = this.buffer.subarray(1);
-        continue;
-      }
-
-      const totalNeeded = nullPos + 1 + dataLength + 1;
-      if (this.buffer.length < totalNeeded) break; // wait for more data
-
-      messages.push(this.buffer.subarray(nullPos + 1, nullPos + 1 + dataLength).toString('utf-8'));
-      this.buffer = this.buffer.subarray(totalNeeded);
-    }
-
-    return messages;
+  /** Bytes diverted because they were not part of any DBGp frame (raw script output). */
+  drainRaw(): string {
+    return this.framer.drainRaw();
   }
 }
 
