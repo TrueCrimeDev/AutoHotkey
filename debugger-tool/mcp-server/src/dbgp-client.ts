@@ -1,9 +1,11 @@
 /**
- * DBGp Client - Connects to AutoHotkey debugger via DBGp protocol
+ * DBGp Client - speaks DBGp to AutoHotkey over any stream pair
+ * (TCP socket or a child process's stdio when launched with /Debug=stdio).
  */
 
 import * as net from 'net';
 import { EventEmitter } from 'events';
+import { DbgpFrameParser, classifyPacket } from './dbgp-parser.js';
 
 export interface DebugResponse {
   command: string;
@@ -47,13 +49,22 @@ export interface ErrorInfo {
   timestamp: number;
 }
 
+interface PendingCommand {
+  resolve: (response: DebugResponse) => void;
+  reject: (err: Error) => void;
+  timer: NodeJS.Timeout | null;
+}
+
 export class DBGpClient extends EventEmitter {
   private server: net.Server | null = null;
-  private socket: net.Socket | null = null;
+  private output: NodeJS.WritableStream | null = null;
   private transactionId = 1;
   private port: number;
-  private buffer = '';
+  private parser = new DbgpFrameParser();
   private connected = false;
+  private pending = new Map<number, PendingCommand>();
+  private stdoutBuffer = '';
+  private stderrBuffer = '';
   private errorQueue: ErrorInfo[] = [];
   private errorQueueMaxSize = 100;
   private errorWaiters: Array<(error: ErrorInfo) => void> = [];
@@ -64,21 +75,46 @@ export class DBGpClient extends EventEmitter {
   }
 
   /**
-   * Start listening for AutoHotkey connection
+   * Attach any (input, output) stream pair as the DBGp transport.
+   * TCP: attachStream(socket, socket). Stdio child: attachStream(child.stdout, child.stdin).
+   */
+  attachStream(input: NodeJS.ReadableStream, output: NodeJS.WritableStream): void {
+    this.parser = new DbgpFrameParser();
+    this.output = output;
+    input.on('data', (data: Buffer) => {
+      for (const xml of this.parser.feed(data)) this.handlePacket(xml);
+      // Raw bytes interleaved with frames are script stdout that bypassed
+      // DBGp stream redirection (e.g. Print() in /Debug=stdio mode).
+      const raw = this.parser.drainRaw();
+      if (raw) {
+        this.stdoutBuffer += raw;
+        this.emit('stream', { kind: 'stream', stream: 'stdout', text: raw });
+      }
+    });
+    input.on('end', () => this.detach());
+    input.on('error', (err: Error) => this.emit('error', err));
+  }
+
+  /** Drop the current transport, rejecting all in-flight commands. */
+  detach(): void {
+    if (!this.connected && !this.output) return;
+    this.connected = false;
+    this.output = null;
+    for (const [, entry] of this.pending) {
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.reject(new Error('Debugger disconnected'));
+    }
+    this.pending.clear();
+    this.emit('disconnected');
+  }
+
+  /**
+   * Start listening for an AutoHotkey TCP connection (legacy /Debug mode).
    */
   async listen(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server = net.createServer((socket) => {
-        this.socket = socket;
-        this.connected = true;
-        this.emit('connected');
-
-        socket.on('data', (data) => this.handleData(data));
-        socket.on('end', () => {
-          this.connected = false;
-          this.emit('disconnected');
-        });
-        socket.on('error', (err) => this.emit('error', err));
+        this.attachStream(socket, socket);
       });
 
       this.server.listen(this.port, '127.0.0.1', () => {
@@ -90,37 +126,49 @@ export class DBGpClient extends EventEmitter {
     });
   }
 
-  /**
-   * Handle incoming data from AutoHotkey
-   */
-  private handleData(data: Buffer): void {
-    this.buffer += data.toString();
+  private handlePacket(xml: string): void {
+    const packet = classifyPacket(xml);
 
-    // DBGp messages are null-terminated with length prefix
-    while (true) {
-      const nullIdx = this.buffer.indexOf('\0');
-      if (nullIdx === -1) break;
+    if (packet.kind === 'stream') {
+      if (packet.stream === 'stdout') this.stdoutBuffer += packet.text;
+      else this.stderrBuffer += packet.text;
+      this.emit('stream', packet);
+      return;
+    }
 
-      const message = this.buffer.substring(0, nullIdx);
-      this.buffer = this.buffer.substring(nullIdx + 1);
+    if (packet.kind === 'init') {
+      this.connected = true;
+      this.emit('init', packet.attributes);
+      this.emit('connected');
+      return;
+    }
 
-      // Parse length prefix if present
-      if (message.match(/^\d+\0/)) {
-        const parts = message.split('\0', 2);
-        if (parts.length === 2) {
-          this.emit('message', parts[1]);
-        }
-      } else {
-        this.emit('message', message);
-      }
+    this.emit('message', xml);
+    const tid = parseInt(packet.attributes.transaction_id ?? '', 10);
+    const entry = isNaN(tid) ? undefined : this.pending.get(tid);
+    if (entry) {
+      this.pending.delete(tid);
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.resolve(this.parseResponse(xml));
     }
   }
 
+  /** Buffered script output captured from DBGp <stream> packets. */
+  getOutput(stream: 'stdout' | 'stderr', clear = false): string {
+    const value = stream === 'stdout' ? this.stdoutBuffer : this.stderrBuffer;
+    if (clear) {
+      if (stream === 'stdout') this.stdoutBuffer = '';
+      else this.stderrBuffer = '';
+    }
+    return value;
+  }
+
   /**
-   * Send DBGp command
+   * Send DBGp command. timeoutMs=0 disables the timeout (used for run/step,
+   * which legitimately block until a breakpoint or script end).
    */
-  private async sendCommand(command: string): Promise<DebugResponse> {
-    if (!this.socket || !this.connected) {
+  private async sendCommand(command: string, timeoutMs = 5000): Promise<DebugResponse> {
+    if (!this.output || !this.connected) {
       throw new Error('Not connected to AutoHotkey debugger');
     }
 
@@ -128,20 +176,15 @@ export class DBGpClient extends EventEmitter {
     const fullCommand = `${command} -i ${tid}\0`;
 
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Command timeout'));
-      }, 5000);
+      const timer = timeoutMs > 0
+        ? setTimeout(() => {
+            this.pending.delete(tid);
+            reject(new Error(`Command timeout after ${timeoutMs}ms: ${command}`));
+          }, timeoutMs)
+        : null;
 
-      const handler = (message: string) => {
-        if (message.includes(`transaction_id="${tid}"`)) {
-          clearTimeout(timeout);
-          this.off('message', handler);
-          resolve(this.parseResponse(message));
-        }
-      };
-
-      this.on('message', handler);
-      this.socket!.write(fullCommand);
+      this.pending.set(tid, { resolve, reject, timer });
+      this.output!.write(fullCommand);
     });
   }
 
@@ -229,20 +272,20 @@ export class DBGpClient extends EventEmitter {
 
   // === Debug Control Commands ===
 
-  async run(): Promise<DebugResponse> {
-    return this.sendCommand('run');
+  async run(timeoutMs = 60000): Promise<DebugResponse> {
+    return this.sendCommand('run', timeoutMs);
   }
 
   async stepInto(): Promise<DebugResponse> {
-    return this.sendCommand('step_into');
+    return this.sendCommand('step_into', 60000);
   }
 
   async stepOver(): Promise<DebugResponse> {
-    return this.sendCommand('step_over');
+    return this.sendCommand('step_over', 60000);
   }
 
   async stepOut(): Promise<DebugResponse> {
-    return this.sendCommand('step_out');
+    return this.sendCommand('step_out', 60000);
   }
 
   async stop(): Promise<DebugResponse> {
@@ -338,15 +381,11 @@ export class DBGpClient extends EventEmitter {
   }
 
   async close(): Promise<void> {
-    if (this.socket) {
-      this.socket.end();
-      this.socket = null;
-    }
+    this.detach();
     if (this.server) {
       this.server.close();
       this.server = null;
     }
-    this.connected = false;
   }
 
   // === Error Queue Management ===

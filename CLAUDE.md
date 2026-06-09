@@ -41,6 +41,11 @@ An MCP-based debugging ecosystem for AutoHotkey v2 with LLM integration. Capture
 # Run with debugger enabled (from WSL, connects to MCP server on port 9000)
 /mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe /Debug ScriptName.ahk
 
+# Preferred from MCP: launch_script tool spawns the engine itself over /Debug=stdio (no port 9000)
+
+# Run a generated snippet from stdin without a temp file
+echo 'Print("hi")' | bin/AutoHotkey64.exe /ErrorStdOut *
+
 # Start MCP server
 cd debugger-tool/mcp-server && npm run build && node build/index.js
 

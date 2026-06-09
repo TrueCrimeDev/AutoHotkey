@@ -62,6 +62,54 @@ Example in repo:
 
 - `test_console.ahk`
 
+### 6. Launch under MCP supervision (stdio debugger, preferred)
+
+The MCP server can spawn the engine itself — no port 9000, no listen-first ordering:
+
+- MCP tool `launch_script` runs `bin\AutoHotkey64.exe /Debug=stdio script.ahk` as a child process.
+- DBGp frames travel over the child's stdin/stdout; script `Print()`/stdout output is
+  redirected into DBGp `<stream>` packets (`stdout -c 2`) and read via `get_script_output`.
+- The script starts paused before auto-execute; `debug_run` begins execution.
+- An exception breakpoint is set by default, so uncaught errors break for inspection
+  (stack, variables, eval) instead of killing the process.
+
+### 7. Run generated code from stdin (no temp file)
+
+The engine accepts `*` as the script name and reads source from stdin:
+
+```powershell
+echo 'Print("hi")' | bin\AutoHotkey64.exe /ErrorStdOut *
+```
+
+Useful for validating or running harness-generated snippets without touching disk.
+Combine with `check` for syntax-only validation of a snippet.
+
+### 8. Interrupt a running script: break → eval → run
+
+DBGp advertises `supports_async=1`, so a busy script can be interrupted at any time:
+
+1. Send `break` (MCP: `debug_command` with `break`) — script pauses wherever it is.
+2. Inspect or mutate: `evaluate`, `variables_get`, `property_set`.
+3. Send `run` to resume.
+
+This is the supported "REPL into a running process" pattern; it works even when the
+script's own message loop is busy (unlike any in-script listener approach).
+
+### 9. NDJSON event stream convention
+
+For machine-readable script telemetry, emit one JSON object per line on stdout using
+single-argument `Print()` (single-arg form never passes through Format, so literal
+braces survive):
+
+```autohotkey
+Print('{"event":"start","detail":"loading config"}')
+Print('{"event":"progress","step":3,"total":10}')
+```
+
+A supervising harness reads these from `get_script_output` (stdio launch) or the
+process stdout (plain console run) and parses each line independently. Errors arrive
+on the same model via `/Diag=json` on stderr.
+
 ## End-to-End Data Flow
 
 ### Console/Error path
