@@ -78,7 +78,7 @@ bin\AutoHotkey64.exe script.ahk
 ### Confirm the console behavior
 
 ```powershell
-bin\AutoHotkey64.exe /ErrorStdOut test_errorstdout.ahk 1>out.txt 2>err.txt
+bin\AutoHotkey64.exe /ErrorStdOut tests/test_errorstdout.ahk 1>out.txt 2>err.txt
 ```
 
 Normal output ends up in `out.txt`; the runtime error lands in `err.txt`. That split — stdout
@@ -303,7 +303,7 @@ Tool-by-tool usage lives in [`debugger-tool/mcp-server/README.md`](debugger-tool
 | [`debugger-tool/mcp-server/`](debugger-tool/mcp-server/) | MCP server bridging LLM tools to AutoHotkey's DBGp debugger |
 | [`debugger-tool/ahk-error-agent/`](debugger-tool/ahk-error-agent/) | Headless error-capture and fix-automation agent |
 | [`examples/`](examples/) | Runnable feature demos — `alpha21/`, `alpha22/`, plus structs, GUIs, and ANSI showcases |
-| `Alpha22_Example.ahk` … `Alpha30_Example.ahk` | Per-version language showcases (root) |
+| `examples/Alpha22_Example.ahk` … `examples/Alpha30_Example.ahk` | Per-version language showcases |
 | `tests/` | Test suite for `Eval`, crash logging, and exit codes |
 | [`BUILD.md`](BUILD.md) | Build instructions |
 | [`updates.md`](updates.md) | Complete fork reference |

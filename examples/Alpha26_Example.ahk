@@ -12,7 +12,7 @@ Changes in alpha.26:
   8. Fixed CallbackCreate reference counting (PR #356)
   9. Fixed IsSet with expressions ending in '?'
 
-Run: bin\AutoHotkey64.exe Alpha26_Example.ahk
+Run: bin\AutoHotkey64.exe examples\Alpha26_Example.ahk
 */
 #Requires AutoHotkey v2.1-alpha.26
 

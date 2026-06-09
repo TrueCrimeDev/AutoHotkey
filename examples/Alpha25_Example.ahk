@@ -11,7 +11,7 @@ New features and fixes:
   7. GUI control calculations fix (Windows 7)
   8. Timer/MsgBox interaction fix
 
-Run: bin\AutoHotkey64.exe Alpha25_Example.ahk
+Run: bin\AutoHotkey64.exe examples\Alpha25_Example.ahk
 */
 #Requires AutoHotkey v2.1-alpha.25
 

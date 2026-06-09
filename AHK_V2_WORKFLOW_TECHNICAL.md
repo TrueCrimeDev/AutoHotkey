@@ -38,7 +38,7 @@ In this fork, runtime errors can be printed to stderr instead of modal dialogs (
 
 Test file in repo:
 
-- `test_errorstdout.ahk`
+- `tests/test_errorstdout.ahk`
 
 ### 4. Run in debugger mode (DBGp)
 
@@ -60,7 +60,7 @@ AHK acts as the DBGp client and connects to a listening debugger server (default
 
 Example in repo:
 
-- `test_console.ahk`
+- `tests/test_console.ahk`
 
 ## End-to-End Data Flow
 
@@ -133,7 +133,7 @@ FileAppend("oops`n", "**")   ; stderr
 
 Used directly in:
 
-- `test_console.ahk`
+- `tests/test_console.ahk`
 - `debugger-tool/ahk-error-agent/include/cloudahk-error-handler.ahk`
 
 ## 4) DBGp stream redirection (`stdout`/`stderr` commands)

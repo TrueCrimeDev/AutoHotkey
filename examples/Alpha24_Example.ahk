@@ -9,7 +9,7 @@ New features:
   5. GetOwnPropDesc returns classes for numeric types
   6. Bug fixes (circular refs, nested struct cleanup, etc.)
 
-Run: bin\AutoHotkey64.exe Alpha24_Example.ahk
+Run: bin\AutoHotkey64.exe examples\Alpha24_Example.ahk
 */
 #Requires AutoHotkey v2.1-alpha.24
 
