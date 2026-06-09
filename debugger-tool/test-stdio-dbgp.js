@@ -35,7 +35,7 @@ const readline = require('readline');
 
 // --- Config ---
 const AHK_EXE = path.resolve(__dirname, '..', 'bin', 'AutoHotkey64.exe');
-const DEFAULT_SCRIPT = path.resolve(__dirname, '..', 'Alpha22_Example.ahk');
+const DEFAULT_SCRIPT = path.resolve(__dirname, '..', 'examples', 'Alpha22_Example.ahk');
 const scriptPath = process.argv[2]
   ? path.resolve(process.argv[2])
   : DEFAULT_SCRIPT;

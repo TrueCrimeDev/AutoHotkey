@@ -52,3 +52,6 @@ C:\\*
 .git_corrupt_*/
 build_*/
 cmake -G */
+
+# Test run artifacts
+tests/tmp/
