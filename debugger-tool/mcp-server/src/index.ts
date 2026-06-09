@@ -16,12 +16,14 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { DBGpClient, ErrorInfo } from './dbgp-client.js';
+import { ScriptLauncher } from './launcher.js';
 import { z } from 'zod';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 
 const client = new DBGpClient(9000);
+const launcher = new ScriptLauncher(client);
 
 // === Claude API (lazy init) ===
 
@@ -114,6 +116,17 @@ const WorkspaceSymbolsSchema = z.object({
   root: z.string().optional().describe('Workspace root to scan (defaults to current working directory)'),
   query: z.string().optional().describe('Optional case-insensitive symbol filter'),
   max_results: z.number().optional().describe('Maximum symbols to return (default: 200)'),
+});
+
+const LaunchScriptSchema = z.object({
+  script: z.string().describe('Path to the .ahk script (Windows path or WSL /mnt/<drive>/ path)'),
+  exe: z.string().optional().describe('Path to AutoHotkey64.exe (default: repo bin/AutoHotkey64.exe, or AHK_EXE env var)'),
+  args: z.array(z.string()).optional().describe('Extra command-line arguments passed to the script'),
+  break_on_exception: z.boolean().optional().describe('Break on uncaught exceptions (default: true)'),
+});
+
+const GetScriptOutputSchema = z.object({
+  clear: z.boolean().optional().describe('Clear buffered output after reading (default: false)'),
 });
 
 type SourceSymbol = {
@@ -253,6 +266,38 @@ async function snapshotWatches(): Promise<WatchSnapshot[]> {
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      // Process Supervision (stdio transport)
+      {
+        name: 'launch_script',
+        description: 'Launch an AutoHotkey script as a supervised child process with the debugger attached over stdio (no port 9000 needed). Script starts paused; call debug_run to begin execution.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            script: { type: 'string', description: 'Path to the .ahk script (Windows or WSL /mnt path)' },
+            exe: { type: 'string', description: 'Path to AutoHotkey64.exe (optional)' },
+            args: { type: 'array', items: { type: 'string' }, description: 'Extra script arguments' },
+            break_on_exception: { type: 'boolean', description: 'Break on uncaught exceptions (default: true)' },
+          },
+          required: ['script'],
+        },
+      },
+      {
+        name: 'terminate_script',
+        description: 'Stop and kill the script launched via launch_script',
+        inputSchema: { type: 'object', properties: {}, required: [] },
+      },
+      {
+        name: 'get_script_output',
+        description: "Get the launched script's buffered stdout/stderr, run state, and exit code",
+        inputSchema: {
+          type: 'object',
+          properties: {
+            clear: { type: 'boolean', description: 'Clear buffers after reading (default: false)' },
+          },
+          required: [],
+        },
+      },
+
       // Debug Control
       {
         name: 'debug_run',
@@ -514,6 +559,66 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     switch (name) {
+      // Process Supervision
+      case 'launch_script': {
+        const params = LaunchScriptSchema.parse(args);
+        const result = await launcher.launch(params.script, {
+          exe: params.exe,
+          args: params.args,
+          breakOnException: params.break_on_exception,
+        });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                status: 'launched',
+                pid: result.pid,
+                transport: 'stdio',
+                script: launcher.getScriptPath(),
+                note: 'Script is paused before auto-execute. Call debug_run to start it; use get_script_output to read its stdout/stderr.',
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'terminate_script': {
+        if (!launcher.getPid()) {
+          return {
+            content: [{ type: 'text', text: 'No script has been launched via launch_script.' }],
+          };
+        }
+        const exit = await launcher.terminate();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ status: 'terminated', exit_code: exit.code }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_script_output': {
+        const params = GetScriptOutputSchema.parse(args);
+        const clear = params.clear ?? false;
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                running: launcher.isRunning(),
+                pid: launcher.getPid(),
+                exit: launcher.getExitInfo(),
+                stdout: client.getOutput('stdout', clear),
+                stderr: client.getOutput('stderr', clear) + launcher.getRawStderr(clear),
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
       // Debug Control
       case 'debug_run': {
         const response = await client.run();
@@ -1173,8 +1278,9 @@ async function main() {
 
   // Start listening for AutoHotkey
   await client.listen();
-  console.error(`Listening for AutoHotkey on port 9000`);
-  console.error('Start AutoHotkey with: AutoHotkey.exe /Debug your_script.ahk');
+  console.error('Listening for AutoHotkey on port 9000 (legacy TCP mode)');
+  console.error('Preferred: use the launch_script tool to spawn scripts over stdio.');
+  console.error('Legacy: start AutoHotkey manually with: AutoHotkey.exe /Debug your_script.ahk');
 
   client.on('connected', () => {
     console.error('AutoHotkey connected!');
