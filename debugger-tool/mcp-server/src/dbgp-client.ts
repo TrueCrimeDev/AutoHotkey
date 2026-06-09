@@ -83,6 +83,13 @@ export class DBGpClient extends EventEmitter {
     this.output = output;
     input.on('data', (data: Buffer) => {
       for (const xml of this.parser.feed(data)) this.handlePacket(xml);
+      // Raw bytes interleaved with frames are script stdout that bypassed
+      // DBGp stream redirection (e.g. Print() in /Debug=stdio mode).
+      const raw = this.parser.drainRaw();
+      if (raw) {
+        this.stdoutBuffer += raw;
+        this.emit('stream', { kind: 'stream', stream: 'stdout', text: raw });
+      }
     });
     input.on('end', () => this.detach());
     input.on('error', (err: Error) => this.emit('error', err));

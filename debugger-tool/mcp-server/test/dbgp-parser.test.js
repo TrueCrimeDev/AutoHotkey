@@ -41,6 +41,17 @@ test('resyncs after corrupted framing', () => {
   assert.match(msgs[0], /transaction_id="3"/);
 });
 
+test('diverts raw non-frame bytes (Print passthrough) without losing frames', () => {
+  const p = new DbgpFrameParser();
+  const msgs = p.feed(Buffer.concat([
+    Buffer.from('hello from Print\n'),
+    frame('<response transaction_id="4" status="break"/>'),
+  ]));
+  assert.equal(msgs.length, 1);
+  assert.equal(p.drainRaw(), 'hello from Print\n');
+  assert.equal(p.drainRaw(), ''); // drained
+});
+
 test('classifies init packets', () => {
   const pkt = classifyPacket('<?xml version="1.0"?><init appid="AutoHotkey" language="AutoHotkey" protocol_version="1"/>');
   assert.equal(pkt.kind, 'init');

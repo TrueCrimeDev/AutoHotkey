@@ -64,6 +64,22 @@ test('stream packets are buffered, not treated as responses', async () => {
   assert.equal(client.getOutput('stdout'), '');
 });
 
+test('raw Print pollution is captured as stdout', async () => {
+  const { client, fromAhk } = makeClient();
+  const ready = new Promise((r) => client.once('init', r));
+  fromAhk.write(frame('<init appid="AutoHotkey"/>'));
+  await ready;
+
+  const streamSeen = new Promise((resolve) => client.once('stream', resolve));
+  fromAhk.write(Buffer.concat([
+    Buffer.from('raw print line\n'),
+    frame('<response transaction_id="99" status="break"/>'),
+  ]));
+  const pkt = await streamSeen;
+  assert.equal(pkt.stream, 'stdout');
+  assert.equal(client.getOutput('stdout'), 'raw print line\n');
+});
+
 test('detach rejects pending commands', async () => {
   const { client, fromAhk } = makeClient();
   const ready = new Promise((r) => client.once('init', r));

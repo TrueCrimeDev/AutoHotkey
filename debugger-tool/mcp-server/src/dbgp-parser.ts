@@ -25,6 +25,7 @@ export type DbgpPacket = DbgpStreamPacket | DbgpInitPacket | DbgpResponsePacket;
 
 export class DbgpFrameParser {
   private buffer = Buffer.alloc(0);
+  private rawChunks: Buffer[] = [];
 
   /** Feed raw bytes; returns any complete XML payloads. */
   feed(chunk: Buffer): string[] {
@@ -32,13 +33,24 @@ export class DbgpFrameParser {
     const messages: string[] = [];
 
     for (;;) {
+      // A frame starts with an ASCII decimal length. Anything else is raw
+      // passthrough output (e.g. Print() writes directly to the stdout handle
+      // in stdio debug mode, bypassing DBGp stream redirection) — divert it.
+      let skip = 0;
+      while (skip < this.buffer.length && (this.buffer[skip] < 0x30 || this.buffer[skip] > 0x39)) skip++;
+      if (skip > 0) {
+        this.rawChunks.push(this.buffer.subarray(0, skip));
+        this.buffer = this.buffer.subarray(skip);
+      }
+
       const nullPos = this.buffer.indexOf(0);
       if (nullPos === -1) break;
 
       const lengthStr = this.buffer.subarray(0, nullPos).toString('ascii');
       const dataLength = parseInt(lengthStr, 10);
       if (isNaN(dataLength) || dataLength < 0 || String(dataLength) !== lengthStr) {
-        // Corrupted framing — drop one byte and resync.
+        // Digit-led junk that isn't a valid length prefix — divert one byte and resync.
+        this.rawChunks.push(this.buffer.subarray(0, 1));
         this.buffer = this.buffer.subarray(1);
         continue;
       }
@@ -51,6 +63,14 @@ export class DbgpFrameParser {
     }
 
     return messages;
+  }
+
+  /** Bytes diverted because they were not part of any DBGp frame (raw script output). */
+  drainRaw(): string {
+    if (this.rawChunks.length === 0) return '';
+    const text = Buffer.concat(this.rawChunks).toString('utf-8');
+    this.rawChunks = [];
+    return text;
   }
 }
 
