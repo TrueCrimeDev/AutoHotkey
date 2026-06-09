@@ -49,6 +49,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/alpha'
+    permissions:
+      contents: write  # required for softprops/action-gh-release to create the release + tag
 
     steps:
     - name: Download all artifacts
@@ -57,7 +59,7 @@ jobs:
         path: artifacts
 
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: build-${{ github.sha }}
         name: Build ${{ github.sha }}
