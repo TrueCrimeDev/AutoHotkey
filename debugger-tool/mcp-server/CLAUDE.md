@@ -6,6 +6,14 @@ This MCP server connects Claude to the AutoHotkey v2 debugger via DBGp protocol.
 
 ## Available Tools
 
+### Process Supervision (preferred entry point)
+
+| Tool | Description |
+|------|-------------|
+| `launch_script` | Spawn AutoHotkey64.exe /Debug=stdio with the script as a supervised child. No port 9000. Script starts paused; call `debug_run`. Sets an exception breakpoint by default. |
+| `terminate_script` | Stop and kill the launched script. |
+| `get_script_output` | Buffered stdout/stderr (via DBGp stream packets), run state, exit code. |
+
 ### Error Capture & Analysis
 
 | Tool | Description |
@@ -51,13 +59,12 @@ This MCP server connects Claude to the AutoHotkey v2 debugger via DBGp protocol.
 When user asks to debug a script:
 
 ```
-1. User runs: AutoHotkey64.exe /Debug script.ahk
-2. Claude calls: debug_run (start execution)
-3. Error occurs → Claude calls: capture_error
-4. Claude receives full error context
-5. Claude analyzes and generates fix
-6. Claude calls: apply_fix with the fix
-7. User re-runs script → fixed!
+1. Claude calls: launch_script {"script": "C:\\path\\script.ahk"}
+2. Claude calls: debug_run (starts execution; returns status=break on uncaught error)
+3. On break: stack_trace + variables_get + evaluate to diagnose
+4. Claude calls: apply_fix with the fix
+5. Claude calls: terminate_script, then launch_script again to verify
+   (Legacy TCP mode still works: user runs AutoHotkey64.exe /Debug script.ahk manually.)
 ```
 
 ### Step-by-Step Example
