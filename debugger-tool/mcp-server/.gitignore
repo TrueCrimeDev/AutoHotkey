@@ -6,3 +6,4 @@ build/
 *.js.map
 *.d.ts
 !test-*.js
+!test/**/*.js
