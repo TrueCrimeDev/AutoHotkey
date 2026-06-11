@@ -717,6 +717,37 @@ bool HandleMenuItem(HWND aHwnd, WORD aMenuItemID, HWND aGuiHwnd)
 
 
 
+// Expand tabs to spaces at fixed 8-column stops so the tab-delimited tables produced
+// for the main window's edit control stay aligned in any console or log viewer
+// (VS Code's Output panel, for one, doesn't render tabs at the terminal's width).
+// Returns a malloc'd string the caller must free, or nullptr on allocation failure.
+static LPTSTR ExpandTabsForConsole(LPCTSTR aText)
+{
+	size_t len = 0, tabs = 0;
+	for (LPCTSTR p = aText; *p; ++p, ++len)
+		if (*p == '\t')
+			++tabs;
+	LPTSTR out = (LPTSTR)malloc((len + tabs * 7 + 1) * sizeof(TCHAR));
+	if (!out)
+		return nullptr;
+	LPTSTR o = out;
+	int col = 0;
+	for (LPCTSTR p = aText; *p; ++p)
+	{
+		if (*p == '\t')
+			do *o++ = ' '; while (++col % 8);
+		else
+		{
+			*o++ = *p;
+			col = (*p == '\r' || *p == '\n') ? 0 : col + 1;
+		}
+	}
+	*o = '\0';
+	return out;
+}
+
+
+
 ResultType ShowMainWindow(MainWindowModes aMode, bool aRestricted)
 // Always returns OK for caller convenience.
 {
@@ -809,7 +840,10 @@ ResultType ShowMainWindow(MainWindowModes aMode, bool aRestricted)
 		HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 		if (hOut != INVALID_HANDLE_VALUE && hOut != NULL)
 		{
-			PrintWideLine(buf_temp, (int)_tcslen(buf_temp));
+			LPTSTR expanded = ExpandTabsForConsole(buf_temp);
+			LPCTSTR text = expanded ? expanded : buf_temp; // On alloc failure, fall back to raw tabs.
+			PrintWideLine(text, (int)_tcslen(text));
+			free(expanded);
 			return OK;
 		}
 	}
