@@ -10,6 +10,7 @@ This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.
 | Eval gate (CLI form) | `/Eval` flag | n/a |
 | Eval gate (script form) | `#EnableEval` directive | n/a |
 | Println-style stdout helper | `Print(text)` BIF | Always on |
+| Console mirror of main-window views | `KeyHistory()`/`ListLines()`/`ListVars()`/`ListHotkeys()` print to stdout when attached | Always on |
 | Parse-failure error class | `SyntaxError` (extends `Error`) | Always on |
 | Crash logging | `/CrashLog=path` flag | Yes — gated |
 | Crash logging (script form) | `#CrashLog path` directive | Yes — gated |
@@ -177,6 +178,23 @@ Print("processing {} of {} files...", n, total)
 ```
 
 `Print` is always available (no gate, no directive). It does not exist upstream; it's a fork-only addition.
+
+### Console mirror of main-window views
+
+When stdout is attached (console build run from a terminal, or output redirected), the four
+main-window view functions write their text to stdout instead of opening the GUI main window:
+
+```ahk
+KeyHistory()    ; key history + hook/timer status -> stdout
+ListLines()     ; recently executed script lines  -> stdout
+ListVars()      ; global/local variables          -> stdout
+ListHotkeys()   ; hotkey table                    -> stdout
+```
+
+The output is byte-for-byte the same text the GUI edit control would show. With no console
+attached (script launched by double-click), the GUI window opens exactly as upstream.
+GUI-originated paths — tray menu, the main window's View menu, Refresh — always use the
+window, never the console. Shares `Print`'s UTF-8 stdout writer.
 
 ---
 

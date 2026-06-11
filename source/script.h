@@ -2639,6 +2639,7 @@ BIF_DECL(BIF_Chr);
 BIF_DECL(BIF_Format);
 BIF_DECL(BIF_FormatTime);
 BIF_DECL(BIF_Print);
+void PrintWideLine(LPCTSTR text, int wlen); // Stdout writer shared by BIF_Print and ShowMainWindow's console mirror.
 BIF_DECL(BIF_NumGet);
 BIF_DECL(BIF_NumPut);
 BIF_DECL(BIF_StrGetPut);
