@@ -191,7 +191,9 @@ ListVars()      ; global/local variables          -> stdout
 ListHotkeys()   ; hotkey table                    -> stdout
 ```
 
-The output is byte-for-byte the same text the GUI edit control would show. With no console
+Tab-delimited tables (KeyHistory, ListHotkeys) are expanded to spaces at 8-column stops
+so they stay aligned in any viewer (terminals, VS Code's Output panel, log files).
+Otherwise the output is the same text the GUI edit control would show. With no console
 attached (script launched by double-click), the GUI window opens exactly as upstream.
 GUI-originated paths — tray menu, the main window's View menu, Refresh — always use the
 window, never the console. Shares `Print`'s UTF-8 stdout writer.
