@@ -1795,8 +1795,9 @@ bif_impl FResult Eval(StrArg aExpression, ResultToken &aRetVal)
 
 
 
-// Write a wide string + trailing newline to stdout as UTF-8. Shared by BIF_Print.
-static void PrintWideLine(LPCTSTR text, int wlen)
+// Write a wide string + trailing newline to stdout as UTF-8.
+// Shared by BIF_Print and ShowMainWindow's console mirror.
+void PrintWideLine(LPCTSTR text, int wlen)
 {
 	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (hOut == INVALID_HANDLE_VALUE || hOut == NULL)
@@ -1804,13 +1805,25 @@ static void PrintWideLine(LPCTSTR text, int wlen)
 
 	int u8len = wlen > 0 ? WideCharToMultiByte(CP_UTF8, 0, text, wlen, nullptr, 0, nullptr, nullptr) : 0;
 
-	char *buf = (char *)_alloca(u8len + 1);
+	// ShowMainWindow can pass up to 64K TCHARs (~192 KB as UTF-8), too much for _alloca,
+	// so fall back to the heap for big payloads.
+	char *heap_buf = nullptr;
+	char *buf;
+	if (u8len + 1 > 16384)
+	{
+		if (  !(heap_buf = (char *)malloc(u8len + 1))  )
+			return;
+		buf = heap_buf;
+	}
+	else
+		buf = (char *)_alloca(u8len + 1);
 	if (u8len > 0)
 		WideCharToMultiByte(CP_UTF8, 0, text, wlen, buf, u8len, nullptr, nullptr);
 	buf[u8len] = '\n';
 
 	DWORD written;
 	WriteFile(hOut, buf, (DWORD)(u8len + 1), &written, nullptr);
+	free(heap_buf);
 }
 
 BIF_DECL(BIF_Print)

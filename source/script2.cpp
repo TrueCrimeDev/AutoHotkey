@@ -798,6 +798,22 @@ ResultType ShowMainWindow(MainWindowModes aMode, bool aRestricted)
 	if (aMode != MAIN_MODE_REFRESH && aMode != MAIN_MODE_NO_CHANGE)
 		current_mode = aMode;
 
+	// Console mirror: when the script explicitly calls KeyHistory()/ListLines()/ListVars()/
+	// ListHotkeys() (aRestricted == false) and stdout is attached (console build run from a
+	// terminal, or redirected output), write the view there instead of popping up the GUI.
+	// GUI-originated callers (tray menu, View menu, Refresh) pass aRestricted == true and
+	// keep the window behavior; if the window is opened later, Refresh rebuilds the view
+	// from current_mode, so skipping WM_SETTEXT here loses nothing.
+	if (!aRestricted && aMode != MAIN_MODE_NO_CHANGE)
+	{
+		HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+		if (hOut != INVALID_HANDLE_VALUE && hOut != NULL)
+		{
+			PrintWideLine(buf_temp, (int)_tcslen(buf_temp));
+			return OK;
+		}
+	}
+
 	// Update the text before displaying the window, since it might be a little less disruptive
 	// and might also be quicker if the window is hidden or non-foreground.
 	// Unlike SetWindowText(), this method seems to expand tab characters:
