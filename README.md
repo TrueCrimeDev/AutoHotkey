@@ -358,7 +358,7 @@ Tool-by-tool usage lives in [`debugger-tool/mcp-server/README.md`](debugger-tool
 | [`updates.md`](updates.md) | Authoritative reference for every fork addition |
 | [`BUILD.md`](BUILD.md) | Toolchains, build configs, troubleshooting |
 | [`CLAUDE.md`](CLAUDE.md) | Project orientation for AI agents |
-| [`V3_MILESTONE_STATUS.md`](V3_MILESTONE_STATUS.md) | Milestone implementation status |
+| [`V3_MILESTONE_STATUS.md`](docs/V3_MILESTONE_STATUS.md) | Milestone implementation status |
 | `debugger-tool/mcp-server/README.md` | MCP tool reference and setup |
 
 ---
