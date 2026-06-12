@@ -26,6 +26,7 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 - [Error reporting](#error-reporting)
 - [Exit codes](#exit-codes)
 - [Language additions](#language-additions)
+- [REPL](#repl)
 - [Crash logging](#crash-logging)
 - [AI-assisted debugging](#ai-assisted-debugging)
 - [Repository map](#repository-map)
@@ -46,6 +47,7 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 | **Single-script tests** | Roll your own | `test` subcommand: exit `0`/`14` |
 | **Crash forensics** | Lost when the window closes | `/CrashLog=` append-only event log that survives hard crashes |
 | **Inline evaluation** | — | `Eval("expr")` runs an expression in live scope (opt-in) |
+| **Interactive session** | — | `repl` subcommand: persistent eval loop over stdin/stdout |
 | **stdout helper** | `FileOpen("*","w")` boilerplate | `Print(fmt, args*)` — UTF-8, `Format`-aware |
 | **Debugger** | DBGp (desktop-oriented) | Same DBGp, wired to an MCP server for LLM-driven debugging |
 
@@ -101,6 +103,7 @@ One executable, selected into different modes by its first arguments:
 | `AutoHotkey64.exe /Diag=json script.ahk` | Runtime errors → `stderr` as JSON |
 | `AutoHotkey64.exe check script.ahk` | Parse only — exit `0` (ok) / `13` (fail) |
 | `AutoHotkey64.exe test script.ahk` | Run as a test — exit `0` (pass) / `14` (fail) |
+| `AutoHotkey64.exe repl [script.ahk]` | Interactive / pipe-driven eval session ([REPL](#repl)) |
 
 Flags compose. A typical unattended invocation:
 
@@ -231,6 +234,44 @@ surrounding code:
 for line in _ScriptGetLines(A_LineFile, A_LineNumber, -3)   ; 3 lines either side
     Print("{:03}: {}", line.Number, line.Text)
 ```
+
+---
+
+## REPL
+
+`repl` turns the binary into a persistent interpreter session: expressions arrive on
+stdin (terminal or pipe), results leave on stdout, state survives between lines. Built
+on the `Eval` machinery, so the loaded script's globals, functions and classes are all
+live.
+
+```text
+$ bin\AutoHotkey64.exe repl
+AutoHotkey v2.1-alpha.30+Console REPL - one expression per line; .help for commands
+>>> x := 10
+10
+>>> x * 4
+40
+>>> g := Gui("+AlwaysOnTop", "Live"), g.Show("w200 h80")
+>>> g.BackColor := 0x202020
+2105376
+>>> .exit
+```
+
+- `repl script.ahk` loads the script, runs its auto-execute section, then opens the
+  session against its state — hotkeys, timers and GUI events keep firing throughout.
+- **Errors never end the session**: parse and runtime errors print one line (stderr in
+  text mode) and the loop continues with prior state intact.
+- EOF or `.exit` exits `0`; `ExitApp(n)` exits with `n`.
+- `/Diag=json` makes every input line produce exactly one JSON result line on stdout —
+  the agent-friendly wire format:
+
+```json
+{"kind":"result","ok":true,"type":"Integer","value":"42"}
+{"kind":"result","ok":false,"type":"SyntaxError","value":"Missing operand."}
+```
+
+Spawn-per-expression is gone: an agent (or the MCP server) opens one process, writes
+lines, reads lines, and closes stdin when done. Full reference: [`updates.md` §16](updates.md).
 
 ---
 

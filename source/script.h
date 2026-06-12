@@ -2297,6 +2297,7 @@ public:
 	bool mHeadless; // true to disable dialog-first error handling and favor stream output.
 	bool mCheckMode; // true when invoked in syntax-check mode.
 	bool mTestMode; // true when invoked in single-script test mode.
+	bool mReplMode; // true when invoked via the `repl` subcommand (interactive/pipe-driven eval session).
 	bool mDiagJson; // true to emit structured JSON diagnostics.
 	bool mTrace; // true to print each executed line number to stderr.
 	bool mErrorStdOut; // true if load-time syntax errors should be sent to stdout vs. a MsgBox.
@@ -2342,6 +2343,8 @@ public:
 	void SetTrayTip(LPTSTR aText);
 	ResultType AutoExecSection();
 	ResultType ExecuteModule(ScriptModule *aModule);
+	void ReplStart(); // Print banner (interactive), force stderr errors, spawn the stdin reader thread.
+	void ReplDrainInput(); // Main-thread handler for AHK_REPL_INPUT; drains the reader thread's mailbox.
 	bool IsPersistent();
 	void ExitIfNotPersistent(ExitReasons aExitReason);
 	ResultType Edit(LPCTSTR aFileName = nullptr);

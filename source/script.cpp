@@ -322,7 +322,7 @@ Script::Script()
 	, mFileSpec(_T("")), mFileDir(_T("")), mFileName(_T("")), mOurEXE(_T("")), mOurEXEDir(_T("")), mMainWindowTitle(_T(""))
 	, mScriptName(NULL)
 	, mIsReadyToExecute(false), mAutoExecSectionIsRunning(false)
-	, mIsRestart(false), mHeadless(false), mCheckMode(false), mTestMode(false), mDiagJson(false), mTrace(false)
+	, mIsRestart(false), mHeadless(false), mCheckMode(false), mTestMode(false), mReplMode(false), mDiagJson(false), mTrace(false)
 	, mErrorStdOut(true), mErrorStdOutColor(false), mErrorStdOutCP(0)
 #ifndef AUTOHOTKEYSC
 	, mValidateThenExit(false)
@@ -1085,7 +1085,8 @@ ResultType Script::ExecuteModule(ScriptModule *aModule)
 bool Script::IsPersistent()
 {
 	// Consider the script "persistent" if any of the following conditions are true:
-	if (Hotkey::sHotkeyCount || Hotstring::sHotstringCount // At least one hotkey or hotstring exists.
+	if (mReplMode // A REPL session stays alive until EOF or .exit.
+		|| Hotkey::sHotkeyCount || Hotstring::sHotstringCount // At least one hotkey or hotstring exists.
 		// No attempt is made to determine if the hotkeys/hotstrings are enabled, since even if they
 		// are, it's impossible to detect whether #HotIf will allow them to ever execute.
 		|| g_persistent // Persistent() has been used somewhere in the script.
@@ -1735,7 +1736,19 @@ ResultType Script::OpenIncludedFile(TextStream *&ts, LPCTSTR aFileSpec, bool aAl
 
 	TextMem::Buffer textbuf(nullptr, 0, false);
 	HRSRC hRes;
-	if (*aFileSpec == '*' && aFileSpec[1] && (hRes = FindResource(NULL, aFileSpec + 1, RT_RCDATA)))
+	if (mReplMode && !_tcsicmp(aFileSpec, _T("*REPL")))
+	{
+		// REPL session with no script file: feed a built-in minimal script through the
+		// TextMem path.  The single call guarantees mLineList is non-empty (so mCurrLine
+		// is valid after auto-execute, which the Eval error path relies on).
+		static const char repl_default_script[] = "Persistent()\n";
+		textbuf.mBuffer = (void *)repl_default_script;
+		textbuf.mLength = sizeof(repl_default_script) - 1;
+		filespec_to_open = textbuf;
+		codepage = CP_UTF8;
+		ts = new TextMem();
+	}
+	else if (*aFileSpec == '*' && aFileSpec[1] && (hRes = FindResource(NULL, aFileSpec + 1, RT_RCDATA)))
 	{
 		HGLOBAL hResData = LoadResource(NULL, hRes);
 		if (hResData && (textbuf.mBuffer = LockResource(hResData)))

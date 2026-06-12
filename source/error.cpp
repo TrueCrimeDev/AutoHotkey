@@ -21,6 +21,9 @@ GNU General Public License for more details.
 #include "TextIO.h"
 #include "abi.h"
 #include "crashlog.h"
+#include "application.h" // REPL: InitNewThread/ResumeUnderlyingThread.
+#include "hook.h" // REPL: AHK_REPL_INPUT.
+#include "ahkversion.h" // REPL banner.
 #include <richedit.h>
 
 
@@ -1656,14 +1659,12 @@ bif_impl FResult _ScriptGetLines(StrArg aFilename, int aLineNumber, optl<int> aR
 
 
 
-bif_impl FResult Eval(StrArg aExpression, ResultToken &aRetVal)
+// Shared by the Eval BIF and the REPL (Script::ReplDrainInput).  Evaluates aExpression
+// against aScope (nullptr = global scope) and stores the value in aRetVal.  On failure
+// an AHK exception is left in g->ThrownToken and a failed FResult is returned.
+static FResult EvalCore(LPCTSTR aExpression, UserFunc *aScope, ResultToken &aRetVal)
 {
-	if (!g_AllowEval)
-		return FError(_T("Eval is disabled (add #EnableEval to your script or pass /Eval)"));
-
-	// Resolve scope: use the caller's UserFunc (if any) so that local
-	// variables referenced in the expression are resolved correctly.
-	UserFunc *caller = g->CurrentFunc;
+	UserFunc *caller = aScope;
 
 	// ParseExprToPostfix writes into the buffer (e.g. normalises whitespace),
 	// so we pass a modifiable copy. The function also makes its own internal
@@ -1795,6 +1796,18 @@ bif_impl FResult Eval(StrArg aExpression, ResultToken &aRetVal)
 
 
 
+bif_impl FResult Eval(StrArg aExpression, ResultToken &aRetVal)
+{
+	if (!g_AllowEval)
+		return FError(_T("Eval is disabled (add #EnableEval to your script or pass /Eval)"));
+
+	// Resolve scope from the caller's UserFunc (if any) so that local variables
+	// referenced in the expression are resolved correctly.
+	return EvalCore(aExpression, g->CurrentFunc, aRetVal);
+}
+
+
+
 // Write a wide string + trailing newline to stdout as UTF-8.
 // Shared by BIF_Print and ShowMainWindow's console mirror.
 void PrintWideLine(LPCTSTR text, int wlen)
@@ -1862,6 +1875,286 @@ BIF_DECL(BIF_Print)
 		aResultToken.mem_to_free = nullptr;
 	}
 	aResultToken.SetValue(_T(""), 0);
+}
+
+
+
+// REPL mode (`AutoHotkey64.exe repl [script.ahk]`).
+// A dedicated thread reads stdin; each line travels through an interlocked single-slot
+// mailbox to the main thread (AHK_REPL_INPUT -> Script::ReplDrainInput), which evaluates
+// it in global scope via EvalCore and prints the result.  Lockstep: the reader waits for
+// g_ReplLineDone before reading the next line, so results pair 1:1 with inputs.
+
+static HANDLE g_ReplLineDone = NULL; // Auto-reset; signaled after each line is fully processed.
+static PVOID volatile g_ReplPendingLine = NULL; // Mailbox slot: heap line awaiting the main thread.
+static LONG volatile g_ReplEofPending = 0; // Set when stdin reaches EOF (or the reader gives up).
+static bool g_ReplInteractive = false; // Stdin is a console (banner + prompt) vs a pipe.
+
+static void ReplWritePrompt()
+{
+	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (hOut == INVALID_HANDLE_VALUE || hOut == NULL)
+		return;
+	DWORD written;
+	WriteFile(hOut, ">>> ", 4, &written, nullptr);
+}
+
+// Convert a UTF-8 byte range (trailing CR stripped) to a heap TCHAR string; caller frees.
+static LPTSTR ReplUtf8ToHeapLine(const char *aBytes, size_t aLen)
+{
+	while (aLen && aBytes[aLen - 1] == '\r')
+		--aLen;
+	int wlen = aLen ? MultiByteToWideChar(CP_UTF8, 0, aBytes, (int)aLen, nullptr, 0) : 0;
+	LPTSTR line = (LPTSTR)malloc((wlen + 1) * sizeof(TCHAR));
+	if (!line)
+		return nullptr;
+	if (wlen)
+		MultiByteToWideChar(CP_UTF8, 0, aBytes, (int)aLen, line, wlen);
+	line[wlen] = '\0';
+	return line;
+}
+
+// Hand one line (or EOF when aLine is NULL) to the main thread; wait until processed.
+static void ReplPostAndWait(LPTSTR aLine)
+{
+	if (aLine)
+		InterlockedExchangePointer(&g_ReplPendingLine, aLine);
+	else
+		InterlockedExchange(&g_ReplEofPending, 1);
+	PostMessage(g_hWnd, AHK_REPL_INPUT, 0, 0);
+	WaitForSingleObject(g_ReplLineDone, INFINITE);
+}
+
+static DWORD WINAPI ReplReaderThread(LPVOID)
+{
+	HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+	if (g_ReplInteractive)
+	{
+		for (;;)
+		{
+			ReplWritePrompt();
+			WCHAR wbuf[16384];
+			DWORD rd = 0;
+			if (!ReadConsoleW(hIn, wbuf, _countof(wbuf) - 1, &rd, nullptr) || rd == 0)
+				break; // Console gone or hard EOF.
+			while (rd && (wbuf[rd - 1] == L'\n' || wbuf[rd - 1] == L'\r'))
+				--rd;
+			if (rd == 1 && wbuf[0] == 0x1A) // Lone Ctrl+Z line.
+				break;
+			wbuf[rd] = L'\0';
+			LPTSTR line = _tcsdup(wbuf);
+			if (!line)
+				break;
+			ReplPostAndWait(line);
+		}
+	}
+	else
+	{
+		// Pipe/file stdin: accumulate UTF-8 bytes, split on '\n'.
+		size_t cap = 8192, len = 0;
+		char *acc = (char *)malloc(cap);
+		bool eof = !acc;
+		while (!eof)
+		{
+			char *nl;
+			while (!(nl = (char *)memchr(acc, '\n', len)))
+			{
+				if (len + 4096 > cap)
+				{
+					char *bigger = (char *)realloc(acc, cap *= 2);
+					if (!bigger)
+					{
+						eof = true;
+						break;
+					}
+					acc = bigger;
+				}
+				DWORD rd = 0;
+				if (!ReadFile(hIn, acc + len, 4096, &rd, nullptr) || rd == 0)
+				{
+					eof = true;
+					break;
+				}
+				len += rd;
+			}
+			size_t line_len = nl ? (size_t)(nl - acc) : len;
+			if (line_len || nl) // Post blank mid-stream lines; skip a zero-length tail at EOF.
+			{
+				LPTSTR line = ReplUtf8ToHeapLine(acc, line_len);
+				if (!line)
+					break;
+				ReplPostAndWait(line);
+			}
+			if (!nl)
+				break; // EOF after the final (possibly unterminated) line.
+			size_t consumed = line_len + 1;
+			memmove(acc, acc + consumed, len - consumed);
+			len -= consumed;
+		}
+		free(acc);
+	}
+	ReplPostAndWait(nullptr); // EOF: the main thread exits the app.
+	return 0;
+}
+
+// Print one REPL outcome.  JSON mode emits exactly one stdout line per input line so a
+// consumer never desynchronizes; text mode prints values to stdout, errors to stderr.
+static void ReplPrintOutcome(bool aOk, LPCTSTR aType, LPCTSTR aValue)
+{
+	if (g_script.mDiagJson)
+	{
+		TCHAR esc_type[128], esc_val[4096], out[4400];
+		EscapeJsonText(esc_type, _countof(esc_type), aType);
+		EscapeJsonText(esc_val, _countof(esc_val), aValue);
+		sntprintf(out, _countof(out), _T("{\"kind\":\"result\",\"ok\":%s,\"type\":\"%s\",\"value\":\"%s\"}")
+			, aOk ? _T("true") : _T("false"), esc_type, esc_val);
+		PrintWideLine(out, (int)_tcslen(out));
+		return;
+	}
+	if (aOk)
+	{
+		PrintWideLine(aValue, (int)_tcslen(aValue));
+		return;
+	}
+	TCHAR out[4400];
+	sntprintf(out, _countof(out), _T("%s: %s\n"), aType, aValue);
+	g_script.PrintErrorStdOut(out, (int)_tcslen(out), _T("**")); // ** means stderr.
+}
+
+void Script::ReplStart()
+{
+	g_ReplLineDone = CreateEvent(nullptr, FALSE, FALSE, nullptr); // Auto-reset.
+	if (!g_ReplLineDone)
+		return;
+	g_ReplInteractive = (GetFileType(GetStdHandle(STD_INPUT_HANDLE)) == FILE_TYPE_CHAR);
+
+	// REPL errors belong on stderr, never in a dialog.
+	if (!mErrorStdOut)
+		SetErrorStdOut(nullptr);
+
+	if (g_ReplInteractive && !mDiagJson)
+	{
+		TCHAR banner[160];
+		sntprintf(banner, _countof(banner), _T("AutoHotkey v%hs REPL - one expression per line; .help for commands"), AHK_VERSION);
+		PrintWideLine(banner, (int)_tcslen(banner));
+	}
+
+	HANDLE thread = CreateThread(nullptr, 0, ReplReaderThread, nullptr, 0, nullptr);
+	if (thread)
+		CloseHandle(thread);
+}
+
+void Script::ReplDrainInput()
+{
+	LPTSTR line = (LPTSTR)InterlockedExchangePointer(&g_ReplPendingLine, NULL);
+	if (!line)
+	{
+		if (InterlockedExchange(&g_ReplEofPending, 0))
+		{
+			SetEvent(g_ReplLineDone); // Unblock the reader in case an OnExit callback cancels the exit.
+			ExitApp(EXIT_EXIT);
+		}
+		return; // Forged or duplicate posting: nothing to do.
+	}
+
+	LPTSTR expr = line;
+	while (*expr == ' ' || *expr == '\t')
+		++expr;
+
+	if (!*expr) // Blank line: no-op.
+	{
+		free(line);
+		SetEvent(g_ReplLineDone);
+		return;
+	}
+	if (!_tcsicmp(expr, _T(".exit")))
+	{
+		free(line);
+		SetEvent(g_ReplLineDone);
+		ExitApp(EXIT_EXIT);
+		return; // Only reached if an OnExit callback canceled the exit.
+	}
+	if (!_tcsicmp(expr, _T(".help")))
+	{
+		static const TCHAR help_text[] = _T("REPL: one expression per line (commas allowed: x := 1, y := 2).  .exit or EOF quits.  Errors do not end the session.");
+		PrintWideLine(help_text, (int)_tcslen(help_text));
+		free(line);
+		SetEvent(g_ReplLineDone);
+		return;
+	}
+
+	if (g_nThreads >= g_MaxThreadsTotal || g->Priority > 0)
+	{
+		ReplPrintOutcome(false, _T("Error"), _T("REPL busy: thread limit reached or a higher-priority thread is running"));
+		free(line);
+		SetEvent(g_ReplLineDone);
+		return;
+	}
+
+	// Launch a pseudo-thread (same pattern as MsgMonitor) so hotkeys, timers and GUI
+	// events interleave normally and a thrown error aborts only this line.
+	InitNewThread(0, false, true);
+
+	// The REPL is an implicit try/catch: without EXCPTMODE_CATCH, SetThrownToken and
+	// RuntimeError report-and-exit immediately in console mode (mErrorStdOut), which
+	// would end the session on the first bad expression.
+	g->ExcptMode = EXCPTMODE_CATCH;
+
+	TCHAR result_buf[MAX_NUMBER_SIZE];
+	ResultToken result;
+	result.InitResult(result_buf);
+
+	FResult fr = EvalCore(expr, nullptr, result);
+	g->ExcptMode = EXCPTMODE_NONE;
+
+	if (fr == OK)
+	{
+		if (result.symbol == SYM_OBJECT)
+		{
+			TCHAR disp[256];
+			sntprintf(disp, _countof(disp), _T("<%s object>"), result.object->Type());
+			ReplPrintOutcome(true, result.object->Type(), disp);
+		}
+		else if (result.symbol == SYM_MISSING) // Void/unset result (e.g. a void function call).
+		{
+			if (mDiagJson)
+				ReplPrintOutcome(true, _T("Unset"), _T(""));
+			// Text mode: print nothing, like a statement.
+		}
+		else
+		{
+			TCHAR num_buf[MAX_NUMBER_SIZE];
+			LPCTSTR value = TokenToString(result, num_buf);
+			ReplPrintOutcome(true, TokenTypeString(result), value);
+		}
+	}
+	else
+	{
+		// EvalCore leaves the exception in g->ThrownToken (SyntaxError or runtime error).
+		LPCTSTR err_type = _T("Error");
+		LPCTSTR err_msg = (fr == FR_E_OUTOFMEM) ? _T("Out of memory") : _T("Evaluation failed");
+		TCHAR msg_buf[MAX_NUMBER_SIZE];
+		if (g->ThrownToken)
+		{
+			if (Object *ex = dynamic_cast<Object *>(TokenToObject(*g->ThrownToken)))
+			{
+				err_type = ex->Type();
+				ExprTokenType t;
+				if (ex->GetOwnProp(t, _T("Message")))
+					err_msg = TokenToString(t, msg_buf);
+			}
+			else
+				err_msg = TokenToString(*g->ThrownToken, msg_buf); // A thrown string/number.
+		}
+		ReplPrintOutcome(false, err_type, err_msg); // Print before freeing: err_msg may point into the exception object.
+		if (g->ThrownToken)
+			FreeExceptionToken(g->ThrownToken);
+	}
+	result.Free();
+
+	ResumeUnderlyingThread();
+	free(line);
+	SetEvent(g_ReplLineDone);
 }
 
 

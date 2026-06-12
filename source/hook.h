@@ -25,6 +25,7 @@ GNU General Public License for more details.
 // for possible future use by the program, so don't use a message above 0x1000 without good reason.
 enum UserMessages {AHK_HOOK_HOTKEY = WM_USER, AHK_HOTSTRING, AHK_USER_MENU, AHK_DIALOG, AHK_NOTIFYICON
 	, AHK_UNUSED_MSG, AHK_EXIT_BY_RELOAD, AHK_EXIT_BY_SINGLEINSTANCE, AHK_CHECK_DEBUGGER
+	, AHK_REPL_INPUT // Posted by the REPL stdin reader thread; lParam = heap-allocated line, or NULL for EOF.
 	// Allow some room here in between for more "exit" type msgs to be added in the future (see below comment).
 	, AHK_GUI_ACTION = WM_USER+20 // Avoid WM_USER+100/101 and vicinity.  See below comment.
 	// v1.0.43.05: On second thought, it seems better to stay close to WM_USER because the OnMessage page

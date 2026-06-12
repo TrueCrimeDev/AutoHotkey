@@ -465,6 +465,13 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lPar
 				return cp->Eval((LPTSTR)lParam);
 		return 0;
 
+	case AHK_REPL_INPUT: // Posted by the REPL stdin reader thread (error.cpp).
+		// lParam is deliberately unused: the line travels via an interlocked single-slot
+		// mailbox so a forged posting from another process can't inject a pointer.
+		if (g_script.mReplMode)
+			g_script.ReplDrainInput();
+		return 0;
+
 	case WM_ENTERMENULOOP:
 		CheckMenuItem(GetMenu(g_hWnd), ID_FILE_PAUSE, g->IsPaused ? MF_CHECKED : MF_UNCHECKED); // This is the menu bar in the main window; the tray menu's checkmark is updated only when the tray menu is actually displayed.
 		g_MenuIsVisible = true; // See comments in similar code in GuiWindowProc().

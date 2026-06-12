@@ -165,6 +165,13 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 			g_script.SetHeadless();
 			continue;
 		}
+		if (i == 1 && !_tcsicmp(param, _T("repl")))
+		{
+			g_script.mReplMode = true;
+			g_AllowEval = true; // The REPL is an Eval driver; the BIF gate is implied.
+			g_AllowOnlyOneInstance = SINGLE_INSTANCE_OFF; // Parallel sessions are expected.
+			continue;
+		}
 #endif
 		// Insist that switches be an exact match for the allowed values to cut down on ambiguity.
 		// For example, if the user runs "CompiledScript.exe /find", we want /find to be considered
@@ -321,6 +328,8 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 #ifndef AUTOHOTKEYSC
 	if ((g_script.mCheckMode || g_script.mTestMode) && !script_filespec)
 		return FAIL;
+	if (g_script.mReplMode && !script_filespec)
+		script_filespec = _T("*REPL"); // Synthetic in-memory script; see LoadIncludedFile().
 #endif
 
 	// Pass any remaining args to the script via the A_Args array.
@@ -478,6 +487,8 @@ int MainExecuteScript(bool aMsgSleep)
 				g_script.ExitApp(exec_result == FAIL ? EXIT_ERROR : EXIT_EXIT);
 			}
 		}
+		if (g_script.mReplMode)
+			g_script.ReplStart(); // Auto-execute has finished; begin the read-eval-print session.
 		if (g_script.IsPersistent())
 		{
 			// Call it in this special mode to kick off the main event loop.
