@@ -49,6 +49,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/alpha'
+    permissions:
+      contents: write # Create Release needs this; the default token is read-only (403 otherwise).
 
     steps:
     - name: Download all artifacts
