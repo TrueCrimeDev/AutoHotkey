@@ -2,7 +2,7 @@
 DarkMode v2 Showcase — tests all dark-styled controls
 */
 #Requires AutoHotkey v2.1-alpha.28
-#Include ..\DarkMode.ahk
+#Include ..\Lib\DarkMode.ahk
 
 myGui := DarkGui("+Resize", "DarkMode v2 Showcase")
 
