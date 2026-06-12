@@ -20,7 +20,7 @@ Changes in alpha.29:
     if fn() didn't return a value. Use `?? default`, `try { ... } catch`,
     or test the underlying var with IsSet() before consuming the result.
 
-Run: bin\AutoHotkey64.exe Alpha29_Example.ahk
+Run: bin\AutoHotkey64.exe examples\Alpha29_Example.ahk
 */
 #Requires AutoHotkey v2.1-alpha.29
 

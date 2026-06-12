@@ -1,5 +1,7 @@
-$ahkExe = "C:\Users\uphol\Documents\Design\Coding\AutoHotkey\bin\AutoHotkey64.exe"
-$script = "C:\Users\uphol\Documents\Autohotkey\_.ahk"
+# Restart-runner: kills any prior instance of the target script, then relaunches it.
+# Usage: .\run_ahk.ps1 [path\to\script.ahk]   (defaults to _.ahk next to this file)
+param([string]$script = (Join-Path $PSScriptRoot '_.ahk'))
+$ahkExe = Join-Path $PSScriptRoot '..\bin\AutoHotkey64.exe'
 
 # Kill any running instances of this script
 $processes = Get-WmiObject Win32_Process -Filter "Name='AutoHotkey64.exe'" |

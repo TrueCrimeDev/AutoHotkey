@@ -12,7 +12,7 @@ Example:
 FileAppend "Hello from AHK`n", "*"
 ```
 
-In this repo, `test_console.ahk` demonstrates this pattern (`test_console.ahk:4`).
+In this repo, `tests/test_console.ahk` demonstrates this pattern (`tests/test_console.ahk:4`).
 
 ## Internal pipeline for stdout
 
@@ -76,13 +76,13 @@ What people call "line output" is usually:
 
 ```powershell
 # stdout test
-bin\AutoHotkey64.exe test_console.ahk 1>out.txt 2>err.txt
+bin\AutoHotkey64.exe tests/test_console.ahk 1>out.txt 2>err.txt
 
 # runtime error test under /ErrorStdOut
-bin\AutoHotkey64.exe /ErrorStdOut test_errorstdout.ahk 1>out.txt 2>err.txt
+bin\AutoHotkey64.exe /ErrorStdOut tests/test_errorstdout.ahk 1>out.txt 2>err.txt
 ```
 
 Expected behavior:
 
-- `test_console.ahk` text goes to `out.txt`
-- runtime error details from `test_errorstdout.ahk` go to `err.txt`
+- `tests/test_console.ahk` text goes to `out.txt`
+- runtime error details from `tests/test_errorstdout.ahk` go to `err.txt`

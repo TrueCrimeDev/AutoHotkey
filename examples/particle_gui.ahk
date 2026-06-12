@@ -7,10 +7,10 @@ Demonstrates:
   - OOP architecture: ParticleSystem, ParticleEditor classes
   - Struct arrays for contiguous particle storage
 
-Requires: Alpha22_Example.ahk in parent directory (DarkGui framework)
+Requires: Alpha22_Example.ahk in same directory (DarkGui framework)
 */
 #Requires AutoHotkey v2.1-alpha.26
-#Include ..\Alpha22_Example.ahk
+#Include Alpha22_Example.ahk
 
 ; ── Data Model ──────────────────────────────────────
 

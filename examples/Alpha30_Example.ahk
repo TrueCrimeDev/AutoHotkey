@@ -29,7 +29,7 @@ Print() in this fork takes (Fmt, Values*) and dispatches to Format
 internally for 2+ args, so `Print("x={}", x)` replaces the old
 `Print(Format("x={}", x))` idiom. See updates.md for details.
 
-Run: bin\AutoHotkey64.exe Alpha30_Example.ahk
+Run: bin\AutoHotkey64.exe examples\Alpha30_Example.ahk
 */
 #Requires AutoHotkey v2.1-alpha.30
 

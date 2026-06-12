@@ -30,7 +30,7 @@ class DbgpCommandGui {
         this.gui.AddText("xm w50 h26 +0x200", "Script:")
         this.gui.SetFont("s9", "Consolas")
         this.scriptEdit := this.gui.AddEdit("x+4 yp w380 h26 Background0x202020 c0xffffff")
-        this.scriptEdit.Value := A_ScriptDir "\..\Alpha22_Example.ahk"
+        this.scriptEdit.Value := A_ScriptDir "\..\examples\Alpha22_Example.ahk"
         this.gui.SetFont("s9 norm", "Segoe UI")
         this.browseBtn := this.gui.AddButton("x+4 yp w60 h26", "Browse")
         this.browseBtn.OnEvent("Click", (*) => this.BrowseScript())

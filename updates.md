@@ -18,7 +18,7 @@ This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.
 | External-signal exit code | `code=130` for Ctrl+C / close | Always on (gate is whether crash log is on) |
 | Interactive / pipe-driven REPL | `repl` subcommand (see §16) | n/a — explicit mode |
 
-Everything else inherited from `v2.1-alpha.29` works as documented upstream (tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc. — see `Alpha29_Example.ahk` for a runnable showcase).
+Everything else inherited from `v2.1-alpha.29` works as documented upstream (tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc. — see `examples/Alpha29_Example.ahk` for a runnable showcase).
 
 ---
 
@@ -457,7 +457,7 @@ bin\AutoHotkey64.exe test tests\<script>.ahk
 | `tests/test_repl.sh` | `repl` subcommand end-to-end (bash; pipes stdin): values, cross-line state, error resilience, JSON mode, `ExitApp` passthrough, script-hosted session. |
 | `tests/manual_*.ahk` | Manual verification scripts (SEH, recursion, long-running for Ctrl+C). Not run automatically. |
 
-The Alpha22-29 feature showcases at the repo root (`Alpha22_Example.ahk` through `Alpha29_Example.ahk`) exercise upstream alpha features and are unaffected by the fork-only additions.
+The Alpha22-29 feature showcases under `examples/` (`examples/Alpha22_Example.ahk` through `examples/Alpha29_Example.ahk`) exercise upstream alpha features and are unaffected by the fork-only additions.
 
 ---
 
@@ -574,7 +574,7 @@ If any of these matter, they're all single-purpose follow-up tasks rather than v
 - **Plans** — `docs/superpowers/plans/2026-05-12-eval-builtin.md`, `docs/superpowers/plans/2026-05-13-crashlog.md`
 - **CLAUDE.md** — high-level project orientation
 - **README.md** — top-level fork overview
-- **Alpha29_Example.ahk** — runnable showcase of upstream alpha.29 features
+- **examples/Alpha29_Example.ahk** — runnable showcase of upstream alpha.29 features
 
 The specs are the authoritative reference for design decisions; the plans break the work into TDD tasks; this `updates.md` is the user-facing summary.
 

@@ -10,7 +10,7 @@ New features:
   6. Export function call behavior change (block syntax required)
   7. Bug fixes (!~=, #Import __Init, module reopening, DllCall)
 
-Run: bin\AutoHotkey64.exe Alpha22_Example.ahk
+Run: bin\AutoHotkey64.exe examples\Alpha22_Example.ahk
 */
 #Requires AutoHotkey v2.1-alpha.22
 
