@@ -16,6 +16,7 @@ This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.
 | Crash logging (script form) | `#CrashLog path` directive | Yes — gated |
 | Stderr file tee | `/StdErrFile=path` flag | Yes — gated |
 | External-signal exit code | `code=130` for Ctrl+C / close | Always on (gate is whether crash log is on) |
+| Interactive / pipe-driven REPL | `repl` subcommand (see §16) | n/a — explicit mode |
 
 Everything else inherited from `v2.1-alpha.29` works as documented upstream (tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc. — see `Alpha29_Example.ahk` for a runnable showcase).
 
@@ -453,6 +454,7 @@ bin\AutoHotkey64.exe test tests\<script>.ahk
 | `tests/test_crashlog_directive.ahk` | `#CrashLog` directive works without CLI flag. |
 | `tests/test_crashlog_exitapp_n.ahk` | `ExitApp 7` → `[EXIT] code=7 reason=ExitApp(7)`. |
 | `tests/crashlog_check.ahk` | Verifier harness: asserts a log file contains given substrings. |
+| `tests/test_repl.sh` | `repl` subcommand end-to-end (bash; pipes stdin): values, cross-line state, error resilience, JSON mode, `ExitApp` passthrough, script-hosted session. |
 | `tests/manual_*.ahk` | Manual verification scripts (SEH, recursion, long-running for Ctrl+C). Not run automatically. |
 
 The Alpha22-29 feature showcases at the repo root (`Alpha22_Example.ahk` through `Alpha29_Example.ahk`) exercise upstream alpha features and are unaffected by the fork-only additions.
@@ -568,10 +570,82 @@ If any of these matter, they're all single-purpose follow-up tasks rather than v
 
 ## 15. Where this is documented in the repo
 
-- **Specs** — `docs/superpowers/specs/2026-05-12-eval-builtin-design.md`, `docs/superpowers/specs/2026-05-13-crashlog-design.md`
+- **Specs** — `docs/superpowers/specs/2026-05-12-eval-builtin-design.md`, `docs/superpowers/specs/2026-05-13-crashlog-design.md`, `docs/superpowers/specs/2026-06-12-repl-mode-design.md`
 - **Plans** — `docs/superpowers/plans/2026-05-12-eval-builtin.md`, `docs/superpowers/plans/2026-05-13-crashlog.md`
 - **CLAUDE.md** — high-level project orientation
 - **README.md** — top-level fork overview
 - **Alpha29_Example.ahk** — runnable showcase of upstream alpha.29 features
 
-The two specs are the authoritative reference for design decisions; the plans break the work into TDD tasks; this `updates.md` is the user-facing summary.
+The specs are the authoritative reference for design decisions; the plans break the work into TDD tasks; this `updates.md` is the user-facing summary.
+
+---
+
+## 16. `repl` subcommand — interactive / pipe-driven eval session
+
+A read-eval-print loop built on the `Eval` machinery (§1). One process holds live
+interpreter state: evaluate expressions in milliseconds, build and poke GUIs
+interactively, and drive it all from a terminal or an agent's stdin pipe.
+
+```bat
+bin\AutoHotkey64.exe repl                       :: bare session (synthetic empty script)
+bin\AutoHotkey64.exe repl script.ahk            :: load script, run auto-execute, then REPL
+bin\AutoHotkey64.exe repl /Diag=json script.ahk :: JSON result lines on stdout
+```
+
+### Semantics
+
+- `repl` must be the **first** argument (same rule as `check` / `test`); flags and the
+  optional script follow.
+- One expression per line; comma compounds work (`x := 1, y := 2`). Expressions are
+  evaluated in **global scope**, so the loaded script's globals, functions and classes
+  are all reachable.
+- The session starts **after** the auto-execute section finishes. Hotkeys, timers and
+  GUI events keep firing between (and during) evaluations — each line runs as a normal
+  pseudo-thread.
+- `Eval()` is implicitly enabled (`g_AllowEval`), `#SingleInstance` is forced off, and
+  the script is treated as persistent for the lifetime of the session.
+- **Errors never end the session.** The REPL acts as an implicit try/catch: parse
+  errors and runtime errors print one line and the loop continues, with prior state
+  intact. (`SyntaxError: Missing operand.` on stderr in text mode.)
+- EOF or `.exit` → clean exit `0`. `ExitApp(n)` typed into the session exits with `n`.
+- Interactive consoles get a banner and a `>>> ` prompt; piped stdin gets neither.
+- Meta-commands: `.exit`, `.help`.
+
+### Output
+
+Text mode: the expression's value prints to stdout; void/unset results print nothing;
+objects print as `<ClassName object>`; errors print one line to stderr.
+
+JSON mode (`/Diag=json`): exactly **one stdout line per input line**, so a consumer
+never desynchronizes:
+
+```json
+{"kind":"result","ok":true,"type":"Integer","value":"42"}
+{"kind":"result","ok":false,"type":"SyntaxError","value":"Missing operand."}
+{"kind":"result","ok":true,"type":"Unset","value":""}
+```
+
+### Example session
+
+```text
+>>> x := 10
+10
+>>> x * 4
+40
+>>> g := Gui("+AlwaysOnTop", "Live"), g.Show("w200 h80")
+>>> g.BackColor := 0x202020
+2105376
+>>> .exit
+```
+
+### v1 limitations
+
+- Single-line expressions only (no multi-line blocks; use commas or load a script).
+- No `ToString` dispatch for object results (`<Array object>`, not contents).
+- JSON values are capped at ~4K characters per line.
+- Inherits the `Eval` §1 known edge case (IIFE + maybe-operator combo).
+
+Implementation: `source/error.cpp` (reader thread, mailbox, `ReplDrainInput`,
+`EvalCore` shared with the `Eval` BIF), dispatch via `AHK_REPL_INPUT` in
+`MainWindowProc`. Design: `docs/superpowers/specs/2026-06-12-repl-mode-design.md`.
+Tests: `tests/test_repl.sh`.
