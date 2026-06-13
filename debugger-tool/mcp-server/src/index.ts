@@ -19,9 +19,37 @@ import { DBGpClient, ErrorInfo } from './dbgp-client.js';
 import { z } from 'zod';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { fileURLToPath } from 'url';
 import Anthropic from '@anthropic-ai/sdk';
 
 const client = new DBGpClient(9000);
+
+const execFileAsync = promisify(execFile);
+
+// Locations for the tree-sitter outline tool (ast_outline). The server lives at
+// debugger-tool/mcp-server/build/index.js, so the engine is three levels up in
+// bin/, and the AHK helper sits in ../scripts next to build/. AHK_BIN overrides
+// the engine path. Requires a TSParse-enabled engine.
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const AHK_BIN = process.env.AHK_BIN || path.resolve(moduleDir, '../../../bin/AutoHotkey64.exe');
+const AST_OUTLINE_SCRIPT = path.resolve(moduleDir, '../scripts/ast_outline.ahk');
+
+async function runAstOutline(file: string): Promise<{ hasError: number; count: number; symbols: any[] }> {
+  const abs = path.resolve(file);
+  const { stdout } = await execFileAsync(AHK_BIN, [AST_OUTLINE_SCRIPT, abs], {
+    timeout: 15000,
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  const text = stdout.trim();
+  if (!text)
+    throw new Error('TSParse produced no output (engine may predate the TSParse BIF, or the DLL is missing)');
+  const parsed = JSON.parse(text);
+  if (parsed.error)
+    throw new Error(parsed.error);
+  return parsed;
+}
 
 // === Claude API (lazy init) ===
 
@@ -99,6 +127,10 @@ const DebugCommandSchema = z.object({
 });
 
 const SourceOutlineSchema = z.object({
+  file: z.string().describe('Path to the AutoHotkey source file'),
+});
+
+const AstOutlineSchema = z.object({
   file: z.string().describe('Path to the AutoHotkey source file'),
 });
 
@@ -416,6 +448,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'source_outline',
         description: 'Extract classes, functions, hotkeys, and labels from an AutoHotkey source file',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: { type: 'string', description: 'Path to the AutoHotkey source file' },
+          },
+          required: ['file'],
+        },
+      },
+      {
+        name: 'ast_outline',
+        description: 'Tree-sitter AST outline of an AHK file: classes, functions, methods, and properties with names, line ranges, and byte spans. Uses a real parse (not regex like source_outline), so it handles nested classes, methods, and multi-line signatures. Reports hasError for parse problems. Requires the TSParse-enabled engine.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -949,6 +992,31 @@ Format response as JSON:
             },
           ],
         };
+      }
+
+      case 'ast_outline': {
+        const params = AstOutlineSchema.parse(args);
+        try {
+          const result = await runAstOutline(params.file);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ file: params.file, ...result }, null, 2),
+              },
+            ],
+          };
+        } catch (err: any) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `ast_outline failed: ${err.message}\n(Engine: ${AHK_BIN} — needs the TSParse BIF. Falling back to source_outline is recommended.)`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
 
       case 'workspace_symbols': {
