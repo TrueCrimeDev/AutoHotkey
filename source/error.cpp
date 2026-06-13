@@ -1764,7 +1764,9 @@ TSApi &GetTSApi()
 
 // Set a property from a UTF-8 string (tree-sitter returns UTF-8). Returns false
 // only on allocation failure; null/empty input yields an empty string.
-bool SetU8Prop(Object *obj, LPCTSTR name, const char *s, int u8len)
+// aName is Object::name_t (LPTSTR); callers pass string literals, matching the
+// SetOwnProp idiom used throughout the codebase.
+bool SetU8Prop(Object *obj, LPTSTR name, const char *s, int u8len)
 {
 	if (!s || u8len <= 0)
 		return obj->SetOwnProp(name, _T(""));
