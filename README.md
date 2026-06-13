@@ -359,6 +359,7 @@ Tool-by-tool usage lives in [`debugger-tool/mcp-server/README.md`](debugger-tool
 | [`BUILD.md`](BUILD.md) | Toolchains, build configs, troubleshooting |
 | [`CLAUDE.md`](CLAUDE.md) | Project orientation for AI agents |
 | [`V3_MILESTONE_STATUS.md`](docs/V3_MILESTONE_STATUS.md) | Milestone implementation status |
+| [`docs/TREE_SITTER.md`](docs/TREE_SITTER.md) | Vendored tree-sitter AHK grammar DLL: exports, DllCall usage |
 | `debugger-tool/mcp-server/README.md` | MCP tool reference and setup |
 
 ---
