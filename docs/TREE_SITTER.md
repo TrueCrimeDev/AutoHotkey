@@ -4,8 +4,64 @@
 source. It bundles the AHK grammar **and** a minimal slice of the tree-sitter runtime,
 so scripts can use it directly via `DllCall` — no separate `tree-sitter.dll` required.
 
-**Status:** vendored artifact, not yet wired into the engine. `AutoHotkey64.exe`
-currently has no tree-sitter integration; this DLL is the building block for it.
+**Status:** the engine exposes a native **`TSParse()`** BIF (see below) that wraps
+this DLL — no `DllCall` needed. The raw `DllCall` surface documented further down
+still works and is the fallback on builds that predate the BIF.
+
+> `TSParse()` requires the engine to be rebuilt from source (`build_local.bat`).
+> Stock `AutoHotkey64.exe` builds before that rebuild will raise
+> `Error: TSParse — call to nonexistent function`.
+
+## Native API: `TSParse(Source)`
+
+`TSParse(source)` loads `tree-sitter-ahk.dll` on first use (preferring the copy
+next to the executable, then the normal DLL search path), parses `source`, walks
+the entire tree in C++, and returns a snapshot of plain AHK objects. The native
+`TSTree` is freed before `TSParse` returns, so there are no native handles to
+release and nothing to leak.
+
+```autohotkey
+tree := TSParse("x := 42`nMsgBox(x)")
+Print("root: {}, hasError: {}", tree.Root.Type, tree.HasError)   ; source_file, 0
+for node in tree.Root.Children
+    Print("  {} [{}..{}]  {}", node.Type, node.StartByte, node.EndByte, node.Text)
+```
+
+Returned tree object:
+
+| Prop | Meaning |
+|---|---|
+| `Root` | root node object (see below) |
+| `Source` | the original source string (UTF-16, as passed) |
+| `HasError` | `1` if the parse tree contains any error/missing nodes, else `0` |
+
+Each node object:
+
+| Prop | Type | Meaning |
+|---|---|---|
+| `Type` | String | grammar symbol, e.g. `assignment_operation`, `function_call` |
+| `StartByte` / `EndByte` | Int | UTF-8 byte offsets into the source |
+| `StartRow` / `StartCol` | Int | 0-based row, **UTF-8 byte** column of the start |
+| `EndRow` / `EndCol` | Int | 0-based row / byte column of the end |
+| `Text` | String | the node's source slice, re-decoded to UTF-16 |
+| `IsNamed` / `IsMissing` / `IsError` / `IsExtra` | Int | node-kind flags (0/1) |
+| `HasError` | Int | 1 if this node or any descendant is an error/missing node |
+| `FieldName` | String | this node's field name in its parent, or `""` |
+| `Children` | Array | all children (named + anonymous) |
+| `NamedChildren` | Array | named children only |
+| `Truncated` | Int | 1 if children were omitted at the depth cap (1000), else 0 |
+
+Errors are raised as exceptions: a missing/invalid DLL throws
+`tree-sitter-ahk.dll could not be loaded …`; a runtime/grammar ABI mismatch
+throws `tree-sitter language/runtime ABI mismatch.`
+
+Implementation: `source/error.cpp` (next to `_ScriptGetLines`), registered in
+`source/lib/functions.h`.
+
+## Raw `DllCall` surface
+
+The DLL is also a plain tree-sitter parser usable directly — useful on stock
+builds, or for incremental parsing / queries the snapshot API doesn't expose.
 
 ## Exports (26)
 
