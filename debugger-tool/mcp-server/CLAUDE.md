@@ -14,6 +14,7 @@ This MCP server connects Claude to the AutoHotkey v2 debugger via DBGp protocol.
 | `analyze_error` | Build an analysis prompt from captured error. Use this to understand the bug. |
 | `apply_fix` | Apply a code fix directly to a file. Auto-applies without confirmation. |
 | `get_source_context` | Get source lines around a specific line in any file. |
+| `ast_outline` | Tree-sitter AST outline (classes/functions/methods/properties with line ranges + byte spans). Real parse, not regex. Shells to the TSParse-enabled engine via `scripts/ast_outline.ahk`; set `AHK_BIN` to override the engine path. |
 | `list_errors` | List all queued errors without removing them. |
 | `clear_errors` | Clear the error queue. |
 
