@@ -300,6 +300,8 @@ md_func(ToolTip, (In_Opt, String, Text), (In_Opt, Int32, X), (In_Opt, Int32, Y),
 md_func(TraySetIcon, (In_Opt, String, File), (In_Opt, Int32, Number), (In_Opt, Bool32, Freeze))
 md_func(TrayTip, (In_Opt, String, Text), (In_Opt, String, Title), (In_Opt, String, Options))
 
+md_func(TSParse, (In, String, Source), (Ret, Object, RetVal))
+
 md_func(WinActivate, MD_WINTITLE_ARGS)
 md_func(WinActivateBottom, MD_WINTITLE_ARGS)
 md_func(WinClose, (In_Opt, Variant, WinTitle), (In_Opt, String, WinText), (In_Opt, Float64, WaitTime), (In_Opt, String, ExcludeTitle), (In_Opt, String, ExcludeText))
