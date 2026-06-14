@@ -67,6 +67,7 @@ cd debugger-tool/ahk-error-agent && npm run build && node dist/index.js -v -w
 | `analyze_error` | Analyze error (client LLM or Claude API) |
 | `apply_fix` | Auto-apply code fix to file |
 | `get_source_context` | Get source lines around file:line |
+| `ast_outline` | Tree-sitter AST outline (classes/functions/methods/properties + line ranges & byte spans); real parse, not regex. Shells to the TSParse engine. |
 | `debug_run/step_*/stop` | Execution control |
 | `breakpoint_set/remove/list` | Breakpoint management |
 | `variables_get` | Get variables in scope |
@@ -118,6 +119,7 @@ These do not exist in upstream AutoHotkey. Use them directly — no `#include`, 
   - Silent no-op when no console is attached.
 - **`Eval(Expression)`** — runtime expression eval. Gated by `#EnableEval` directive or `/Eval` CLI flag. Throws `SyntaxError` on parse failure. See `updates.md` section 1.
 - **`SyntaxError`** — exception class for parse errors. Has `Message`, `What`, `Extra`, `Line`, `Column`.
+- **`TSParse(Source)`** — parse AHK source with the bundled tree-sitter grammar; returns a snapshot tree of plain AHK objects. Lazily loads `bin/tree-sitter-ahk.dll` on first call. Returns `{ Root, Source, HasError }`; each node has `Type`, `StartByte`/`EndByte`, `StartRow`/`StartCol`/`EndRow`/`EndCol`, `Text`, `IsNamed`/`IsMissing`/`IsError`/`IsExtra`/`HasError`, `FieldName`, `Children`, `NamedChildren`, `Truncated`. For **structure only** — the grammar is incomplete (false `HasError` on valid code); use `check` for validity. Full docs: `docs/TREE_SITTER.md`.
 
 Full reference: `updates.md` in the repo root.
 
@@ -137,3 +139,36 @@ AutoHotkey debugger uses DBGp protocol on port 9000:
 ```
 
 Key commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`, `stack_get`
+
+---
+
+# ⏳ Session Handoff — Pick Up Here (updated 2026-06-14)
+
+Tree-sitter for AHK is integrated end-to-end. **Delete this whole section once you're caught up.**
+
+## Merged this session (all on `alpha`)
+- **#15** — moved root tests/examples into `tests/` and `examples/`.
+- **#20** — moved root docs to `docs/`; `DarkMode.ahk` → `Lib/DarkMode.ahk` (alpha.30 typed-Struct lib).
+- **#21** — vendored `bin/tree-sitter-ahk.dll` (self-contained AHK grammar + runtime, ABI 15) + `tests/test_treesitter_dll.ahk` + `docs/TREE_SITTER.md`.
+- **#22** — native `TSParse()` BIF in the engine (`source/error.cpp` + `source/lib/functions.h`). CI-verified x64+Win32; runtime-verified.
+- **#23** — `ast_outline` MCP tool (`debugger-tool/mcp-server`) + `scripts/ast_outline.ahk`.
+
+## Binary state
+- `bin/AutoHotkey64.exe` = the TSParse-enabled build (installed from the CI artifact; `A_AhkVersion` = `2.1-alpha.30+Console`).
+- Previous (REPL, no-TSParse) build backed up at `bin/AutoHotkey64.exe.pre-tsparse.bak` — safe to delete once happy.
+- **Can't build the MSVC engine in WSL.** Use the GitHub Actions PR build as the compiler; `gh run download` the artifact. (See memory `engine_build_verify_via_ci`.)
+
+## ⚠️ Do this first after restart
+1. **MCP server / port 9000:** the `autohotkey-debug` server hard-binds port 9000 and **only one instance can run**. A stale 1.3-day session was holding it and was killed — port is now free.
+2. You had **~6 old `claude` sessions** lingering. Close them so they don't re-grab 9000.
+3. `ast_outline` only shows up after the MCP server restarts with the rebuilt `build/` (already rebuilt; `build/` is gitignored). Restart the CLI, or `/mcp` → reconnect `autohotkey-debug`.
+4. **Verify:** ask *"Do you have an `ast_outline` tool?"*, then *"Use `ast_outline` on `Lib\DarkMode.ahk`"* (expect ~73 symbols).
+
+## Open decisions (offered, not yet done — pick any)
+- [ ] **(recommended)** Make the port-9000 bind **non-fatal** so `ast_outline`/`source_outline`/`workspace_symbols` keep working during a port conflict. Today a clash crashes the *entire* MCP server, taking down tools that don't even use 9000.
+- [ ] Fix the **10 stale example files** using removed alpha.30 Struct type-strings (`i32`/`u32`/`u8`/`uptr` → `Int32`/`UInt32`/`UInt8`/`UIntPtr`): all `examples/AlphaNN_Example.ahk`, `examples/alpha_tricks.ahk`, `examples/combined_alpha22_23.ahk`. (`examples/particle_gui.ahk` `#Include`s Alpha22, so it fails too.) Removed by upstream commits `7427d3bc` / `34b17011`.
+- [ ] Faster tree-sitter path: build `tree-sitter-ahk.wasm` + `web-tree-sitter` in the Node MCP server (in-process, incremental). Needs the grammar **source** — only the `.dll` is vendored.
+
+## Caveats to remember
+- The tree-sitter AHK grammar is **incomplete for this fork**: reports `HasError=1` on *valid* code (typed Structs, fat-arrow methods, hotkeys like `^j::`). Treat output as **structure only** (the symbols/tree); for "does it parse?" use the `check` subcommand — it's ~5× faster *and* correct.
+- `ast_outline` doesn't use port 9000 at all (it shells to the engine) — which is why decoupling it from the DBGp listener (first open item) is worth doing.
