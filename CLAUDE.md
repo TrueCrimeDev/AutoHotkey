@@ -165,7 +165,7 @@ Tree-sitter for AHK is integrated end-to-end. **Delete this whole section once y
 4. **Verify:** ask *"Do you have an `ast_outline` tool?"*, then *"Use `ast_outline` on `Lib\DarkMode.ahk`"* (expect ~73 symbols).
 
 ## Open decisions (offered, not yet done — pick any)
-- [ ] **(recommended)** Make the port-9000 bind **non-fatal** so `ast_outline`/`source_outline`/`workspace_symbols` keep working during a port conflict. Today a clash crashes the *entire* MCP server, taking down tools that don't even use 9000.
+- [x] **DONE** (`fix/mcp-port-bind-nonfatal`) — port-9000 bind is now **non-fatal**: an `EADDRINUSE`/bind failure logs a WARNING and the MCP server still starts, so `ast_outline`/`get_source_context` keep working during a port conflict. Only live-debugger tools report "Not connected" (existing `isConnected()` guards). Fix is in `debugger-tool/mcp-server/src/index.ts` `main()`.
 - [ ] Fix the **10 stale example files** using removed alpha.30 Struct type-strings (`i32`/`u32`/`u8`/`uptr` → `Int32`/`UInt32`/`UInt8`/`UIntPtr`): all `examples/AlphaNN_Example.ahk`, `examples/alpha_tricks.ahk`, `examples/combined_alpha22_23.ahk`. (`examples/particle_gui.ahk` `#Include`s Alpha22, so it fails too.) Removed by upstream commits `7427d3bc` / `34b17011`.
 - [ ] Faster tree-sitter path: build `tree-sitter-ahk.wasm` + `web-tree-sitter` in the Node MCP server (in-process, incremental). Needs the grammar **source** — only the `.dll` is vendored.
 
