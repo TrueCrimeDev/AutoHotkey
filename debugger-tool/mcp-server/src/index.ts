@@ -1239,10 +1239,26 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 async function main() {
   console.error('Starting MCP AutoHotkey Debug Server...');
 
-  // Start listening for AutoHotkey
-  await client.listen();
-  console.error(`Listening for AutoHotkey on port 9000`);
-  console.error('Start AutoHotkey with: AutoHotkey.exe /Debug your_script.ahk');
+  // Start listening for AutoHotkey.
+  // A bind failure (e.g. another debugger already holding port 9000) must NOT be
+  // fatal: the shell-based tools (ast_outline, get_source_context, ...) never touch
+  // the DBGp client, and every debugger tool already guards on client.isConnected()
+  // and returns a clean "Not connected" instead of crashing. So we log and continue.
+  try {
+    await client.listen();
+    console.error(`Listening for AutoHotkey on port 9000`);
+    console.error('Start AutoHotkey with: AutoHotkey.exe /Debug your_script.ahk');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code === 'EADDRINUSE') {
+      console.error('WARNING: Port 9000 is already in use (another debugger instance?).');
+    } else {
+      console.error('WARNING: Failed to bind DBGp listener on port 9000:', err);
+    }
+    console.error('Live-debugger tools (debug_*, breakpoint_*, variables_get, evaluate, stack_trace,');
+    console.error('capture_error) will be unavailable, but source tools (ast_outline,');
+    console.error('get_source_context, ...) still work. Free the port and restart to enable debugging.');
+  }
 
   client.on('connected', () => {
     console.error('AutoHotkey connected!');
