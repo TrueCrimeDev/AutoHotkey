@@ -1948,6 +1948,342 @@ bif_impl FResult TSParse(StrArg aSource, IObject *&aRetVal)
 	return OK;
 }
 
+// Check(Source) -> Object { Ok, Diagnostics, Raw }
+// Subprocess-backed validator with oracle parity: writes Source to a temp .ahk,
+// spawns THIS exe hidden in check mode  "<self>" /Diag=json /Check "<tmp>"  with
+// child stdout+stderr to ONE inheritable capture file, then branches on the child
+// EXIT CODE (0 = AHK_EXIT_OK valid; 13 = AHK_EXIT_VALIDATE_ERROR, defines.h:147).
+// SAFETY (no fork bomb): /Check (mValidateThenExit, script.cpp:1523) returns after
+// PreparseCommands() and NEVER executes the body, so a Check() inside the temp
+// source is parsed but not run. Mirrors TSParse (error.cpp:1888) refcount rules,
+// reuses SetU8Prop (error.cpp:1769); all temp files/handles freed on every path.
+namespace { // Check() file-static helpers
+
+static const int kCheckFieldCap = 4096;
+
+static bool CheckWriteTempSource(StrArg aSource, LPTSTR aOutPath /*[MAX_PATH+1]*/)
+{
+	TCHAR tmpDir[MAX_PATH + 1];
+	aOutPath[0] = '\0';
+	if (!GetTempPath(_countof(tmpDir), tmpDir))
+		return false;
+	if (!GetTempFileName(tmpDir, _T("ahk"), 0, aOutPath))
+		return false;
+	int u8size = WideCharToMultiByte(CP_UTF8, 0, aSource, -1, nullptr, 0, nullptr, nullptr);
+	if (u8size <= 0)
+	{
+		DeleteFile(aOutPath); aOutPath[0] = '\0'; return false;
+	}
+	char *u8 = (char *)malloc((size_t)u8size);
+	if (!u8)
+	{
+		DeleteFile(aOutPath); aOutPath[0] = '\0'; return false;
+	}
+	WideCharToMultiByte(CP_UTF8, 0, aSource, -1, u8, u8size, nullptr, nullptr);
+	HANDLE hf = CreateFile(aOutPath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+		FILE_ATTRIBUTE_TEMPORARY, nullptr);
+	if (hf == INVALID_HANDLE_VALUE)
+	{
+		free(u8); DeleteFile(aOutPath); aOutPath[0] = '\0'; return false;
+	}
+	DWORD wrote = 0;
+	BOOL wok = WriteFile(hf, u8, (DWORD)(u8size - 1), &wrote, nullptr); // drop trailing NUL
+	CloseHandle(hf);
+	free(u8);
+	if (!wok || wrote != (DWORD)(u8size - 1))
+	{
+		DeleteFile(aOutPath); aOutPath[0] = '\0'; return false;
+	}
+	return true;
+}
+
+static bool CheckRunSelf(LPCTSTR aSelfExe, LPCTSTR aScriptPath,
+	DWORD &aExitCode, char *&aCaptured, DWORD &aCapLen)
+{
+	aExitCode = (DWORD)-1; aCaptured = nullptr; aCapLen = 0;
+	TCHAR tmpDir[MAX_PATH + 1], capPath[MAX_PATH + 1];
+	if (!GetTempPath(_countof(tmpDir), tmpDir))
+		return false;
+	if (!GetTempFileName(tmpDir, _T("ahc"), 0, capPath))
+		return false;
+	SECURITY_ATTRIBUTES sa;
+	sa.nLength = sizeof(sa);
+	sa.bInheritHandle = TRUE;
+	sa.lpSecurityDescriptor = nullptr;
+	HANDLE hCap = CreateFile(capPath, GENERIC_WRITE, FILE_SHARE_READ, &sa,
+		CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr);
+	if (hCap == INVALID_HANDLE_VALUE)
+	{
+		DeleteFile(capPath); return false;
+	}
+	// Host may have NO console; borrowing parent STD_INPUT_HANDLE could hand the
+	// child NULL/non-inheritable stdin, breaking the USESTDHANDLES contract. Check
+	// mode never reads stdin, but a valid inheritable handle is required, so use NUL.
+	HANDLE hNul = CreateFile(_T("NUL"), GENERIC_READ,
+		FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, OPEN_EXISTING, 0, nullptr);
+	if (hNul == INVALID_HANDLE_VALUE)
+	{
+		CloseHandle(hCap); DeleteFile(capPath); return false;
+	}
+	size_t cmdChars = _tcslen(aSelfExe) + _tcslen(aScriptPath) + 40;
+	LPTSTR cmd = (LPTSTR)malloc(cmdChars * sizeof(TCHAR));
+	if (!cmd)
+	{
+		CloseHandle(hNul); CloseHandle(hCap); DeleteFile(capPath); return false;
+	}
+	sntprintf(cmd, (int)cmdChars, _T("\"%s\" /Diag=json /Check \"%s\""), aSelfExe, aScriptPath);
+	STARTUPINFO si;
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+	si.wShowWindow = SW_HIDE;
+	si.hStdInput = hNul;   // valid inheritable NUL (check mode never reads it)
+	si.hStdOutput = hCap;  // '*' pass record -> here
+	si.hStdError = hCap;   // '**' diagnostic -> SAME file
+	PROCESS_INFORMATION pi;
+	ZeroMemory(&pi, sizeof(pi));
+	BOOL ok = CreateProcess(nullptr, cmd, nullptr, nullptr, TRUE,
+		CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+	free(cmd);
+	if (!ok)
+	{
+		CloseHandle(hNul); CloseHandle(hCap); DeleteFile(capPath); return false;
+	}
+	CloseHandle(hNul);
+	CloseHandle(hCap);
+	CloseHandle(pi.hThread);
+	WaitForSingleObject(pi.hProcess, INFINITE);
+	if (!GetExitCodeProcess(pi.hProcess, &aExitCode))
+		aExitCode = (DWORD)-1;
+	CloseHandle(pi.hProcess);
+	HANDLE hRead = CreateFile(capPath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+		nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_TEMPORARY, nullptr);
+	if (hRead != INVALID_HANDLE_VALUE)
+	{
+		LARGE_INTEGER sz; sz.QuadPart = 0;
+		if (GetFileSizeEx(hRead, &sz) && sz.QuadPart >= 0 && sz.QuadPart < (1 << 24)) // 16MB cap
+		{
+			DWORD n = (DWORD)sz.QuadPart;
+			char *buf = (char *)malloc((size_t)n + 1);
+			if (buf)
+			{
+				DWORD got = 0;
+				if (ReadFile(hRead, buf, n, &got, nullptr))
+				{
+					buf[got] = '\0'; aCaptured = buf; aCapLen = got;
+				}
+				else
+					free(buf);
+			}
+		}
+		CloseHandle(hRead);
+	}
+	DeleteFile(capPath);
+	return true;
+}
+
+// Inverse of EscapeJsonText (error.cpp:241-279). Emitter only produces \\ \" \/
+// \r \n \t and \uXXXX (only for ASCII controls < 0x20), so fold \u to one byte.
+static void CheckJsonUnescape(const char *s, int len, char *out, int aOutCap)
+{
+	int o = 0;
+	for (int i = 0; i < len && o < aOutCap - 1; ++i)
+	{
+		char c = s[i];
+		if (c == '\\' && i + 1 < len)
+		{
+			char e = s[++i];
+			switch (e)
+			{
+			case 'r': out[o++] = '\r'; break;
+			case 'n': out[o++] = '\n'; break;
+			case 't': out[o++] = '\t'; break;
+			case 'u':
+				if (i + 4 < len)
+				{
+					char hex[5];
+					hex[0] = s[i + 1]; hex[1] = s[i + 2]; hex[2] = s[i + 3]; hex[3] = s[i + 4];
+					hex[4] = '\0';
+					unsigned cp = (unsigned)strtoul(hex, nullptr, 16);
+					i += 4;
+					out[o++] = (char)(cp & 0xFF);
+				}
+				break;
+			default: out[o++] = e; break; // \\  \"  \/  and any other: literal
+			}
+		}
+		else
+			out[o++] = c;
+	}
+	out[o] = '\0';
+}
+
+// Find "key":" then copy the value to the first UNescaped quote, then unescape.
+// _snprintf_s is the codebase narrow formatter (crashlog.cpp:47); returns count
+// or -1 on truncation (both caught by the guard).
+static bool CheckExtractJsonStr(const char *aJson, const char *aKey, char *aOut, int aOutCap)
+{
+	aOut[0] = '\0';
+	if (!aJson)
+		return false;
+	char needle[64];
+	int nn = _snprintf_s(needle, _countof(needle), _TRUNCATE, "\"%s\":\"", aKey);
+	if (nn <= 0 || nn >= (int)_countof(needle))
+		return false;
+	const char *p = strstr(aJson, needle);
+	if (!p)
+		return false;
+	p += nn;
+	const char *start = p, *q = p;
+	while (*q)
+	{
+		if (*q == '\\') { if (q[1] == '\0') break; q += 2; continue; }
+		if (*q == '"') break;
+		++q;
+	}
+	if (*q != '"')
+		return false;
+	CheckJsonUnescape(start, (int)(q - start), aOut, aOutCap);
+	return true;
+}
+
+// Find "key": then read an unquoted integer; aDefault if absent/non-numeric.
+static __int64 CheckExtractJsonInt(const char *aJson, const char *aKey, __int64 aDefault)
+{
+	if (!aJson)
+		return aDefault;
+	char needle[64];
+	int nn = _snprintf_s(needle, _countof(needle), _TRUNCATE, "\"%s\":", aKey);
+	if (nn <= 0 || nn >= (int)_countof(needle))
+		return aDefault;
+	const char *p = strstr(aJson, needle);
+	if (!p)
+		return aDefault;
+	p += nn;
+	while (*p == ' ' || *p == '\t')
+		++p;
+	if (*p == '"')
+		return aDefault;
+	char *end = nullptr;
+	long long v = strtoll(p, &end, 10);
+	if (end == p)
+		return aDefault;
+	return (__int64)v;
+}
+
+static void CheckSetStrOr(Object *d, LPTSTR name, const char *aJson, const char *key, LPCTSTR aDef)
+{
+	char val[kCheckFieldCap];
+	if (CheckExtractJsonStr(aJson, key, val, _countof(val)))
+		SetU8Prop(d, name, val, (int)strlen(val));
+	else
+		d->SetOwnProp(name, aDef);
+}
+
+static Object *CheckBuildDiag(const char *aJson, DWORD aExitCode)
+{
+	Object *d = Object::Create();
+	if (!d)
+		return nullptr;
+	CheckSetStrOr(d, _T("Severity"), aJson, "severity", _T("error"));
+	CheckSetStrOr(d, _T("Type"), aJson, "type", _T("Error"));
+	d->SetOwnProp(_T("Code"), CheckExtractJsonInt(aJson, "code", (__int64)aExitCode));
+	CheckSetStrOr(d, _T("Message"), aJson, "message", _T(""));
+	CheckSetStrOr(d, _T("Extra"), aJson, "extra", _T(""));
+	CheckSetStrOr(d, _T("File"), aJson, "file", _T(""));
+	d->SetOwnProp(_T("Line"), CheckExtractJsonInt(aJson, "line", (__int64)0));
+	d->SetOwnProp(_T("Column"), CheckExtractJsonInt(aJson, "column", (__int64)0));
+	return d;
+}
+
+static Object *CheckSyntheticDiag(LPCTSTR aMessage)
+{
+	Object *d = Object::Create();
+	if (!d)
+		return nullptr;
+	d->SetOwnProp(_T("Severity"), _T("error"));
+	d->SetOwnProp(_T("Type"), _T("Error"));
+	d->SetOwnProp(_T("Code"), (__int64)0);
+	d->SetOwnProp(_T("Message"), aMessage);
+	d->SetOwnProp(_T("Extra"), _T(""));
+	d->SetOwnProp(_T("File"), _T(""));
+	d->SetOwnProp(_T("Line"), (__int64)0);
+	d->SetOwnProp(_T("Column"), (__int64)0);
+	return d;
+}
+
+static bool CheckAppendDiag(Array *aDiags, Object *d)
+{
+	if (!d)
+		return false;
+	ExprTokenType t(d);
+	bool ok = aDiags->Append(t);
+	d->Release();
+	return ok;
+}
+
+} // namespace (Check helpers)
+
+bif_impl FResult Check(StrArg aSource, IObject *&aRetVal)
+{
+	TCHAR self[MAX_PATH];
+	DWORD sn = GetModuleFileName(NULL, self, MAX_PATH);
+	if (sn == 0 || sn >= (DWORD)MAX_PATH)
+		return FR_E_WIN32(GetLastError());
+	TCHAR inPath[MAX_PATH + 1];
+	if (!CheckWriteTempSource(aSource, inPath))
+		return FError(_T("Check: could not create or write the temporary script file."));
+	DWORD exitCode = 0, capLen = 0;
+	char *cap = nullptr;
+	bool spawned = CheckRunSelf(self, inPath, exitCode, cap, capLen);
+	DeleteFile(inPath);
+	Object *result = Object::Create();
+	if (!result)
+	{
+		if (cap) free(cap);
+		return FR_E_OUTOFMEM;
+	}
+	Array *diags = Array::Create();
+	if (!diags)
+	{
+		if (cap) free(cap);
+		result->Release();
+		return FR_E_OUTOFMEM;
+	}
+	bool isOk = spawned && (exitCode == AHK_EXIT_OK);
+	result->SetOwnProp(_T("Ok"), (__int64)(isOk ? 1 : 0));
+	SetU8Prop(result, _T("Raw"), cap, (int)capLen);
+	if (!spawned)
+	{
+		Object *d = CheckSyntheticDiag(_T("Check: failed to spawn the validator child process."));
+		if (d)
+			CheckAppendDiag(diags, d);
+	}
+	else if (!isOk)
+	{
+		const char *rec = cap ? strstr(cap, "\"kind\":\"diagnostic\"") : nullptr;
+		Object *d;
+		if (rec)
+			d = CheckBuildDiag(rec, exitCode);
+		else
+		{
+			TCHAR msg[128];
+			sntprintf(msg, _countof(msg),
+				_T("Check: validator exited with code %u and no diagnostic output."),
+				(unsigned)exitCode);
+			d = CheckSyntheticDiag(msg);
+		}
+		if (d)
+			CheckAppendDiag(diags, d);
+	}
+	result->SetOwnProp(_T("Diagnostics"), diags);
+	diags->Release();
+	if (cap)
+		free(cap);
+	aRetVal = result;
+	return OK;
+}
+
 
 
 // Shared by the Eval BIF and the REPL (Script::ReplDrainInput).  Evaluates aExpression
