@@ -134,11 +134,142 @@ bif_impl FResult TrayTip(optl<StrArg> aText, optl<StrArg> aTitle, optl<StrArg> a
 // Main Window //
 /////////////////
 
+// === Windowless diagnostic snapshot (AHKMON) ================================
+// An external reader sends WM_COPYDATA to the main window with
+// COPYDATASTRUCT.dwData == 0x41484B51 ('AHKQ') and a UTF-8 payload
+// "<replyHwndDecimal>\n<views CSV>"  (views in {ListLines,ListHotkeys,ListVars,
+// KeyHistory}). We build each requested view's text via BuildMainView — the SAME
+// generators the View menu uses — WITHOUT ever showing/activating/focusing the
+// main window, assemble one UTF-8 @@AHKMON@@-sentinel blob, and reply with
+// WM_COPYDATA dwData == 0x41484B52 ('AHKR') to replyHwnd. Handled before
+// MsgMonitor so a script's OnMessage(WM_COPYDATA) cannot intercept the request.
+static LRESULT AHKMon_HandleQuery(PCOPYDATASTRUCT cds)
+{
+	if (!cds)
+		return TRUE;
+
+	// Decode request payload (UTF-8 -> UTF-16).
+	int reqU8 = (int)cds->cbData;
+	int reqW = reqU8 > 0 ? MultiByteToWideChar(CP_UTF8, 0, (LPCSTR)cds->lpData, reqU8, nullptr, 0) : 0;
+	LPTSTR req = (LPTSTR)malloc((reqW + 1) * sizeof(TCHAR));
+	if (!req)
+		return TRUE;
+	if (reqW > 0)
+		MultiByteToWideChar(CP_UTF8, 0, (LPCSTR)cds->lpData, reqU8, req, reqW);
+	req[reqW] = '\0';
+
+	// First line = reply HWND (decimal); remainder = CSV of view names.
+	LPTSTR nl = _tcschr(req, '\n');
+	HWND reply_hwnd = NULL;
+	LPTSTR views_csv = _T("");
+	if (nl)
+	{
+		*nl = '\0';
+		reply_hwnd = (HWND)(UINT_PTR)_ttoi64(req);
+		views_csv = nl + 1;
+		LPTSTR cr = _tcschr(views_csv, '\r'); // tolerate CRLF on the first line break
+		if (cr) memmove(cr, cr + 1, (_tcslen(cr + 1) + 1) * sizeof(TCHAR));
+	}
+	if (!reply_hwnd)
+	{
+		free(req);
+		return TRUE;
+	}
+
+	// Wide assembly buffer, converted once to UTF-8 at the end. Sized for four
+	// maxed-out 65534-char views plus header/sentinel slack so nothing truncates.
+	const int kBlobChars = 4 * 65534 + 4096;
+	LPTSTR blob = (LPTSTR)malloc(kBlobChars * sizeof(TCHAR));
+	LPTSTR view_buf = (LPTSTR)malloc(65534 * sizeof(TCHAR));
+	if (!blob || !view_buf)
+	{
+		free(req); free(blob); free(view_buf);
+		return TRUE;
+	}
+	LPTSTR b = blob;
+	LPTSTR blob_end = blob + kBlobChars;
+	#define BLOB_REMAIN ((int)(blob_end - b))
+
+	// Epoch millis from FILETIME (100ns ticks since 1601-01-01).
+	FILETIME ft; GetSystemTimeAsFileTime(&ft);
+	ULONGLONG t100 = ((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+	ULONGLONG unix_ms = (t100 - 116444736000000000ULL) / 10000ULL;
+
+	// Window title; the header sentinel is single-line, so neutralize any CR/LF.
+	TCHAR title[256];
+	if (!GetWindowText(g_hWnd, title, _countof(title)))
+		*title = '\0';
+	for (LPTSTR p = title; *p; ++p)
+		if (*p == '\r' || *p == '\n') *p = ' ';
+
+	b += sntprintf(b, BLOB_REMAIN,
+		_T("@@AHKMON snapshot ts=%I64u target=%Iu title=%s@@\n"),
+		unix_ms, (UINT_PTR)g_hWnd, title);
+
+	// Requested views, in the order given.
+	LPTSTR ctx = nullptr;
+	for (LPTSTR tok = _tcstok_s(views_csv, _T(","), &ctx); tok; tok = _tcstok_s(nullptr, _T(","), &ctx))
+	{
+		while (*tok == ' ' || *tok == '\t') ++tok;
+		LPTSTR te = tok + _tcslen(tok);
+		while (te > tok && (te[-1] == ' ' || te[-1] == '\t' || te[-1] == '\r')) *--te = '\0';
+		if (!*tok)
+			continue;
+
+		MainWindowModes mode;
+		if      (!_tcsicmp(tok, _T("ListLines")))   mode = MAIN_MODE_LINES;
+		else if (!_tcsicmp(tok, _T("ListHotkeys"))) mode = MAIN_MODE_HOTKEYS;
+		else if (!_tcsicmp(tok, _T("ListVars")))    mode = MAIN_MODE_VARS;
+		else if (!_tcsicmp(tok, _T("KeyHistory")))  mode = MAIN_MODE_KEYHISTORY;
+		else continue; // Unknown view name -> skip.
+
+		b += sntprintf(b, BLOB_REMAIN, _T("@@AHKMON view=%s@@\n"), tok);
+		*view_buf = '\0';
+		BuildMainView(mode, view_buf, 65534); // SAME generators as the menu; no window shown.
+		b += sntprintf(b, BLOB_REMAIN, _T("%s\n"), view_buf); // empty list -> blank block, sentinels still present.
+	}
+
+	b += sntprintf(b, BLOB_REMAIN, _T("@@AHKMON end@@\n"));
+	#undef BLOB_REMAIN
+
+	// UTF-16 -> UTF-8 (pattern from PrintWideLine, error.cpp).
+	int wlen = (int)(b - blob);
+	int u8len = wlen > 0 ? WideCharToMultiByte(CP_UTF8, 0, blob, wlen, nullptr, 0, nullptr, nullptr) : 0;
+	char *u8 = (char *)malloc(u8len + 1);
+	if (u8)
+	{
+		if (u8len > 0)
+			WideCharToMultiByte(CP_UTF8, 0, blob, wlen, u8, u8len, nullptr, nullptr);
+		u8[u8len] = '\0';
+
+		COPYDATASTRUCT rep;
+		rep.dwData = 0x41484B52; // 'AHKR'
+		rep.cbData = (DWORD)u8len; // bytes, excluding NUL
+		rep.lpData = u8;
+		DWORD_PTR res;
+		// Timeout so a hung/dead reader cannot stall the script's GUI thread.
+		SendMessageTimeout(reply_hwnd, WM_COPYDATA, (WPARAM)g_hWnd,
+			(LPARAM)&rep, SMTO_ABORTIFHUNG | SMTO_NORMAL, 5000, &res);
+		free(u8);
+	}
+
+	free(view_buf);
+	free(blob);
+	free(req);
+	return TRUE; // We handled it.
+}
+
+
 LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 {
 	// Detect Explorer crashes so that tray icon can be recreated.  I think this only works on Win98
 	// and beyond, since the feature was never properly implemented in Win95:
 	static UINT WM_TASKBARCREATED = RegisterWindowMessage(_T("TaskbarCreated"));
+
+	// Windowless diagnostic snapshot: serve AHKMON queries (WM_COPYDATA 'AHKQ')
+	// before MsgMonitor so a script's OnMessage(WM_COPYDATA) cannot swallow them.
+	if (iMsg == WM_COPYDATA && lParam && ((PCOPYDATASTRUCT)lParam)->dwData == 0x41484B51)
+		return AHKMon_HandleQuery((PCOPYDATASTRUCT)lParam);
 
 	// See GuiWindowProc() for details about this first section:
 	LRESULT msg_reply;
@@ -751,6 +882,25 @@ static LPTSTR ExpandTabsForConsole(LPCTSTR aText)
 	}
 	*o = '\0';
 	return out;
+}
+
+
+
+LPTSTR BuildMainView(MainWindowModes aMode, LPTSTR aBuf, int aBufSize)
+// Pure text generation — identical to ShowMainWindow's switch (the four list
+// generators), with NO visibility/foreground side effects. Caller-owned buffer.
+{
+	switch (aMode)
+	{
+	case MAIN_MODE_LINES:      return Line::LogToText(aBuf, aBufSize);
+	case MAIN_MODE_VARS:       return g_script.ListVars(aBuf, aBufSize);
+	case MAIN_MODE_HOTKEYS:    return Hotkey::ListHotkeys(aBuf, aBufSize);
+	case MAIN_MODE_KEYHISTORY: return g_script.ListKeyHistory(aBuf, aBufSize);
+	default:
+		if (aBufSize > 0)
+			*aBuf = '\0';
+		return aBuf;
+	}
 }
 
 

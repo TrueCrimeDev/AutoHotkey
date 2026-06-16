@@ -233,6 +233,10 @@ void Util_WinKill(HWND hWnd);
 enum MainWindowModes {MAIN_MODE_NO_CHANGE, MAIN_MODE_LINES, MAIN_MODE_VARS
 	, MAIN_MODE_HOTKEYS, MAIN_MODE_KEYHISTORY, MAIN_MODE_REFRESH};
 ResultType ShowMainWindow(MainWindowModes aMode = MAIN_MODE_NO_CHANGE, bool aRestricted = true);
+// Build one diagnostic view's text into aBuf with NO window side effects (no
+// ShowWindow/activate/WM_SETTEXT). Same generators ShowMainWindow uses, so the
+// output is byte-identical to the View menu. Returns the end pointer.
+LPTSTR BuildMainView(MainWindowModes aMode, LPTSTR aBuf, int aBufSize);
 DWORD GetAHKInstallDir(LPTSTR aBuf);
 
 
