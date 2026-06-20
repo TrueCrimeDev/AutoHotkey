@@ -11,11 +11,6 @@ stock AutoHotkey.
 ![license](https://img.shields.io/badge/license-GPL--2.0-7BC96F)
 ![platform](https://img.shields.io/badge/platform-Windows%20x64-808080)
 
-Stock AutoHotkey is built for the desktop: errors open a MsgBox, output goes to GUIs, and a
-script that fails still exits `0`. That model fights you the moment you run scripts from a
-terminal, a CI job, or an agent loop. This fork keeps the language identical and changes only
-the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
-
 ---
 
 ## Contents
@@ -36,6 +31,11 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 ---
 
 ## Why this fork
+
+Stock AutoHotkey is built for the desktop: errors open a MsgBox, output goes to GUIs, and a
+script that fails still exits `0`. That model fights you the moment you run scripts from a
+terminal, a CI job, or an agent loop. This fork keeps the language identical and changes only
+the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 
 | | Stock AutoHotkey | This fork |
 |---|---|---|
