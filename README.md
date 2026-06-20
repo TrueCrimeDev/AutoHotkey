@@ -60,16 +60,22 @@ unchanged; the additions are flags, subcommands, and a few opt-in built-ins.
 
 ### Build (Windows)
 
-Requires **Visual Studio 2022** or **Build Tools 18** with the *C++ Desktop Development*
-workload. The helper auto-detects the toolchain:
+GCC (**mingw-w64** via [MSYS2](https://www.msys2.org)) is the canonical compiler. Install the
+toolchain once:
 
-```powershell
-.\build_local.bat
+```bash
+pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
 ```
 
-Output lands in `bin\AutoHotkey64.exe`. (`build_vs18.cmd` is the fallback when only Build
-Tools 18 is present.) Full details, manual `msbuild` invocation, and the WSL/mingw
-cross-compile path are in [`BUILD.md`](BUILD.md) and [`updates.md` §12](updates.md).
+then build from the repo root:
+
+```powershell
+.\build.bat
+```
+
+Output lands in `bin\AutoHotkey64.exe`. MSVC is still supported as an alternative
+(`build_local.bat`) and produces the CI release binary. Full details — both toolchains, manual
+invocations, and the CMake flags — are in [`BUILD.md`](BUILD.md) and [`updates.md` §12](updates.md).
 
 ### First run
 

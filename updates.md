@@ -463,36 +463,34 @@ The Alpha22-29 feature showcases under `examples/` (`examples/Alpha22_Example.ah
 
 ## 12. Build paths
 
-Two build systems coexist; both produce `bin/AutoHotkey64.exe`.
+Two build systems coexist; both produce `bin/AutoHotkey64.exe`. **GCC (mingw-w64) is the canonical compiler**; MSVC remains available and still produces the CI release binary.
 
-### MSVC (canonical)
-
-```bat
-build_local.bat
-```
-
-Uses Visual Studio BuildTools (VS18 / VS2022) → `AutoHotkeyx.sln` / `AutoHotkeyx.vcxproj`. Faster build; smaller binary. The `Config.vcxproj` includes `/Zc:preprocessor` (required by `__VA_OPT__` in `script_func_impl.h`).
-
-### mingw / GCC (MSYS2)
+### GCC / mingw-w64 (canonical)
 
 ```bash
-# from the repo root, in WSL:
-cmd.exe /c build_mingw.bat          # append `clean` to force a fresh configure
+# from the repo root (WSL or a Windows shell):
+cmd.exe /c build.bat                 # append `clean` to force a fresh configure
 ```
 
-`build_mingw.bat` drives MSYS2's mingw-w64 toolchain through CMake — Ninja when present, otherwise MinGW Makefiles — and writes `bin/AutoHotkey64.exe`; the build tree lives in `build_mingw/`. Requires MSYS2 with:
+`build.bat` drives MSYS2's mingw-w64 toolchain through CMake — Ninja when present, otherwise MinGW Makefiles — and writes `bin/AutoHotkey64.exe`; the build tree lives in `build_gcc/`. Requires MSYS2 with:
 
 ```
 pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
 ```
 
-Set `MSYS2_ROOT` if MSYS2 isn't at `C:\msys64`. The `build-mingw` job in `.github/workflows/build.yml` builds this route in CI on every push. Larger statically-linked binary (~3.2 MB vs MSVC's ~1.3 MB). Some MSVC-only constructs are guarded with `#ifdef _MSC_VER`:
+Set `MSYS2_ROOT` if MSYS2 isn't at `C:\msys64`. The `build-mingw` job in `.github/workflows/build.yml` builds this route in CI on every push. Statically linked (~3.2 MB). Some MSVC-only constructs are guarded with `#ifdef _MSC_VER`:
 
 - `__try`/`__except` SEH around the crash-log filter's defensive guard (mingw GCC doesn't support that syntax — bare filter still works, just without the inner reentrancy catch).
 - Various goto-init-crossing block wraps and `std::nullptr_t` qualifications throughout `source/` (mingw GCC is stricter than MSVC).
 - ASM stubs (`x64call.asm` / `x64stub.asm`) have GAS-syntax twins (`x64call.s` / `x64stub.s`) for the mingw build.
 
-The mingw build is suitable for development work from WSL but the MSVC binary is the recommended one for distribution.
+### MSVC (alternative)
+
+```bat
+build_local.bat
+```
+
+Uses Visual Studio BuildTools (VS18 / VS2022) → `AutoHotkeyx.sln` / `AutoHotkeyx.vcxproj`. Smaller binary (~1.3 MB) with full SEH crash-log fidelity; this is what the CI `release` job ships. The `Config.vcxproj` includes `/Zc:preprocessor` (required by `__VA_OPT__` in `script_func_impl.h`).
 
 ---
 

@@ -1,63 +1,54 @@
 # Building AutoHotkey with _ScriptGetLines
 
+**GCC (mingw-w64) is the canonical compiler for this fork.** MSVC remains supported as an
+alternative and still produces the CI release binary.
+
 ## Prerequisites
 
-- Visual Studio 2022, or Visual Studio Build Tools 18 on this machine
-- C++ Desktop Development workload installed
+- [MSYS2](https://www.msys2.org) with the mingw-w64 toolchain
+- After installing MSYS2, in the MSYS2 shell:
+  ```bash
+  pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+  ```
 
 ## Quick Build (Windows)
 
-1. Use the repo helper script, which auto-detects the supported toolchain on this machine:
+1. From the repo root (WSL or a Windows shell), run the helper script:
+
+   ```cmd
+   build.bat
+   ```
+
+   Append `clean` to force a fresh configure; set `MSYS2_ROOT` if MSYS2 isn't at `C:\msys64`.
+
+2. Output will be in `bin\AutoHotkey64.exe`. The build tree lives in `build_gcc/`.
+
+CI verifies this route via the `build-mingw` job in `.github/workflows/build.yml`. The GCC
+binary is statically linked (~3.2 MB). There is no Clang path — the sources only fork on
+`_MSC_VER` vs mingw GCC.
+
+## Alternative: MSVC (Visual Studio)
+
+Smaller binary (~1.3 MB) with full SEH crash-log fidelity; this is what the CI `release` job
+ships. Requires Visual Studio 2022 or Build Tools 18 with the *C++ Desktop Development* workload.
+
+1. Use the repo helper script, which auto-detects the toolchain:
 
    ```cmd
    build_local.bat
    ```
 
-   If only Visual Studio Build Tools 18 is installed, you can also run:
+   If only Visual Studio Build Tools 18 is installed, you can also run `build_vs18.cmd`.
 
-   ```cmd
-   build_vs18.cmd
-   ```
-
-2. If you prefer a manual build, open **Developer Command Prompt for VS 2022** (or the equivalent Build Tools prompt)
-
-3. Navigate to the project:
-   ```cmd
-   cd C:\Users\uphol\Documents\Design\Coding\AutoHotkey
-   ```
-
-4. Build x64 Release:
+2. Manual build — open **Developer Command Prompt for VS 2022** and run:
    ```cmd
    msbuild AutoHotkeyx.sln /p:Configuration=Release /p:Platform=x64
    ```
 
-5. Output will be in `bin\AutoHotkey64.exe`
+3. Or via the **Visual Studio GUI**: open `AutoHotkeyx.sln`, select **Release** / **x64**,
+   then Build > Build Solution (Ctrl+Shift+B).
 
-## Alternative: Visual Studio GUI
-
-1. Open `AutoHotkeyx.sln` in Visual Studio
-2. Select **Release** and **x64** from the toolbar dropdowns
-3. Build > Build Solution (Ctrl+Shift+B)
-4. Output in `bin\AutoHotkey64.exe`
-
-## Alternative: mingw-w64 / GCC (MSYS2)
-
-A non-MSVC build path using GCC, handy for cross-compiling from WSL. MSVC stays the
-canonical/distribution build; the mingw binary is larger (~3.2 MB) and statically linked.
-
-1. Install [MSYS2](https://www.msys2.org), then in the MSYS2 shell:
-   ```bash
-   pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
-   ```
-2. From the repo root (WSL or a Windows shell):
-   ```cmd
-   cmd.exe /c build_mingw.bat
-   ```
-   Append `clean` to force a fresh configure; set `MSYS2_ROOT` if MSYS2 isn't at `C:\msys64`.
-3. Output in `bin\AutoHotkey64.exe`. CI verifies this route via the `build-mingw` job in
-   `.github/workflows/build.yml`.
-
-There is no Clang path — the sources only fork on `_MSC_VER` vs mingw GCC.
+4. Output in `bin\AutoHotkey64.exe`.
 
 ## Build Configurations
 
