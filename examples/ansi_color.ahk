@@ -11,8 +11,12 @@ Two things make ANSI color work in a plain cmd.exe / PowerShell console:
      with SetConsoleMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x4). Windows
      Terminal / Cmder / ConEmu enable it for you; raw cmd/pwsh do not.
 
-With both in place you can build one fully-colored string and emit it in a
-single FileAppend — no per-segment SetConsoleTextAttribute calls.
+And a trap: write through the SAME handle VT was enabled on. FileAppend("CONOUT$")
+opens a fresh handle (VT defaults OFF) and shows raw escapes anyway — so this
+example writes via WriteConsoleW on the configured handle instead.
+
+With all three in place you build one fully-colored string and emit it in a
+single write — no per-segment SetConsoleTextAttribute calls.
 
 Usage:
   bin\AutoHotkey64.exe examples\ansi_color.ahk          ; color demo
@@ -72,16 +76,31 @@ AnsiTags(text) {
     return out
 }
 
-; Render tags and write the whole line in one FileAppend.
+; Write through the SAME handle VT was enabled on. A fresh CONOUT$ handle (what
+; FileAppend opens) defaults to VT OFF, so writing via it shows raw escapes even
+; after InitVT — that's the trap. WriteConsoleW reuses our configured handle.
+; Falls back to stdout when there's no console (redirected/piped): raw text, no
+; color, which is the correct behavior for a pipe.
+ConWrite(text) {
+    h := InitVT()
+    if (h) {
+        written := 0
+        DllCall("WriteConsoleW", "ptr", h, "wstr", text, "uint", StrLen(text),
+                "uint*", &written, "ptr", 0)
+    } else {
+        FileAppend(text, "*")
+    }
+}
+
+; Render tags and write the whole line in one call.
 Out(text) {
-    InitVT()
-    FileAppend(AnsiTags(text) . "`n", "CONOUT$")
+    ConWrite(AnsiTags(text) . "`n")
 }
 
 Demo() {
     esc := Chr(0x1B)
     if !InitVT()
-        FileAppend("(no console attached; ANSI will show as raw text)`n", "CONOUT$")
+        FileAppend("(no console attached; ANSI shows as raw text when redirected)`n", "*")
 
     buf := AnsiTags("<green>AHK v2 ANSI color demo</green>`n`n")
 
@@ -107,7 +126,7 @@ Demo() {
     }
     buf .= esc . "[0m`n"
 
-    FileAppend(buf, "CONOUT$")
+    ConWrite(buf)
 }
 
 ; Runtime verification — proves AnsiTags emits real ESC sequences. No console
