@@ -88,7 +88,8 @@ ConWrite(text) {
         DllCall("WriteConsoleW", "ptr", h, "wstr", text, "uint", StrLen(text),
                 "uint*", &written, "ptr", 0)
     } else {
-        FileAppend(text, "*")
+        ; Redirected/piped: must pin UTF-8 or AHK may emit UTF-16 (shows as CJK).
+        FileAppend(text, "*", "UTF-8")
     }
 }
 
@@ -100,7 +101,7 @@ Out(text) {
 Demo() {
     esc := Chr(0x1B)
     if !InitVT()
-        FileAppend("(no console attached; ANSI shows as raw text when redirected)`n", "*")
+        FileAppend("(no console attached; ANSI shows as raw text when redirected)`n", "*", "UTF-8")
 
     buf := AnsiTags("<green>AHK v2 ANSI color demo</green>`n`n")
 
