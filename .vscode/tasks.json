@@ -13,6 +13,24 @@
     },
     "tasks": [
         {
+            // Runs the active file with the fork build in the integrated
+            // TERMINAL (VT-capable) — so ANSI escapes render in color, unlike
+            // the AHK extension's Run button which uses the non-VT OUTPUT panel.
+            "label": "Run AHK (fork, color)",
+            "type": "process",
+            "command": "${workspaceFolder}\\bin\\AutoHotkey64.exe",
+            "args": ["${file}"],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Run AHK with Debug Interceptor",
             "type": "shell",
             "command": "& 'C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe' '${workspaceFolder}\\AutoDebug.ahk' '${file}'",
