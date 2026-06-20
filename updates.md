@@ -473,14 +473,20 @@ build_local.bat
 
 Uses Visual Studio BuildTools (VS18 / VS2022) → `AutoHotkeyx.sln` / `AutoHotkeyx.vcxproj`. Faster build; smaller binary. The `Config.vcxproj` includes `/Zc:preprocessor` (required by `__VA_OPT__` in `script_func_impl.h`).
 
-### mingw (cross-compile from WSL)
+### mingw / GCC (MSYS2)
 
 ```bash
-cd build_mingw
-cmd.exe /c rebuild.bat
+# from the repo root, in WSL:
+cmd.exe /c build_mingw.bat          # append `clean` to force a fresh configure
 ```
 
-Uses MSYS2 mingw-w64 via CMake. Larger statically-linked binary (~3.2 MB vs MSVC's ~1.3 MB). Some MSVC-only constructs are guarded with `#ifdef _MSC_VER`:
+`build_mingw.bat` drives MSYS2's mingw-w64 toolchain through CMake — Ninja when present, otherwise MinGW Makefiles — and writes `bin/AutoHotkey64.exe`; the build tree lives in `build_mingw/`. Requires MSYS2 with:
+
+```
+pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+```
+
+Set `MSYS2_ROOT` if MSYS2 isn't at `C:\msys64`. The `build-mingw` job in `.github/workflows/build.yml` builds this route in CI on every push. Larger statically-linked binary (~3.2 MB vs MSVC's ~1.3 MB). Some MSVC-only constructs are guarded with `#ifdef _MSC_VER`:
 
 - `__try`/`__except` SEH around the crash-log filter's defensive guard (mingw GCC doesn't support that syntax — bare filter still works, just without the inner reentrancy catch).
 - Various goto-init-crossing block wraps and `std::nullptr_t` qualifications throughout `source/` (mingw GCC is stricter than MSVC).

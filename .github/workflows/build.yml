@@ -45,6 +45,42 @@ jobs:
         path: bin/${{ matrix.output_name }}.exe
         if-no-files-found: error
 
+  # GCC / mingw-w64 build route (non-canonical; verifies the CMake MINGW path).
+  # Does not gate the release job — MSVC stays the distribution build.
+  build-mingw:
+    runs-on: windows-2022
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup MSYS2 (mingw-w64)
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        path-type: inherit   # exposes Windows cscript.exe for the manifest step
+        update: true
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+
+    - name: Configure CMake (mingw)
+      shell: msys2 {0}
+      run: cmake -S . -B build_mingw -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build (mingw)
+      shell: msys2 {0}
+      run: cmake --build build_mingw --parallel
+
+    - name: Upload Artifact (mingw)
+      uses: actions/upload-artifact@v4
+      with:
+        name: AutoHotkey64-mingw
+        path: bin/AutoHotkey64.exe
+        if-no-files-found: error
+
   release:
     needs: build
     runs-on: ubuntu-latest

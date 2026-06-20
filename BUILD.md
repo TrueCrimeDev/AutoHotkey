@@ -40,6 +40,25 @@
 3. Build > Build Solution (Ctrl+Shift+B)
 4. Output in `bin\AutoHotkey64.exe`
 
+## Alternative: mingw-w64 / GCC (MSYS2)
+
+A non-MSVC build path using GCC, handy for cross-compiling from WSL. MSVC stays the
+canonical/distribution build; the mingw binary is larger (~3.2 MB) and statically linked.
+
+1. Install [MSYS2](https://www.msys2.org), then in the MSYS2 shell:
+   ```bash
+   pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+   ```
+2. From the repo root (WSL or a Windows shell):
+   ```cmd
+   cmd.exe /c build_mingw.bat
+   ```
+   Append `clean` to force a fresh configure; set `MSYS2_ROOT` if MSYS2 isn't at `C:\msys64`.
+3. Output in `bin\AutoHotkey64.exe`. CI verifies this route via the `build-mingw` job in
+   `.github/workflows/build.yml`.
+
+There is no Clang path — the sources only fork on `_MSC_VER` vs mingw GCC.
+
 ## Build Configurations
 
 | Config | Platform | Output |
