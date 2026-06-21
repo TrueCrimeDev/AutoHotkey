@@ -7,7 +7,7 @@ as a plain function.
 Requires the fork engine (`bin/AutoHotkey64.exe`, `2.1-alpha.30+Console`) for the
 `TSParse` / `Print` BIFs.
 
-## Two ways to use it
+## Three ways to use it
 
 **1. Run it in the exe as an MCP server** (stdio — for Claude Code / Cursor):
 
@@ -41,6 +41,29 @@ Including `mcp.ahk` only defines the functions — it does **not** start the ser
 > only possible by compiling it into the engine as a native C++ BIF (like
 > `TSParse`). That's the only mechanism AHK v2 offers; there is no auto-include.
 
+**3. Drive an MCP server from AHK** (AHK as the *client*):
+
+```ahk
+#Include mcp.ahk
+
+; spawn any stdio MCP server — your own mcp.ahk, or a node/python one
+c := McpClient('"' A_AhkPath '" "C:\path\mcp.ahk"')
+for t in c.ListTools()
+    Print(t["name"])
+res := c.CallTool("ast_outline", Map("file", "C:\x.ahk"))
+Print(res["content"][1]["text"])
+c.Close()
+```
+
+`McpClient` is modeled after the official SDK clients (TypeScript
+`Client` + `StdioClientTransport`, Python `ClientSession`): it spawns the server
+as a child process, runs the `initialize` handshake, then `ListTools()` /
+`CallTool()` over newline-delimited JSON-RPC. It works against **any** stdio MCP
+server, not just this one. See `examples/drive_server.ahk` for a full run.
+
+(Transport is `WScript.Shell.Exec`, whose streams use the console codepage — best
+for ASCII-safe payloads. A `CreateProcess` pipe transport would add full UTF-8.)
+
 ## Tools
 
 | Tool | Arguments | Returns |
@@ -57,9 +80,13 @@ Including `mcp.ahk` only defines the functions — it does **not** start the ser
 
 ## What's in the file
 
-`mcp.ahk` contains, in one file: a JSON parser/stringifier (`class Json`), the four
-tool handlers, `MCP()` (call a tool as a function), and `MCPServe()` (the stdio
-JSON-RPC loop). The server starts only when the file is run as the main script.
+`mcp.ahk` contains, in one file: a JSON parser/stringifier (`class Json`), the
+tool handlers, `MCP()` (call a tool as a function), `MCPServe()` (the stdio
+JSON-RPC server loop), and `McpClient` (drive another MCP server). The server
+starts only when the file is run as the main script.
+
+`examples/`: `outline.ahk` (use the tools as functions) and `drive_server.ahk`
+(AHK driving the server as a client).
 
 ## Tests
 

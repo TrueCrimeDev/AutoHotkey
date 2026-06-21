@@ -40,6 +40,81 @@ MCP(name, args := "") {
 }
 
 ; =========================================================================
+;  McpClient — drive an MCP server from AHK (the standard cross-language way)
+; =========================================================================
+;
+; Modeled after the official SDK clients (TypeScript Client + StdioClientTransport,
+; Python ClientSession + stdio_client): spawn a server process, run the initialize
+; handshake, then ListTools() / CallTool(). Talks newline-delimited JSON-RPC over
+; the child's stdin/stdout via WScript.Shell.Exec. Works against ANY stdio MCP
+; server — your own mcp.ahk, or a Node/Python one.
+;
+;   c := McpClient('"' A_AhkPath '" "C:\path\mcp.ahk"')   ; or a node/python command
+;   for t in c.ListTools()
+;       Print(t["name"])
+;   res := c.CallTool("ast_outline", Map("file", "C:\x.ahk"))
+;   Print(res["content"][1]["text"])
+;   c.Close()
+;
+; Note: WScript.Shell streams use the console codepage, so this is best for
+; ASCII-safe payloads (tool names, ASCII paths). For full UTF-8, a CreateProcess
+; pipe transport would be the next step.
+
+class McpClient {
+    __New(command, clientName := "ahk-mcp-client", clientVersion := "0.1.0") {
+        this.exec := ComObject("WScript.Shell").Exec(command)
+        this.nextId := 0
+        this.serverInfo := Map()
+        res := this.Request("initialize", Map(
+            "protocolVersion", "2025-06-18",
+            "capabilities", Map(),
+            "clientInfo", Map("name", clientName, "version", clientVersion)))
+        this.serverInfo := res.Has("serverInfo") ? res["serverInfo"] : Map()
+        this.Notify("notifications/initialized")        ; required post-handshake notification
+    }
+
+    ; JSON-RPC request (has id) -> returns the result, throws on a protocol error.
+    Request(method, params := "") {
+        msg := Map("jsonrpc", "2.0", "id", ++this.nextId, "method", method)
+        if (IsObject(params))
+            msg["params"] := params
+        this.exec.StdIn.WriteLine(Json.Stringify(msg))
+        resp := Json.Parse(this._ReadLine())
+        if (resp.Has("error"))
+            throw Error("MCP error " resp["error"]["code"] ": " resp["error"]["message"])
+        return resp.Has("result") ? resp["result"] : Map()
+    }
+
+    ; JSON-RPC notification (no id, no response).
+    Notify(method, params := "") {
+        msg := Map("jsonrpc", "2.0", "method", method)
+        if (IsObject(params))
+            msg["params"] := params
+        this.exec.StdIn.WriteLine(Json.Stringify(msg))
+    }
+
+    ListTools() => this.Request("tools/list")["tools"]
+
+    CallTool(name, args := "") {
+        return this.Request("tools/call", Map("name", name, "arguments", IsObject(args) ? args : Map()))
+    }
+
+    Close() {
+        try this.exec.StdIn.Close()
+    }
+
+    _ReadLine() {
+        loop {
+            if (this.exec.StdOut.AtEndOfStream)
+                throw Error("MCP server closed the connection")
+            line := this.exec.StdOut.ReadLine()
+            if (Trim(line) != "")
+                return line
+        }
+    }
+}
+
+; =========================================================================
 ;  Tools (native AHK handlers; each returns a JSON string)
 ; =========================================================================
 
@@ -256,9 +331,10 @@ MCPServe(tools, opts := "") {
     _McpStats()["started"] := A_TickCount        ; reset uptime to server start
     stdin := FileOpen("*", "r", "UTF-8")
     loop {
-        if (stdin.AtEOF)
-            break
-        line := Trim(stdin.ReadLine(), " `t`r`n")
+        line := stdin.ReadLine()             ; blocks until a line or real EOF
+        if (line = "" && stdin.AtEOF)        ; check AtEOF AFTER the read — checking
+            break                            ; before it falsely fires on a momentarily
+        line := Trim(line, " `t`r`n")        ; empty pipe between a client's messages
         if (line = "")
             continue
         resp := _McpHandle(line, tools, name, version)
