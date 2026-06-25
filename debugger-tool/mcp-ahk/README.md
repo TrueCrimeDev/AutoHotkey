@@ -64,6 +64,27 @@ server, not just this one. See `examples/drive_server.ahk` for a full run.
 (Transport is `WScript.Shell.Exec`, whose streams use the console codepage — best
 for ASCII-safe payloads. A `CreateProcess` pipe transport would add full UTF-8.)
 
+## Command line
+
+`ahkmcp` runs any tool from the shell and prints the result (pretty JSON by
+default, `--raw` for compact/pipeable). Launchers are path-relative, so the repo
+can live anywhere — put `debugger-tool\mcp-ahk` on your PATH and:
+
+```
+ahkmcp list                                     list tools
+ahkmcp ast_outline C:\proj\x.ahk                outline a file
+ahkmcp get_source_context C:\proj\x.ahk 42 3    lines 39-45, line 42 flagged
+ahkmcp workspace_symbols C:\proj query=Foo      find defs named *Foo*
+ahkmcp server_status
+ahkmcp ast_outline C:\proj\x.ahk --raw          compact JSON (pipe to jq)
+```
+
+- Windows / PowerShell: `ahkmcp.cmd`
+- WSL / bash: `ahkmcp` (auto-translates `/mnt/...` path args to Windows form)
+
+Args are positional per tool, or `key=value` in any order. It calls `MCP()`
+in-process — no server, no protocol.
+
 ## Tools
 
 | Tool | Arguments | Returns |
@@ -84,6 +105,8 @@ for ASCII-safe payloads. A `CreateProcess` pipe transport would add full UTF-8.)
 tool handlers, `MCP()` (call a tool as a function), `MCPServe()` (the stdio
 JSON-RPC server loop), and `McpClient` (drive another MCP server). The server
 starts only when the file is run as the main script.
+
+`cli.ahk` + `ahkmcp` / `ahkmcp.cmd`: the command-line front-end and its launchers.
 
 `examples/`: `outline.ahk` (use the tools as functions) and `drive_server.ahk`
 (AHK driving the server as a client).

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# ahkmcp — run the AHK MCP CLI tools from WSL/bash.
+# Paths are relative to this script, so the repo can live anywhere.
+# Usage:  ahkmcp <tool> [args...]   e.g.  ahkmcp ast_outline /mnt/c/proj/x.ahk
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exe="$here/../../bin/AutoHotkey64.exe"
+script="$(wslpath -w "$here/cli.ahk" 2>/dev/null || echo "$here/cli.ahk")"
+
+# The engine is a Windows process, so translate bare /mnt/... path args to
+# Windows form for convenience (key=value args are passed through untouched).
+args=()
+for a in "$@"; do
+  if [[ "$a" == /mnt/* ]]; then a="$(wslpath -w "$a")"; fi
+  args+=("$a")
+done
+
+exec "$exe" "$script" "${args[@]}"
