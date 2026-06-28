@@ -6,6 +6,13 @@
         "C:\\Users\\uphol\\Documents\\Design\\Coding\\AutoHotkey\\debugger-tool\\mcp-server\\build\\index.js"
       ],
       "env": {}
+    },
+    "ahk-mcp": {
+      "command": "C:\\Users\\uphol\\Documents\\Design\\Coding\\AutoHotkey\\bin\\AutoHotkey64.exe",
+      "args": [
+        "C:\\Users\\uphol\\Documents\\Design\\Coding\\AutoHotkey\\debugger-tool\\mcp-ahk\\mcp.ahk"
+      ],
+      "env": {}
     }
   }
 }
