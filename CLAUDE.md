@@ -41,8 +41,19 @@ An MCP-based debugging ecosystem for AutoHotkey v2 with LLM integration. Capture
 # Run with debugger enabled (from WSL, connects to MCP server on port 9000)
 /mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe /Debug ScriptName.ahk
 
-# Start MCP server
-cd debugger-tool/mcp-server && npm run build && node build/index.js
+# Syntax-check / test with the engine (exit 13 = check fail, 14 = test fail)
+bin/AutoHotkey64.exe check /ErrorStdOut ScriptName.ahk
+bin/AutoHotkey64.exe test /ErrorStdOut ScriptName.ahk
+
+# Regression suite (exit code = failing assertions + crashes)
+bin/AutoHotkey64.exe /ErrorStdOut 'qa\run.ahk'
+
+# In-process MCP server (mcp.ahk runs INSIDE the engine; registered as ahk-mcp)
+bin/AutoHotkey64.exe debugger-tool/mcp-ahk/mcp.ahk
+
+# Same tools from the shell, no MCP client needed
+debugger-tool/mcp-ahk/ahkmcp list
+debugger-tool/mcp-ahk/ahkmcp ast_outline 'C:\path\x.ahk'
 
 # Start error agent (alternative to MCP)
 cd debugger-tool/ahk-error-agent && npm run build && node dist/index.js -v -w
@@ -61,17 +72,27 @@ cd debugger-tool/ahk-error-agent && npm run build && node dist/index.js -v -w
 
 ## MCP Tools
 
+Two servers matter day to day (both use WSL-style command paths in config —
+Windows-style `node C:\...` commands silently fail to spawn under the WSL CLI):
+
+**`ahk` (global, `~/.claude.json`)** — the main toolbox: `AHK_Run`, `AHK_Lint`,
+`AHK_Diagnostics`, the `uia_*` UI-automation funnel, and `AHK_Debug_DBGp`,
+which packs the whole DBGp loop into one tool (actions: start/stop/status, run,
+step_into/over/out, capture_error, analyze_error, apply_fix,
+breakpoint_set/remove/list, variables_get, evaluate, stack_trace).
+
+**`ahk-mcp` (project, `.mcp.json`)** — `mcp.ahk` running inside the fork engine:
+
 | Tool | Description |
 |------|-------------|
-| `capture_error` | Wait for next error, return full context |
-| `analyze_error` | Analyze error (client LLM or Claude API) |
-| `apply_fix` | Auto-apply code fix to file |
+| `ast_outline` | Tree-sitter AST outline (classes/functions/methods/properties + line ranges & byte spans); real parse, not regex. Uses the TSParse engine. |
 | `get_source_context` | Get source lines around file:line |
-| `ast_outline` | Tree-sitter AST outline (classes/functions/methods/properties + line ranges & byte spans); real parse, not regex. Shells to the TSParse engine. |
-| `debug_run/step_*/stop` | Execution control |
-| `breakpoint_set/remove/list` | Breakpoint management |
-| `variables_get` | Get variables in scope |
-| `stack_trace` | Get call stack |
+| `workspace_symbols` | Scan .ahk files for definitions by name |
+| `server_status` | Server/engine info |
+
+Same tools from the shell: `debugger-tool\mcp-ahk\ahkmcp <tool> [args]`.
+The legacy Node server (`debugger-tool/mcp-server`) still exists but is no
+longer registered; `AHK_Debug_DBGp` replaced it.
 
 ## _ScriptGetLines
 
@@ -142,33 +163,25 @@ Key commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`,
 
 ---
 
-# ⏳ Session Handoff — Pick Up Here (updated 2026-06-14)
+# Current State & Open Items (updated 2026-08-26)
 
-Tree-sitter for AHK is integrated end-to-end. **Delete this whole section once you're caught up.**
+- `bin/AutoHotkey64.exe` = TSParse-enabled CI build, `2.1-alpha.30+Console`.
+  The engine **cannot be built in WSL** (MSVC-only for CI; canonical local
+  route is `build.bat` via mingw-w64/`C:\msys64` from Windows). To verify
+  source/ changes, use the GitHub Actions PR build and `gh run download`.
+- `qa/` is the fork regression suite (subprocess-per-test; see `qa/README.md`).
+  Keep it green: `bin\AutoHotkey64.exe /ErrorStdOut qa\run.ahk` → exit 0.
+- `WORKLOG.md` tracks the verification-layer backlog (struct/language/docs
+  tests) and per-session findings.
 
-## Merged this session (all on `alpha`)
-- **#15** — moved root tests/examples into `tests/` and `examples/`.
-- **#20** — moved root docs to `docs/`; `DarkMode.ahk` → `Lib/DarkMode.ahk` (alpha.30 typed-Struct lib).
-- **#21** — vendored `bin/tree-sitter-ahk.dll` (self-contained AHK grammar + runtime, ABI 15) + `tests/test_treesitter_dll.ahk` + `docs/TREE_SITTER.md`.
-- **#22** — native `TSParse()` BIF in the engine (`source/error.cpp` + `source/lib/functions.h`). CI-verified x64+Win32; runtime-verified.
-- **#23** — `ast_outline` MCP tool (`debugger-tool/mcp-server`) + `scripts/ast_outline.ahk`.
-
-## Binary state
-- `bin/AutoHotkey64.exe` = the TSParse-enabled build (installed from the CI artifact; `A_AhkVersion` = `2.1-alpha.30+Console`).
-- Previous (REPL, no-TSParse) build backed up at `bin/AutoHotkey64.exe.pre-tsparse.bak` — safe to delete once happy.
-- **Can't build the MSVC engine in WSL.** Use the GitHub Actions PR build as the compiler; `gh run download` the artifact. (See memory `engine_build_verify_via_ci`.)
-
-## ⚠️ Do this first after restart
-1. **MCP server / port 9000:** the `autohotkey-debug` server hard-binds port 9000 and **only one instance can run**. A stale 1.3-day session was holding it and was killed — port is now free.
-2. You had **~6 old `claude` sessions** lingering. Close them so they don't re-grab 9000.
-3. `ast_outline` only shows up after the MCP server restarts with the rebuilt `build/` (already rebuilt; `build/` is gitignored). Restart the CLI, or `/mcp` → reconnect `autohotkey-debug`.
-4. **Verify:** ask *"Do you have an `ast_outline` tool?"*, then *"Use `ast_outline` on `Lib\DarkMode.ahk`"* (expect ~73 symbols).
-
-## Open decisions (offered, not yet done — pick any)
-- [x] **DONE** (`fix/mcp-port-bind-nonfatal`) — port-9000 bind is now **non-fatal**: an `EADDRINUSE`/bind failure logs a WARNING and the MCP server still starts, so `ast_outline`/`get_source_context` keep working during a port conflict. Only live-debugger tools report "Not connected" (existing `isConnected()` guards). Fix is in `debugger-tool/mcp-server/src/index.ts` `main()`.
-- [ ] Fix the **10 stale example files** using removed alpha.30 Struct type-strings (`i32`/`u32`/`u8`/`uptr` → `Int32`/`UInt32`/`UInt8`/`UIntPtr`): all `examples/AlphaNN_Example.ahk`, `examples/alpha_tricks.ahk`, `examples/combined_alpha22_23.ahk`. (`examples/particle_gui.ahk` `#Include`s Alpha22, so it fails too.) Removed by upstream commits `7427d3bc` / `34b17011`.
-- [ ] Faster tree-sitter path: build `tree-sitter-ahk.wasm` + `web-tree-sitter` in the Node MCP server (in-process, incremental). Needs the grammar **source** — only the `.dll` is vendored.
-
-## Caveats to remember
-- The tree-sitter AHK grammar is **incomplete for this fork**: reports `HasError=1` on *valid* code (typed Structs, fat-arrow methods, hotkeys like `^j::`). Treat output as **structure only** (the symbols/tree); for "does it parse?" use the `check` subcommand — it's ~5× faster *and* correct.
-- `ast_outline` doesn't use port 9000 at all (it shells to the engine) — which is why decoupling it from the DBGp listener (first open item) is worth doing.
+Open items:
+- [ ] Fix the **10 stale example files** using removed alpha.30 Struct
+  type-strings (`i32`/`u32`/`u8`/`uptr` → `Int32`/`UInt32`/`UInt8`/`UIntPtr`):
+  `examples/AlphaNN_Example.ahk`, `examples/alpha_tricks.ahk`,
+  `examples/combined_alpha22_23.ahk` (+ `examples/particle_gui.ahk` via
+  `#Include`). Removed by upstream commits `7427d3bc` / `34b17011`.
+- [ ] Faster tree-sitter path: build `tree-sitter-ahk.wasm` + `web-tree-sitter`
+  for in-process, incremental parsing in a Node host. Needs the grammar
+  **source** — only the `.dll` is vendored.
+- [ ] `FileRead` on a zero-byte file returns **no value** on this alpha
+  (see WORKLOG 2026-08-26) — pin intended behavior with a qa test.
