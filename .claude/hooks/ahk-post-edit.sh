@@ -2,6 +2,7 @@
 # Post-edit hook for AutoHotkey v2 scripts
 # Validates syntax after edits using the custom engine's check command
 # with structured JSON diagnostics. Blocks on syntax errors.
+# JSON parsing uses python3 — jq is NOT installed in this WSL.
 
 # Custom engine with check/diag support; fall back to stock
 CUSTOM_AHK="/mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe"
@@ -20,7 +21,11 @@ MAIN_SCRIPT="_.ahk"
 
 # Parse JSON from stdin to get the edited file path
 input=$(cat)
-file_path=$(echo "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
+file_path=$(printf '%s' "$input" | python3 -c "
+import json,sys
+try: print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))
+except Exception: pass
+" 2>/dev/null)
 
 # Only process .ahk files
 if [[ ! "$file_path" == *.ahk ]]; then
@@ -41,12 +46,21 @@ else
     win_path="$file_path"
 fi
 
-# Helper: build a safe JSON block response using jq
+# Helper: build a safe JSON block response
 block_response() {
-    local reason="$1"
-    local context="$2"
-    jq -n --arg reason "$reason" --arg context "$context" \
-        '{"decision":"block","reason":$reason,"additionalContext":$context}'
+    python3 -c "
+import json,sys
+print(json.dumps({'decision':'block','reason':sys.argv[1],'additionalContext':sys.argv[2]}))
+" "$1" "$2"
+}
+
+# Helper: pull one key out of a (possibly non-JSON) diagnostics blob
+diag_field() {
+    printf '%s' "$1" | python3 -c "
+import json,sys
+try: print(json.load(sys.stdin).get(sys.argv[1],''))
+except Exception: pass
+" "$2" 2>/dev/null
 }
 
 # --- Step 1: Validate the edited file ---
@@ -57,9 +71,8 @@ if [[ "$HAS_CHECK" == true ]]; then
     validation_exit=$?
 
     if [[ $validation_exit -eq 13 || $validation_exit -eq 12 ]]; then
-        # Parse JSON diagnostics if available
-        diag_msg=$(echo "$validation_output" | jq -r '.message // empty' 2>/dev/null)
-        diag_line=$(echo "$validation_output" | jq -r '.line // empty' 2>/dev/null)
+        diag_msg=$(diag_field "$validation_output" message)
+        diag_line=$(diag_field "$validation_output" line)
 
         if [[ -n "$diag_msg" ]]; then
             error_detail="Line $diag_line: $diag_msg"
@@ -116,8 +129,8 @@ if [[ "$is_dependency" == true ]]; then
     fi
 
     if [[ $main_exit -ne 0 ]]; then
-        diag_msg=$(echo "$main_output" | jq -r '.message // empty' 2>/dev/null)
-        diag_line=$(echo "$main_output" | jq -r '.line // empty' 2>/dev/null)
+        diag_msg=$(diag_field "$main_output" message)
+        diag_line=$(diag_field "$main_output" line)
 
         if [[ -n "$diag_msg" ]]; then
             error_detail="Line $diag_line: $diag_msg"
