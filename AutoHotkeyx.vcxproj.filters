@@ -178,6 +178,9 @@
     <ClCompile Include="source\error.cpp">
       <Filter>Core</Filter>
     </ClCompile>
+    <ClCompile Include="source\mcp_server.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
     <ClCompile Include="source\MdFunc.cpp">
       <Filter>Core</Filter>
     </ClCompile>
@@ -256,6 +259,12 @@
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="source\script.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\mcp_server.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\ts_api.h">
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="source\script_com.h">

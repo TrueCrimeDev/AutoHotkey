@@ -65,6 +65,30 @@ Eval(Expression) => Any
  */
 Print(Fmt := '', Values*) => void
 
+/**
+ * Parses AutoHotkey source text with the bundled tree-sitter grammar and
+ * returns a snapshot tree of plain AHK objects.
+ *
+ * Lazily loads `bin\tree-sitter-ahk.dll` on first call. Returns
+ * `{ Root, Source, HasError }`; every node exposes `Type`,
+ * `StartByte`/`EndByte`, `StartRow`/`StartCol`/`EndRow`/`EndCol`, `Text`,
+ * `IsNamed`/`IsMissing`/`IsError`/`IsExtra`/`HasError`, `FieldName`,
+ * `Children`, `NamedChildren`, and `Truncated`.
+ *
+ * Structure only: the grammar is incomplete for this fork and reports
+ * `HasError=1` on some valid code (typed Structs, fat-arrow methods,
+ * hotkeys). For "does it parse?" use the `check` CLI subcommand instead.
+ * Full docs: docs/TREE_SITTER.md.
+ *
+ * @example
+ * tree := TSParse(FileRead("x.ahk", "UTF-8"))
+ * for node in tree.Root.NamedChildren
+ *     Print("{} @ {}", node.Type, node.StartRow + 1)
+ *
+ * @since 2.1-alpha.30+Console
+ */
+TSParse(Source) => Object
+
 ;@endregion
 
 

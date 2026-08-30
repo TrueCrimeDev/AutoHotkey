@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.1-alpha.30
+#SingleInstance Off  ; stdio MCP servers spawn once per client; default Prompt deadlocks a 2nd launch
 /*
 mcp.ahk — a self-contained MCP server that runs inside AutoHotkey64.exe.
 
@@ -119,7 +120,7 @@ class McpClient {
 ; =========================================================================
 
 Tool_AstOutline(args) {
-    tree := TSParse(FileRead(args["file"], "UTF-8"))
+    tree := TSParse(FileRead(args["file"], "UTF-8") ?? "")  ; v2.1: FileRead on a zero-byte file returns unset
     symbols := []
     _AstCollect(tree.Root, symbols)
     out := Map()
@@ -163,7 +164,7 @@ _AstName(node) {
 Tool_GetSourceContext(args) {
     line   := args.Has("line")   ? Integer(args["line"])   : 1
     radius := args.Has("radius") ? Integer(args["radius"]) : 5
-    lines := StrSplit(FileRead(args["file"], "UTF-8"), "`n", "`r")
+    lines := StrSplit(FileRead(args["file"], "UTF-8") ?? "", "`n", "`r")
     total := lines.Length
     startL := Max(1, line - radius), endL := Min(total, line + radius)
 
@@ -187,7 +188,7 @@ Tool_GetSourceContext(args) {
 }
 
 Tool_SourceOutline(args) {
-    lines := StrSplit(FileRead(args["file"], "UTF-8"), "`n", "`r")
+    lines := StrSplit(FileRead(args["file"], "UTF-8") ?? "", "`n", "`r")
     syms := []
     for idx, ln in lines {
         kind := "", nm := "", t := Trim(ln)
@@ -222,7 +223,7 @@ Tool_WorkspaceSymbols(args) {
             break
         }
         path := A_LoopFileFullPath, content := ""
-        try content := FileRead(path, "UTF-8")
+        try content := FileRead(path, "UTF-8") ?? ""
         catch
             continue
         for idx, ln in StrSplit(content, "`n", "`r") {
@@ -358,7 +359,9 @@ _McpHandle(line, tools, name, version) {
         req := Json.Parse(line)
     catch as e
         return _McpError(Json.Null, -32700, "Parse error: " e.Message)
-    if (!(req is Map) || !req.Has("method"))
+    ; method MUST be a string (JSON-RPC 2.0); a non-string (true/null/{}) would
+    ; otherwise blow up string concatenation below and poison the stats Map.
+    if (!(req is Map) || !req.Has("method") || IsObject(req["method"]))
         return _McpError(req is Map && req.Has("id") ? req["id"] : Json.Null, -32600, "Invalid Request")
 
     method := req["method"], hasId := req.Has("id")
@@ -405,7 +408,7 @@ _McpToolsList(tools) {
 
 _McpToolsCall(id, req, tools) {
     params := (req.Has("params") && req["params"] is Map) ? req["params"] : Map()
-    if (!params.Has("name"))
+    if (!params.Has("name") || IsObject(params["name"])) ; name must be a string
         return _McpError(id, -32602, "Invalid params: missing tool name")
     nm := params["name"]
     if (!tools.Has(nm))

@@ -15,11 +15,15 @@
             "preLaunchTask": "build-debug"
         },
         {
+            // Debugs the active .ahk with the LIVE fork build in bin\ (bin_debug\
+            // is the MSVC debug build of the interpreter itself, often stale).
+            // DBGp allows ONE listener on port 9000: F5 here and an MCP DBGp
+            // listener (AHK_Debug_DBGp) are mutually exclusive.
             "name": "Debug x64w AHK",
             "type": "autohotkey",
             "request": "launch",
             "program": "${file}",
-            "runtime": "${workspaceRoot}/bin_debug/AutoHotkey64.exe",
+            "runtime": "${workspaceRoot}/bin/AutoHotkey64.exe",
             "useDebugDirective": true,
             "args": [],
             "variableCategories": [

@@ -4,6 +4,13 @@
 AutoHotkey process (the script *is* the server), and its tools are also callable
 as a plain function.
 
+> **Native verb:** the same server is also compiled into the fork engine as
+> `AutoHotkey64.exe mcp` (C++, `source/mcp_server.cpp`) — zero files needed
+> beyond the exe + `tree-sitter-ahk.dll`. Same five tools, same protocol, same
+> payloads; `tests/conformance_native.py` diffs it against this script. This
+> file remains the reference implementation and the function-call / client API
+> (`MCP()`, `McpClient`).
+
 Requires the fork engine (`bin/AutoHotkey64.exe`, `2.1-alpha.30+Console`) for the
 `TSParse` / `Print` BIFs.
 
@@ -115,7 +122,12 @@ starts only when the file is run as the main script.
 
 ```
 bin\AutoHotkey64.exe debugger-tool\mcp-ahk\tests\test_json.ahk        # 38 codec tests
-bin\AutoHotkey64.exe debugger-tool\mcp-ahk\tests\test_protocol.ahk    # 20 dispatch tests
+bin\AutoHotkey64.exe debugger-tool\mcp-ahk\tests\test_protocol.ahk    # 27 dispatch tests
+bin\AutoHotkey64.exe debugger-tool\mcp-ahk\tests\test_tools.ahk       # 16 tool tests
+
+# Native `mcp` verb: 42 protocol-conformance checks + differential tests that
+# require every tool payload to deep-equal this script's output (from WSL):
+python3 debugger-tool/mcp-ahk/tests/conformance_native.py bin/AutoHotkey64.exe
 ```
 
 ## Notes / limits
@@ -124,3 +136,15 @@ bin\AutoHotkey64.exe debugger-tool\mcp-ahk\tests\test_protocol.ahk    # 20 dispa
   MCP, which is key-addressed.
 - Deferred: `check` (must shell to a throwaway process — in-process parsing has
   side-effects), `apply_fix`, `analyze_error`, and the DBGp live-debugger tools.
+
+Deliberate divergences of the native `mcp` verb (native is the better behavior;
+everything else is verified payload-identical by `tests/conformance_native.py`):
+
+- Request lines are unbounded; this script's `ReadLine` caps at 64 KB and
+  fragments longer requests into `-32700`s.
+- Tool file reads are capped at 100 MB (`-32603`) so a pathological file cannot
+  abort the process; this script has no cap.
+- `workspace_symbols` never follows directory junctions/symlinks (cycles hang
+  the scan); `Loop Files "R"` follows them.
+- `workspace_symbols` default `root` is the process working directory, as the
+  schema documents; this script's default is its own directory (script CWD).

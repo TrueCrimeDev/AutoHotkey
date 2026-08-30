@@ -14,7 +14,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "mcp__autohotkey-debug__.*",
+        "matcher": "mcp__ahk__AHK_Debug_DBGp",
         "hooks": [
           {
             "type": "command",
@@ -26,7 +26,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "mcp__autohotkey-debug__capture_error|mcp__autohotkey-debug__analyze_error|mcp__autohotkey-debug__apply_fix",
+        "matcher": "mcp__ahk__AHK_Debug_DBGp",
         "hooks": [
           {
             "type": "command",
