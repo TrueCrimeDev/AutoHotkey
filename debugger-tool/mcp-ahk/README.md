@@ -115,8 +115,9 @@ starts only when the file is run as the main script.
 
 `cli.ahk` + `ahkmcp` / `ahkmcp.cmd`: the command-line front-end and its launchers.
 
-`examples/`: `outline.ahk` (use the tools as functions) and `drive_server.ahk`
-(AHK driving the server as a client).
+`examples/`: `outline.ahk` (use the tools as functions), `drive_server.ahk`
+(AHK driving the script server as a client), and `native_verb.ahk` (AHK driving
+the engine's built-in `mcp` verb — all five tools, no server script).
 
 ## Tests
 
