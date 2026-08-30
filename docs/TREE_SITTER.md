@@ -33,7 +33,7 @@ Returned tree object:
 |---|---|
 | `Root` | root node object (see below) |
 | `Source` | the original source string (UTF-16, as passed) |
-| `HasError` | `1` if the parse tree contains any error/missing nodes, else `0` |
+| `HasError` | `1` if the parse tree contains any error/missing nodes, else `0`. Structure-only — not a validity check. The grammar is incomplete for this fork and reports `HasError=1` on valid code (typed Structs, fat-arrow methods, `^j::` hotkeys). To test whether source actually parses, use the `Check(Source)` BIF (real-engine oracle) or the `check` CLI subcommand. |
 
 Each node object:
 
@@ -57,6 +57,10 @@ throws `tree-sitter language/runtime ABI mismatch.`
 
 Implementation: `source/error.cpp` (next to `_ScriptGetLines`), registered in
 `source/lib/functions.h`.
+
+## Validity: Check(Source)
+
+`TSParse().HasError` is not a validity signal. Use the native `Check(Source)` BIF — it spawns this exe in check mode against a temp file in a child process (oracle-parity with the CLI, host state untouched). The child runs validate-then-exit mode (parses but never executes), so a Check() inside the source cannot recurse. Returns `Ok` (1 valid / 0 invalid), `Diagnostics` (Array, empty when Ok=1, items `{Severity,Type,Code,Message,Extra,File,Line,Column}`), and `Raw`. On spawn failure returns Ok=0 with a synthetic diagnostic (no throw).
 
 ## Raw `DllCall` surface
 

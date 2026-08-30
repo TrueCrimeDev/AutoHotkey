@@ -1,84 +1,47 @@
 #!/bin/bash
-# Injects AHK debugger ecosystem context into Claude Code sessions.
-# Fired on SessionStart (startup, resume, compact) and UserPromptSubmit (debug-related).
+# Injects the AHK fork tooling map into Claude Code sessions.
+# Fired on SessionStart (startup, resume, compact).
+# Keep this in sync with what is ACTUALLY connected — a tool list that
+# doesn't exist in the session is worse than no context at all.
 
 cat <<'CONTEXT'
-## AutoHotkey Debugger MCP Ecosystem
+## AutoHotkey Fork — Tooling Map
 
-You have an MCP server (`autohotkey-debug`) that bridges you to the AutoHotkey v2 debugger via DBGp protocol.
-
-### Architecture
-```
-Claude Code  ←MCP stdio→  MCP Server (Node.js)  ←DBGp TCP:9000→  AutoHotkey.exe /Debug
-```
-
-### Available MCP Tools (22 total)
-
-**Execution control:**
-- `debug_run` — continue until breakpoint/error
-- `debug_step_into` / `debug_step_over` / `debug_step_out` — line stepping
-- `debug_stop` / `debug_status` — session control
-- `debug_command` — raw DBGp passthrough
-
-**Breakpoints:**
-- `breakpoint_set(file, line, condition?)` → returns ID
-- `breakpoint_remove(id)` / `breakpoint_list`
-
-**Inspection:**
-- `variables_get(context: 0=local, 1=global)` — scope variables
-- `evaluate(expression)` — eval in current context
-- `stack_trace` — call stack
-
-**Source intelligence:**
-- `get_source_context(file, line, radius?)` — read surrounding lines
-- `source_outline(file)` — extract functions/classes/hotkeys/labels
-- `workspace_symbols(root?, query?, max_results?)` — scan all .ahk files
-
-**Error capture & analysis (core loop):**
-- `capture_error(timeout?)` — BLOCKING wait for next exception (default 30s)
-- `analyze_error(error, use_api?)` — build analysis prompt or call Claude API directly
-- `apply_fix(file, line, original, replacement)` — verified code replacement
-
-**Variable watches (auto-tracked during stepping):**
-- `watch_add(name)` / `watch_remove(name)` / `watch_list`
-- Step commands auto-snapshot all watches and return `{ name, value, previous, changed }` array
-
-**Queue management:**
-- `list_errors` / `clear_errors`
-
-### Critical Workflow Rules
-
-1. **Connection order**: MCP server must be running BEFORE AHK connects. Tell user:
-   `bin\AutoHotkey64.exe /Debug script.ahk`
-
-2. **capture_error is blocking** — call `debug_run` first to start execution, then `capture_error` to wait for the exception.
-
-3. **Error fix loop**: `capture_error` → `analyze_error` → `apply_fix` → user re-runs
-
-4. **Step + watch pattern**: `watch_add("varName")` → then every `debug_step_*` response includes watch changes automatically. No need to call `watch_list` after each step.
-
-5. **analyze_error modes**:
-   - `use_api: false` (default) — returns the analysis prompt for YOU to analyze
-   - `use_api: true` — calls Anthropic API directly (needs ANTHROPIC_API_KEY in env), returns `{ status: "analyzed", analysis: { diagnosis, root_cause, suggested_fix, confidence } }`
-
-6. **apply_fix safety**: Verifies original line matches (trimmed) before replacing. If mismatch, it fails safely with the actual line content.
-
-7. **File paths**: AHK uses Windows paths (`C:\...`). All MCP tools handle this natively.
-
-### Custom AHK Engine Features
-
-The project's `bin\AutoHotkey64.exe` is a custom build with:
+### Engine CLI (`bin\AutoHotkey64.exe`, 2.1-alpha.30+Console)
+- Run headless: `bin\AutoHotkey64.exe /ErrorStdOut script.ahk` (stdout works, exit codes propagate)
+- `check script.ahk` — syntax validation (exit 13 = fail; add `/Diag=json` for structured output)
+- `test script.ahk` — test runner (exit 14 = fail)
+- Regression suite: `bin\AutoHotkey64.exe /ErrorStdOut qa\run.ahk` (exit = fails + crashes)
+- Exit codes: 0=ok, 10=runtime, 11=internal, 12=parse/load, 13=check fail, 14=test fail, 64=CLI error
+- `/Debug` — connect out to a DBGp listener on port 9000 (single listener only)
 - `/Headless` — suppress all dialogs
-- `/Diag=json` — structured JSON diagnostics to stdout
-- `check script.ahk` — syntax validation (exit 0=ok, 13=fail)
-- `test script.ahk` — test runner (exit 0=pass, 14=fail)
-- `_ScriptGetLines()` — programmatic source context
-- `/Debug` — connect to DBGp debugger on port 9000
+- Fork BIFs: `Print()`, `Eval()` (needs `#EnableEval` or `/Eval`), `TSParse()`, `_ScriptGetLines()`
 
-### AHK v2 Syntax Reminders
-- Always `:=` for assignment (never `=`)
-- Arrays are 1-indexed
-- `ComObject()` not `ComObjCreate()`
-- ByRef uses `&var` syntax
-- GUI: `Gui()` object syntax, not commands
+### MCP servers
+**`ahk` (global — the main toolbox):**
+- `AHK_Run` / `AHK_Lint` / `AHK_Diagnostics` — run and validate scripts
+- `AHK_Debug_DBGp` — the COMPLETE DBGp debug loop in one tool. Actions:
+  start/stop/status, run, step_into/over/out, capture_error, analyze_error,
+  apply_fix, breakpoint_set/remove/list, variables_get, evaluate, stack_trace.
+- `uia_windows` → `uia_tree` → `uia_find` → `uia_element` → `uia_highlight` —
+  UI-automation funnel (read-only; act by running the returned snippet via
+  AHK_Run). Invoke the `/uia` skill before UI-automation work.
+
+**`ahk-mcp` (project — mcp.ahk running INSIDE the fork engine):**
+- `ast_outline`, `get_source_context`, `workspace_symbols`, `server_status`
+- Same tools from the shell: `debugger-tool\mcp-ahk\ahkmcp list` / `ahkmcp ast_outline file.ahk`
+- If its tools are missing, check `/mcp` — the server must start via the WSL
+  path to the exe (see .mcp.json).
+
+### Debug workflow (AHK_Debug_DBGp)
+1. `action: "start"` — listener must be up BEFORE the script runs
+2. User runs: `bin\AutoHotkey64.exe /Debug script.ahk`
+3. `capture_error` (blocking; call `run` first if paused) → analyze → `apply_fix` → re-run
+4. Only ONE DBGp listener on port 9000: the MCP listener and VS Code F5
+   debugging are mutually exclusive.
+
+### AHK v2 syntax reminders
+- Always `:=` for assignment; arrays are 1-indexed; `ComObject()` not
+  `ComObjCreate()`; ByRef is `&var`; `Gui()` object syntax.
+- Parentheses on EVERY function call: `Print("x")`, never `Print "x"`.
 CONTEXT

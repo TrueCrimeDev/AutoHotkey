@@ -322,7 +322,7 @@ Script::Script()
 	, mFileSpec(_T("")), mFileDir(_T("")), mFileName(_T("")), mOurEXE(_T("")), mOurEXEDir(_T("")), mMainWindowTitle(_T(""))
 	, mScriptName(NULL)
 	, mIsReadyToExecute(false), mAutoExecSectionIsRunning(false)
-	, mIsRestart(false), mHeadless(false), mCheckMode(false), mTestMode(false), mReplMode(false), mDiagJson(false), mTrace(false)
+	, mIsRestart(false), mHeadless(false), mCheckMode(false), mTestMode(false), mReplMode(false), mMcpMode(false), mDiagJson(false), mTrace(false)
 	, mErrorStdOut(true), mErrorStdOutColor(false), mErrorStdOutCP(0)
 #ifndef AUTOHOTKEYSC
 	, mValidateThenExit(false)

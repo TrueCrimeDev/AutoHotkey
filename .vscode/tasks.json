@@ -31,47 +31,98 @@
             "problemMatcher": []
         },
         {
-            "label": "Run AHK with Debug Interceptor",
-            "type": "shell",
-            "command": "& 'C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe' '${workspaceFolder}\\AutoDebug.ahk' '${file}'",
+            // Syntax-check the active file with the fork engine (exit 13 = fail).
+            // The matcher turns `file (line) : ==> msg` into clickable entries
+            // in the Problems panel.
+            "label": "Check AHK (fork)",
+            "type": "process",
+            "command": "${workspaceFolder}\\bin\\AutoHotkey64.exe",
+            "args": ["check", "/ErrorStdOut", "${file}"],
+            "group": "test",
             "presentation": {
                 "echo": true,
-                "reveal": "always",
-                "focus": false,
+                "reveal": "silent",
                 "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
+                "showReuseMessage": false,
+                "clear": true
             },
-            "problemMatcher": []
+            "problemMatcher": {
+                "owner": "ahk",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(.+) \\((\\d+)\\) : ==> (.+)$",
+                    "file": 1,
+                    "line": 2,
+                    "message": 3
+                }
+            }
         },
         {
-            "label": "Run AHK Normally (No Debug)",
-            "type": "shell",
-            "command": "& 'C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe' '${file}'",
+            // Run the active file through the engine's test runner (exit 14 = fail).
+            "label": "Test AHK (fork)",
+            "type": "process",
+            "command": "${workspaceFolder}\\bin\\AutoHotkey64.exe",
+            "args": ["test", "/ErrorStdOut", "${file}"],
+            "group": "test",
             "presentation": {
                 "echo": true,
                 "reveal": "always",
-                "focus": false,
                 "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
+                "showReuseMessage": false,
+                "clear": true
             },
-            "problemMatcher": []
+            "problemMatcher": {
+                "owner": "ahk",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(.+) \\((\\d+)\\) : ==> (.+)$",
+                    "file": 1,
+                    "line": 2,
+                    "message": 3
+                }
+            }
         },
         {
-            "label": "Start Global Debug Server",
-            "type": "shell",
-            "command": "& 'C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe' '${workspaceFolder}\\GlobalDebugServer.ahk'",
+            // Whole-tree regression suite (qa/run.ahk, subprocess-per-test).
+            // Exit code = failing assertions + crashes.
+            "label": "QA suite (fork)",
+            "type": "process",
+            "command": "${workspaceFolder}\\bin\\AutoHotkey64.exe",
+            "args": ["/ErrorStdOut", "${workspaceFolder}\\qa\\run.ahk"],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
             "presentation": {
                 "echo": true,
                 "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
             },
-            "isBackground": true,
-            "problemMatcher": []
+            "problemMatcher": {
+                "owner": "ahk",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(.+) \\((\\d+)\\) : ==> (.+)$",
+                    "file": 1,
+                    "line": 2,
+                    "message": 3
+                }
+            }
+        },
+        {
+            // Canonical engine build: mingw-w64 GCC via C:\msys64 → bin\.
+            // (build.bat; the msbuild tasks below are the legacy MSVC route.)
+            "label": "build (fork, mingw)",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/C", "${workspaceFolder}\\build.bat"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$gcc"
         },
         {
             "label": "build",
@@ -85,10 +136,7 @@
                 "/consoleloggerparameters:NoSummary",
                 "${workspaceFolder}/AutoHotkeyx.sln"
             ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
+            "group": "build"
         },
         {
             "label": "rebuild",

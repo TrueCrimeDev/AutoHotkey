@@ -2302,6 +2302,7 @@ public:
 	bool mCheckMode; // true when invoked in syntax-check mode.
 	bool mTestMode; // true when invoked in single-script test mode.
 	bool mReplMode; // true when invoked via the `repl` subcommand (interactive/pipe-driven eval session).
+	bool mMcpMode; // true when invoked via the `mcp` subcommand (stdio JSON-RPC MCP server; no script is loaded).
 	bool mDiagJson; // true to emit structured JSON diagnostics.
 	bool mTrace; // true to print each executed line number to stderr.
 	bool mErrorStdOut; // true if load-time syntax errors should be sent to stdout vs. a MsgBox.
