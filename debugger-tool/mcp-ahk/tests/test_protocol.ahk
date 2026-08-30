@@ -94,6 +94,14 @@ Check("err.parse",      r["error"]["code"],    -32700)
 r := Reply('{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{}}')
 Check("err.noName",     r["error"]["code"],    -32602)
 
+; non-string method/name must not crash the dispatcher (JSON-RPC: method is a string)
+r := Reply('{"jsonrpc":"2.0","id":10,"method":true}')
+Check("err.boolMethod",   r["error"]["code"],  -32600)
+r := Reply('{"jsonrpc":"2.0","method":null}')
+Check("err.nullMethod",   r["error"]["code"],  -32600)
+r := Reply('{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":true}}')
+Check("err.boolToolName", r["error"]["code"],  -32602)
+
 ; --- server_status reports live stats ---
 r := Reply('{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"server_status","arguments":{}}}')
 st := Json.Parse(r["result"]["content"][1]["text"])
