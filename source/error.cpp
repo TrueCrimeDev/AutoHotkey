@@ -24,6 +24,7 @@ GNU General Public License for more details.
 #include "application.h" // REPL: InitNewThread/ResumeUnderlyingThread.
 #include "hook.h" // REPL: AHK_REPL_INPUT.
 #include "ahkversion.h" // REPL banner.
+#include "ts_api.h" // TSParse + the mcp verb's ast_outline share the tree-sitter loader.
 #include <richedit.h>
 
 
@@ -1668,41 +1669,8 @@ bif_impl FResult _ScriptGetLines(StrArg aFilename, int aLineNumber, optl<int> aR
 // to release. The DLL is optional: if it is missing, TSParse throws.
 // ============================================================================
 
-namespace {
-
-// Minimal slice of the tree-sitter C API. TSNode is a 32-byte by-value struct;
-// on the x64 ABI the compiler returns it via a hidden pointer and passes it as a
-// pointer to a copy — matching how the DLL was built (and the Buffer(32) dance
-// the AHK-side smoke test uses). TSPoint (8 bytes) is returned in a register.
-struct TSPoint { UINT32 row, column; };
-struct TSNode  { UINT32 context[4]; const void *id; const void *tree; };
-
-struct TSApi
-{
-	HMODULE mod = nullptr;
-	bool ok = false;
-
-	const void *(*lang)(void);
-	void *(*parser_new)(void);
-	void  (*parser_delete)(void *);
-	bool  (*set_language)(void *, const void *);
-	void *(*parse_string)(void *, const void *, const char *, UINT32);
-	void  (*tree_delete)(void *);
-	TSNode (*root_node)(const void *);
-	const char *(*node_type)(TSNode);
-	UINT32 (*start_byte)(TSNode);
-	UINT32 (*end_byte)(TSNode);
-	TSPoint (*start_point)(TSNode);
-	TSPoint (*end_point)(TSNode);
-	UINT32 (*child_count)(TSNode);
-	TSNode (*child)(TSNode, UINT32);
-	bool (*is_named)(TSNode);
-	bool (*is_missing)(TSNode);
-	bool (*is_error)(TSNode);
-	bool (*has_error)(TSNode);
-	bool (*is_extra)(TSNode);
-	const char *(*field_name_for_child)(TSNode, UINT32);
-};
+// TSPoint/TSNode/TSApi are declared in ts_api.h so the `mcp` verb's native
+// ast_outline can walk raw TSNodes from its own translation unit.
 
 // Resolve the DLL + exports once. Mirrors the static-LoadLibrary pattern used
 // elsewhere in this file (e.g. msftedit.dll). AHK runs BIFs on the main thread,
@@ -1761,6 +1729,8 @@ TSApi &GetTSApi()
 	api.ok = true;
 	return api;
 }
+
+namespace {
 
 // Set a property from a UTF-8 string (tree-sitter returns UTF-8). Returns false
 // only on allocation failure; null/empty input yields an empty string.

@@ -20,6 +20,7 @@ GNU General Public License for more details.
 #include "window.h" // For MsgBox()
 #include "TextIO.h"
 #include "crashlog.h"
+#include "mcp_server.h" // McpServerMain() for the `mcp` subcommand.
 
 // General note:
 // The use of Sleep() should be avoided *anywhere* in the code.  Instead, call MsgSleep().
@@ -89,6 +90,11 @@ int WINAPI _tWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmd
 	LPTSTR script_filespec; // Script path as originally specified, or NULL if omitted/defaulted.
 	if (!ParseCmdLineArgs(script_filespec))
 		return AHK_EXIT_CLI_ERROR;
+
+#ifndef AUTOHOTKEYSC
+	if (g_script.mMcpMode)
+		return McpServerMain(); // Stdio JSON-RPC loop; never loads a script, opens no windows.
+#endif
 
 	UINT load_result = g_script.LoadFromFile(script_filespec);
 	if (load_result == LOADING_FAILED) // Error during load (was already displayed by the function call).
@@ -170,6 +176,15 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 			g_script.mReplMode = true;
 			g_AllowEval = true; // The REPL is an Eval driver; the BIF gate is implied.
 			g_AllowOnlyOneInstance = SINGLE_INSTANCE_OFF; // Parallel sessions are expected.
+			continue;
+		}
+		// !script_filespec: a resource-compiled script (detected above) must get
+		// "mcp" as its own A_Args[1], not be hijacked into server mode.
+		if (i == 1 && !script_filespec && !_tcsicmp(param, _T("mcp")))
+		{
+			g_script.mMcpMode = true;
+			g_script.SetHeadless();
+			g_AllowOnlyOneInstance = SINGLE_INSTANCE_OFF; // Stdio MCP servers spawn one process per client.
 			continue;
 		}
 #endif

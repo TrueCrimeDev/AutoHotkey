@@ -51,6 +51,10 @@ bin/AutoHotkey64.exe /ErrorStdOut 'qa\run.ahk'
 # In-process MCP server (mcp.ahk runs INSIDE the engine; registered as ahk-mcp)
 bin/AutoHotkey64.exe debugger-tool/mcp-ahk/mcp.ahk
 
+# Native MCP server verb (compiled into the engine — source/mcp_server.cpp;
+# same tools/protocol as mcp.ahk, verified by tests/conformance_native.py)
+bin/AutoHotkey64.exe mcp
+
 # Same tools from the shell, no MCP client needed
 debugger-tool/mcp-ahk/ahkmcp list
 debugger-tool/mcp-ahk/ahkmcp ast_outline 'C:\path\x.ahk'
