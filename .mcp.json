@@ -3,7 +3,7 @@
     "ahk-mcp": {
       "command": "/mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe",
       "args": [
-        "C:\\Users\\uphol\\Documents\\Design\\Coding\\AutoHotkey\\debugger-tool\\mcp-ahk\\mcp.ahk"
+        "mcp"
       ],
       "env": {}
     }
