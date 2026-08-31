@@ -39,7 +39,7 @@ class JsonObject : public Object
 	struct Slot
 	{
 		LPTSTR key;      // malloc'd, compared case-sensitively
-		TCHAR key_c;     // first char, for fast rejection during lookup
+		UINT32 hash;     // of key, so lookups compare an integer before strcmp
 		JsonTag tag;
 		Variant value;
 	};
@@ -47,6 +47,14 @@ class JsonObject : public Object
 	Slot *mSlot = nullptr;
 	index_t mCount = 0, mCapacity = 0;
 
+	// Open-addressed hash index over mSlot, built once an object is big enough
+	// to make the linear scan matter. Entries hold slot+1; 0 means empty.
+	UINT32 *mIndex = nullptr;
+	index_t mIndexCap = 0;
+
+	static UINT32 HashKey(LPCTSTR aKey);
+	void RebuildIndex();
+	void DropIndex();
 	Slot *Find(LPCTSTR aKey) const;
 	bool Grow(index_t aNeeded);
 
@@ -86,6 +94,32 @@ public:
 	FResult get_Keys(IObject *&aRetVal);
 	FResult get_Values(IObject *&aRetVal);
 	FResult __Enum(optl<int> aVarCount, IObject *&aRetVal);
+};
+
+// Arrays parsed from JSON, carrying the same provenance tags as JsonObject so
+// a bare true/false/null inside an array round-trips too. Derives from Array,
+// so `value is Array` and every Array method keep working unchanged.
+//
+// Array's own mutators know nothing about the tags, so any change to the
+// array's length moves elements out from under them; TagAt() detects that and
+// reports no tag rather than mislabelling a value. Untouched arrays — the case
+// that matters for read-modify-write of a config file — keep full fidelity.
+class JsonArray : public Array
+{
+	JsonTag *mTags = nullptr;
+	index_t mTagCount = 0;  // Length when the tags were recorded
+
+public:
+	static Object *sPrototype;
+
+	~JsonArray() { free(mTags); }
+	static JsonArray *Create();
+
+	bool AppendTagged(ExprTokenType &aValue, JsonTag aTag);
+	JsonTag TagAt(index_t aIndex)
+	{
+		return (mTags && Length() == mTagCount && aIndex < mTagCount) ? mTags[aIndex] : JTAG_NONE;
+	}
 };
 
 // Registered from Object::CreateRootPrototypes().

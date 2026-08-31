@@ -151,7 +151,10 @@ These do not exist in upstream AutoHotkey. Use them directly — no `#include`, 
   case-sensitive `JSON.Object` (Map-like API plus `.Keys`/`.Values` in document
   order), so a config file survives parse → edit → stringify byte-exact.
   `true`/`false`/`null` reach script as `1`/`0`/`""` — the container remembers what
-  they were, so they re-emit as keywords. Options: `Container` ("JSON.Object"|"Map"),
+  they were, so they re-emit as keywords. Arrays parse to `JSON.Array` (derives
+  from `Array`, so `is Array` and every Array method still work) and carry the
+  same tags; changing an array's length drops its tags rather than risk
+  mislabelling a value. Options: `Container` ("JSON.Object"|"Map"),
   `Booleans`/`Null` ("integer"/"empty"|"native" for `JSON.True/False/Null`
   singletons, which round-trip inside arrays too), `MaxDepth`, `AllowComments`,
   `AllowTrailingCommas`, `EnsureAscii`, `EscapeSlash`. Depth and circular

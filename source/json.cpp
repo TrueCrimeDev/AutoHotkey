@@ -359,6 +359,39 @@ void WriteQuoted(JsonBuf &aBuf, LPCTSTR s, size_t len, const JsonWriteOpts &opt)
 // ============================================================================
 
 Object *JsonObject::sPrototype;
+Object *JsonArray::sPrototype;
+
+JsonArray *JsonArray::Create()
+{
+	auto arr = new JsonArray();
+	arr->SetBase(sPrototype);
+	return arr;
+}
+
+bool JsonArray::AppendTagged(ExprTokenType &aValue, JsonTag aTag)
+{
+	if (!Append(aValue))
+		return false;
+	index_t len = Length();
+	if (aTag != JTAG_NONE || mTags)
+	{
+		// Allocated lazily: an array with no true/false/null needs no tags at all.
+		auto bigger = (JsonTag *)realloc(mTags, len * sizeof(JsonTag));
+		if (!bigger)
+		{
+			free(mTags);
+			mTags = nullptr;
+			mTagCount = 0;
+			return true;   // the value is stored; only fidelity is lost
+		}
+		mTags = bigger;
+		for (index_t k = mTagCount; k + 1 < len; ++k)
+			mTags[k] = JTAG_NONE;
+		mTags[len - 1] = aTag;
+		mTagCount = len;
+	}
+	return true;
+}
 
 JsonObject::~JsonObject()
 {
@@ -368,6 +401,7 @@ JsonObject::~JsonObject()
 		mSlot[k].value.Free();
 	}
 	free(mSlot);
+	free(mIndex);
 }
 
 JsonObject *JsonObject::Create()
@@ -377,11 +411,66 @@ JsonObject *JsonObject::Create()
 	return obj;
 }
 
+// FNV-1a over the UTF-16 code units.
+UINT32 JsonObject::HashKey(LPCTSTR aKey)
+{
+	UINT32 h = 2166136261u;
+	for (; *aKey; ++aKey)
+	{
+		h ^= (UINT32)*aKey;
+		h *= 16777619u;
+	}
+	return h;
+}
+
+// Below this many keys a linear scan of a compact array beats hashing.
+#define JSON_INDEX_MIN 12
+
+void JsonObject::DropIndex()
+{
+	free(mIndex);
+	mIndex = nullptr;
+	mIndexCap = 0;
+}
+
+void JsonObject::RebuildIndex()
+{
+	DropIndex();
+	if (mCount < JSON_INDEX_MIN)
+		return;
+	index_t cap = 32;
+	while (cap < mCount * 2)
+		cap *= 2;
+	mIndex = (UINT32 *)calloc(cap, sizeof(UINT32));
+	if (!mIndex)
+		return;   // stays correct without the index, just slower
+	mIndexCap = cap;
+	for (index_t k = 0; k < mCount; ++k)
+	{
+		index_t at = mSlot[k].hash & (cap - 1);
+		while (mIndex[at])
+			at = (at + 1) & (cap - 1);
+		mIndex[at] = k + 1;
+	}
+}
+
 JsonObject::Slot *JsonObject::Find(LPCTSTR aKey) const
 {
-	TCHAR first = *aKey;
+	UINT32 hash = HashKey(aKey);
+	if (mIndex)
+	{
+		index_t at = hash & (mIndexCap - 1);
+		while (UINT32 entry = mIndex[at])
+		{
+			Slot *slot = mSlot + (entry - 1);
+			if (slot->hash == hash && !_tcscmp(slot->key, aKey))
+				return slot;
+			at = (at + 1) & (mIndexCap - 1);
+		}
+		return nullptr;
+	}
 	for (index_t k = 0; k < mCount; ++k)
-		if (mSlot[k].key_c == first && !_tcscmp(mSlot[k].key, aKey))
+		if (mSlot[k].hash == hash && !_tcscmp(mSlot[k].key, aKey))
 			return mSlot + k;
 	return nullptr;
 }
@@ -408,7 +497,7 @@ bool JsonObject::Append(LPCTSTR aKey, ExprTokenType &aValue, JsonTag aTag)
 	Slot &slot = mSlot[mCount];
 	if (!(slot.key = _tcsdup(aKey)))
 		return false;
-	slot.key_c = *aKey;
+	slot.hash = HashKey(aKey);
 	slot.tag = aTag;
 	slot.value.Minit();
 	if (!slot.value.Assign(aValue))
@@ -417,6 +506,20 @@ bool JsonObject::Append(LPCTSTR aKey, ExprTokenType &aValue, JsonTag aTag)
 		return false;
 	}
 	++mCount;
+	if (mIndex)
+	{
+		if (mCount * 2 > mIndexCap)
+			RebuildIndex();
+		else
+		{
+			index_t at = slot.hash & (mIndexCap - 1);
+			while (mIndex[at])
+				at = (at + 1) & (mIndexCap - 1);
+			mIndex[at] = mCount;   // slot + 1
+		}
+	}
+	else if (mCount >= JSON_INDEX_MIN)
+		RebuildIndex();
 	return true;
 }
 
@@ -452,6 +555,7 @@ bool JsonObject::DeleteItem(LPCTSTR aKey, ResultToken *aRetVal)
 	index_t at = (index_t)(slot - mSlot);
 	memmove(mSlot + at, mSlot + at + 1, (mCount - at - 1) * sizeof(Slot));
 	--mCount;
+	RebuildIndex();   // every slot after `at` moved
 	return true;
 }
 
@@ -463,6 +567,7 @@ void JsonObject::ClearItems()
 		mSlot[k].value.Free();
 	}
 	mCount = 0;
+	DropIndex();
 }
 
 FResult JsonObject::get_Count(UINT &aRetVal)
@@ -844,7 +949,7 @@ bool ParseObject(JsonScanner &sc, JsonValue &aOut, int aDepth)
 bool ParseArray(JsonScanner &sc, JsonValue &aOut, int aDepth)
 {
 	++sc.i; // '['
-	auto arr = Array::Create();
+	auto arr = JsonArray::Create();
 	if (!arr)
 		return sc.Fail(_T("OutOfMemory"), _T("Out of memory"));
 	aOut.tok.SetValue(arr);
@@ -867,7 +972,7 @@ bool ParseArray(JsonScanner &sc, JsonValue &aOut, int aDepth)
 		JsonValue val;
 		if (!ParseValue(sc, val, aDepth + 1))
 			return false;
-		bool stored = arr->Append(val.tok);
+		bool stored = arr->AppendTagged(val.tok, val.tag);
 		val.Release();
 		if (!stored)
 			return sc.Fail(_T("OutOfMemory"), _T("Out of memory"));
@@ -1019,6 +1124,7 @@ bool JsonWriter::WriteArray(Array *aArr)
 {
 	if (!Enter(aArr))
 		return false;
+	auto tagged = dynamic_cast<JsonArray *>(aArr);
 	buf.Put('[');
 	Object::index_t count = aArr->Length();
 	for (Object::index_t k = 0; k < count; ++k)
@@ -1034,7 +1140,7 @@ bool JsonWriter::WriteArray(Array *aArr)
 			buf.Put(_T("null"));
 			continue;
 		}
-		if (!WriteValue(t, JTAG_NONE))
+		if (!WriteValue(t, tagged ? tagged->TagAt(k) : JTAG_NONE))
 			return false;
 	}
 	if (count)
@@ -1330,6 +1436,8 @@ void DefineJsonClass()
 {
 	JsonObject::sPrototype = Object::CreatePrototype(_T("JSON.Object"), Object::sPrototype
 		, JsonObject::sMembers, _countof(JsonObject::sMembers));
+
+	JsonArray::sPrototype = Object::CreatePrototype(_T("JSON.Array"), Array::sPrototype);
 
 	Object *jsonClass = Object::CreateClass(_T("JSON"), Object::sClass, JsonObject::sPrototype, nullptr);
 	if (!jsonClass)

@@ -15,7 +15,8 @@
 ; ---- type identity ---------------------------------------------------------
 Assert.eq(Type(JSON), "Class", "json.class")
 Assert.eq(Type(JSON.Parse("{}")), "JSON.Object", "json.parse.type")
-Assert.eq(Type(JSON.Parse("[]")), "Array", "json.parse.array.type")
+Assert.eq(Type(JSON.Parse("[]")), "JSON.Array", "json.parse.array.type")
+Assert.truthy(JSON.Parse("[]") is Array, "json.parse.array.is.array")
 
 ; ---- scalars and containers ------------------------------------------------
 o := JSON.Parse('{"s":"x","i":2,"f":3.5,"t":true,"f2":false,"n":null,"a":[1,2],"o":{"k":1}}')
@@ -62,6 +63,35 @@ Assert.eq(JSON.Parse('[1e-2]')[1], 0.01, "json.exp.negative")
 ; Floats keep their exact value rather than being regex-rounded.
 Assert.eq(JSON.Stringify(JSON.Parse('[0.1,3.141592653589793]')), "[0.1,3.141592653589793]", "json.float.exact")
 
+; ---- arrays carry the same provenance tags ---------------------------------
+Assert.eq(JSON.Stringify(JSON.Parse('[1,true,false,null,"s"]')), '[1,true,false,null,"s"]', "json.array.roundtrip")
+Assert.eq(JSON.Stringify(JSON.Parse('{"f":[true,null],"g":1}')), '{"f":[true,null],"g":1}', "json.array.nested.roundtrip")
+arr := JSON.Parse('[true,false]')
+Assert.eq(Type(arr), "JSON.Array", "json.array.type")
+Assert.truthy(arr is Array, "json.array.is.array")          ; must stay Array-compatible
+Assert.eq(arr[1], 1, "json.array.elem.value")
+Assert.truthy(arr[1], "json.array.elem.truthy")
+Assert.falsy(arr[2], "json.array.elem.falsy")
+Assert.eq(arr.Length, 2, "json.array.length")
+; Array's own mutators know nothing about tags, so a length change drops them
+; rather than risking a value being mislabelled.
+mutated := JSON.Parse('[true,false]')
+mutated.Push(1)
+Assert.eq(JSON.Stringify(mutated), "[1,0,1]", "json.array.mutated.drops.tags")
+
+; ---- large objects use the hash index rather than a linear scan ------------
+big := "{"
+loop 3000
+    big .= (A_Index > 1 ? "," : "") '"k' A_Index '":' A_Index
+bigObj := JSON.Parse(big "}")
+Assert.eq(bigObj.Count, 3000, "json.big.count")
+Assert.eq(bigObj["k1"], 1, "json.big.lookup.first")
+Assert.eq(bigObj["k3000"], 3000, "json.big.lookup.last")
+Assert.truthy(bigObj.Delete("k1500"), "json.big.delete")
+Assert.falsy(bigObj.Has("k1500"), "json.big.deleted.gone")
+Assert.eq(bigObj["k3000"], 3000, "json.big.lookup.after.delete")  ; index rebuilt
+Assert.eq(bigObj.Count, 2999, "json.big.count.after.delete")
+
 ; ---- strings and escapes ---------------------------------------------------
 Assert.eq(JSON.Parse('"Aé"'), "Aé", "json.escape.u")
 Assert.eq(JSON.Parse('"a\/b"'), "a/b", "json.escape.slash")       ; thqby leaves this as a\/b
@@ -89,7 +119,6 @@ Assert.eq(JSON.Stringify(JSON.Parse('{"a":1}')), '{"a":1}', "json.compact.defaul
 ; ---- options ---------------------------------------------------------------
 Assert.eq(Type(JSON.Parse('{"a":1}', {Container:"Map"})), "Map", "json.opt.container.map")
 Assert.eq(Type(JSON.Parse('{"a":true}', {Booleans:"native"})["a"]), "Object", "json.opt.booleans.native")
-; Native mode round-trips inside arrays too, where the container tag cannot reach.
 Assert.eq(JSON.Stringify(JSON.Parse('[true,false,null]', {Booleans:"native", Null:"native"}))
     , "[true,false,null]", "json.opt.native.array.roundtrip")
 Assert.eq(JSON.Stringify(JSON.Parse('{/*c*/"a":1}', {AllowComments:true})), '{"a":1}', "json.opt.comments")
@@ -139,8 +168,8 @@ deep := ""
 loop 400
     deep .= "["
 Assert.throws(() => JSON.Parse(deep), "json.err.depth", "DepthExceeded")
-Assert.eq(Type(JSON.Parse(SubStr(deep, 1, 200) StrReplace(SubStr(deep, 1, 200), "[", "]")))
-    , "Array", "json.depth.under.cap.ok")
+Assert.truthy(JSON.Parse(SubStr(deep, 1, 200) StrReplace(SubStr(deep, 1, 200), "[", "]")) is Array
+    , "json.depth.under.cap.ok")
 
 cyc := JSON.Parse('{"a":1}')
 cyc["self"] := cyc
