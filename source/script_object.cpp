@@ -4330,7 +4330,8 @@ void Object::CreateRootPrototypes()
 				{_T("UnsetItemError"), &ErrorPrototype::UnsetItem}
 			}},
 			{_T("ValueError"), &ErrorPrototype::Value, no_ctor, no_members, {
-				{_T("IndexError"), &ErrorPrototype::Index}
+				{_T("IndexError"), &ErrorPrototype::Index},
+				{_T("JSONError"), &ErrorPrototype::Json}
 			}},
 			{_T("ZeroDivisionError"), &ErrorPrototype::ZeroDivision}
 		}},
@@ -4479,6 +4480,7 @@ namespace ErrorPrototype
 	Object *Target, *Unset, *Member, *Property, *Method, *Index, *UnsetItem;
 	Object *Timeout;
 	Object *Syntax;
+	Object *Json;
 }
 
 Object *Object::sVarRefPrototype;

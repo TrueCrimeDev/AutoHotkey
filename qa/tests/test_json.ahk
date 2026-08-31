@@ -144,7 +144,49 @@ Assert.eq(seen, "y=2;z=3;", "json.obj.enum.order")
 Assert.eq(JSON.Stringify(Map("a", 1)), '{"a":1}', "json.dump.map")
 Assert.eq(JSON.Stringify([1, "a"]), '[1,"a"]', "json.dump.array")
 
+; ---- embedded NUL is data, not a string terminator -------------------------
+; The length came from _tcslen once, so a NUL truncated the input and silently
+; hid everything after it (found by the JSONTestSuite case n_multidigit_number_then_00).
+Assert.throws(() => JSON.Parse("123" Chr(0)), "json.nul.trailing", "TrailingContent")
+Assert.throws(() => JSON.Parse("123" Chr(0) "xyz"), "json.nul.hides.garbage", "TrailingContent")
+Assert.throws(() => JSON.Parse("[1," Chr(0) "2]"), "json.nul.inside", "UnexpectedChar")
+
+; ---- options plumbing fails loudly instead of silently ---------------------
+; A Map's items are not own properties, so it used to read as an empty option
+; set -- every option the caller asked for silently ignored.
+Assert.throws(() => JSON.Parse('{"a":1}', Map("Container", "Map")), "json.opt.map.rejected", "object literal")
+Assert.throws(() => JSON.Parse('{"a":1}', {Container:"Map"}, {MaxDepth:5}), "json.opt.duplicate.rejected", "More than one")
+; Options are accepted from either trailing slot, and a callable is left alone
+; so claiming the Reviver/Replacer slot later cannot change a working call.
+Assert.eq(Type(JSON.Parse('{"a":1}', {Container:"Map"})), "Map", "json.opt.slot2")
+Assert.eq(Type(JSON.Parse('{"a":1}', , {Container:"Map"})), "Map", "json.opt.slot3")
+Assert.eq(JSON.Stringify(JSON.Parse('{"a":1}', (v) => v)), '{"a":1}', "json.opt.callable.ignored")
+; Stringify used to swallow an options object passed in the Space slot.
+Assert.eq(JSON.Stringify(JSON.Parse('{"u":"' Chr(233) '"}'), , {EnsureAscii:true})
+    , '{"u":"' Chr(92) 'u00e9"}' , "json.opt.space.slot.is.options")
+Assert.eq(JSON.Parse(1700000000), 1700000000, "json.numeric.arg.still.parses")
+
+; ---- plain object literals serialize ---------------------------------------
+Assert.eq(JSON.Stringify({a: 1, b: "x"}), '{"a":1,"b":"x"}', "json.dump.object.literal")
+Assert.eq(JSON.Stringify({outer: {inner: [1, 2]}}), '{"outer":{"inner":[1,2]}}', "json.dump.object.nested")
+; A dynamic property is skipped: producing its value means invoking script,
+; which serializing a value must never do.
+dynObj := {}
+dynObj.DefineProp("dyn", {Get: (s) => 42})
+dynObj.plain := 7
+Assert.eq(JSON.Stringify(dynObj), '{"plain":7}', "json.dump.object.skips.dynamic")
+selfRef := {}
+selfRef.self := selfRef
+Assert.throws(() => JSON.Stringify(selfRef), "json.dump.object.cycle", "CircularReference")
+
 ; ---- errors are catchable and carry position -------------------------------
+; JSONError derives from ValueError, so code already catching ValueError works.
+try {
+    JSON.Parse("{")
+} catch as e {
+    Assert.eq(Type(e), "JSONError", "json.err.type")
+    Assert.truthy(e is ValueError, "json.err.is.valueerror")
+}
 Assert.throws(() => JSON.Parse("{"), "json.err.truncated", "UnexpectedEnd")
 Assert.throws(() => JSON.Parse("[1,2}"), "json.err.mismatch", "UnexpectedChar")   ; thqby accepts this
 Assert.throws(() => JSON.Parse('{"a":1} trailing'), "json.err.trailing", "TrailingContent")
@@ -177,5 +219,7 @@ Assert.throws(() => JSON.Stringify(cyc), "json.err.cycle", "CircularReference")
 
 ; An unsupported value names its type rather than emitting invalid JSON.
 Assert.throws(() => JSON.Stringify({fn: (*) => 1}.fn), "json.err.unsupported", "UnsupportedType")
+Assert.throws(() => JSON.Stringify(Buffer(4)), "json.err.unsupported.buffer", "UnsupportedType")
+Assert.eq(JSON.Stringify({}), "{}", "json.dump.empty.literal")
 
 Assert.Summary()

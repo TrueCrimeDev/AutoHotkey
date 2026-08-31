@@ -157,8 +157,12 @@ These do not exist in upstream AutoHotkey. Use them directly — no `#include`, 
   mislabelling a value. Options: `Container` ("JSON.Object"|"Map"),
   `Booleans`/`Null` ("integer"/"empty"|"native" for `JSON.True/False/Null`
   singletons, which round-trip inside arrays too), `MaxDepth`, `AllowComments`,
-  `AllowTrailingCommas`, `EnsureAscii`, `EscapeSlash`. Depth and circular
-  references raise catchable errors carrying line/col/pos and a `[Code]`.
+  `AllowTrailingCommas`, `EnsureAscii`, `EscapeSlash`. Plain object literals
+  (`{a: 1}`) serialize via their own value properties — dynamic properties are
+  skipped, since producing one means invoking script. Errors are `JSONError`
+  (a `ValueError` subclass) carrying line/col/pos and a `[Code]`; depth and
+  circular references are catchable. Conformance: nst/JSONTestSuite 95/95 y_
+  and 188/188 n_ (`qa/tests/test_jsonsuite.ahk`).
 - **`TSParse(Source)`** — parse AHK source with the bundled tree-sitter grammar; returns a snapshot tree of plain AHK objects. Lazily loads `bin/tree-sitter-ahk.dll` on first call. Returns `{ Root, Source, HasError }`; each node has `Type`, `StartByte`/`EndByte`, `StartRow`/`StartCol`/`EndRow`/`EndCol`, `Text`, `IsNamed`/`IsMissing`/`IsError`/`IsExtra`/`HasError`, `FieldName`, `Children`, `NamedChildren`, `Truncated`. For **structure only** — the grammar is incomplete (false `HasError` on valid code, e.g. typed Structs, fat-arrow methods, `^j::` hotkeys); do not use `TSParse(...).HasError` as a validity check. For 'does it parse?' use the `Check` BIF above (real-engine oracle), or the `check` CLI subcommand. Full docs: `docs/TREE_SITTER.md`.
 
 Full reference: `updates.md` in the repo root.

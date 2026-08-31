@@ -1090,6 +1090,7 @@ struct JsonWriter
 	bool WriteObject(JsonObject *aObj);
 	bool WriteArray(Array *aArr);
 	bool WriteMap(Map *aMap);
+	bool WritePlainObject(Object *aObj);
 };
 
 bool JsonWriter::WriteObject(JsonObject *aObj)
@@ -1181,6 +1182,40 @@ bool JsonWriter::WriteMap(Map *aMap)
 	return true;
 }
 
+// A plain object literal ({a: 1}) is what an AHK user reaches for first, so it
+// has to serialize. Own value properties only — see Object::OwnPropAt. Note the
+// engine keeps fields sorted case-insensitively, so unlike JSON.Object these
+// keys come out ordered, not in definition order.
+bool JsonWriter::WritePlainObject(Object *aObj)
+{
+	if (!Enter(aObj))
+		return false;
+	buf.Put('{');
+	Object::index_t count = aObj->OwnPropCount();
+	Object::index_t written = 0;
+	for (Object::index_t k = 0; k < count; ++k)
+	{
+		LPCTSTR name = nullptr;
+		ExprTokenType val;
+		if (!aObj->OwnPropAt(k, name, val))
+			continue;   // dynamic/typed property: never invoke script to serialize
+		if (written++)
+			buf.Put(',');
+		Indent(depth);
+		WriteQuoted(buf, name, _tcslen(name), opt);
+		buf.Put(':');
+		if (opt.space)
+			buf.Put(' ');
+		if (!WriteValue(val, JTAG_NONE))
+			return false;
+	}
+	if (written)
+		Indent(depth - 1);
+	buf.Put('}');
+	Leave();
+	return true;
+}
+
 bool JsonWriter::WriteValue(ExprTokenType &aTokIn, JsonTag aTag)
 {
 	// An argument passed as a variable arrives as SYM_VAR; resolve it to the
@@ -1230,6 +1265,14 @@ bool JsonWriter::WriteValue(ExprTokenType &aTokIn, JsonTag aTag)
 			return WriteArray(arr);
 		if (auto map = dynamic_cast<Map *>(obj))
 			return WriteMap(map);
+		// A property bag, but only for things that actually are one. Func and
+		// friends derive from Object too, and serializing a function as {} —
+		// or a Buffer as {} because it exposes no value properties — would be
+		// silently wrong, so those fall through to the error below.
+		auto plain = dynamic_cast<Object *>(obj);
+		if (plain && !dynamic_cast<Func *>(obj)
+			&& (plain->OwnPropCount() || plain->Base() == Object::sPrototype))
+			return WritePlainObject(plain);
 		TCHAR m[128];
 		sntprintf(m, _countof(m), _T("Value of type '%s' cannot be represented as JSON"), TokenTypeString(aTok));
 		return Fail(_T("UnsupportedType"), m);
@@ -1276,7 +1319,8 @@ int ClampDepth(int aDepth)
 	return aDepth;
 }
 
-// Raises the parse/stringify failure as a script exception carrying position.
+// Raises the parse/stringify failure as a JSONError (a ValueError subclass, so
+// code already catching ValueError keeps working) carrying the position inline.
 FResult ThrowJsonError(LPCTSTR aCode, LPCTSTR aMsg, int aLine, int aCol, size_t aPos)
 {
 	TCHAR full[420];
@@ -1285,7 +1329,35 @@ FResult ThrowJsonError(LPCTSTR aCode, LPCTSTR aMsg, int aLine, int aCol, size_t 
 			, aMsg, aLine, aCol, (size_t)(aPos + 1), aCode);
 	else
 		sntprintf(full, _countof(full), _T("%s [%s]"), aMsg, aCode);
-	return FError(full, nullptr, ErrorPrototype::Value);
+	return FError(full, nullptr, ErrorPrototype::Json);
+}
+
+// Collects the options object from the trailing parameters.
+//
+// Every rejection here was previously a SILENT wrong result: a Map read as
+// options yielded an empty option set (its items are not own properties), and a
+// second object simply overwrote the first. Callables are skipped rather than
+// rejected because those slots are reserved for Reviver/Replacer, so claiming
+// them later cannot change the meaning of a call that works today.
+FResult GatherOptions(ExprTokenType *aParam[], int aParamCount, int aFirst, Object *&aOpts)
+{
+	aOpts = nullptr;
+	for (int k = aFirst; k < aParamCount; ++k)
+	{
+		IObject *o = TokenToObject(*aParam[k]);
+		if (!o || dynamic_cast<Func *>(o))
+			continue;
+		if (dynamic_cast<Map *>(o))
+			return FError(_T("Options must be an object literal such as {MaxDepth: 5}; a Map is not read as options.")
+				, nullptr, ErrorPrototype::Json);
+		auto obj = dynamic_cast<Object *>(o);
+		if (!obj)
+			continue;
+		if (aOpts)
+			return FError(_T("More than one options object was passed."), nullptr, ErrorPrototype::Json);
+		aOpts = obj;
+	}
+	return OK;
 }
 
 } // anonymous namespace
@@ -1298,14 +1370,22 @@ FResult ThrowJsonError(LPCTSTR aCode, LPCTSTR aMsg, int aLine, int aCol, size_t 
 // Object there is read as Options so thqby-shaped calls keep working.
 BIF_DECL(JsonClass_Parse)
 {
-	LPTSTR text = ParamIndexToString(1, _f_number_buf);
+	// Take the length from the token, not _tcslen: an embedded U+0000 is input,
+	// and treating it as a terminator silently hid everything after it.
+	size_t len = 0;
+	LPTSTR text = ParamIndexToString(1, _f_number_buf, &len);
 	if (!text)
+	{
 		text = _T("");
+		len = 0;
+	}
 
-	Object *opts = nullptr;
-	for (int k = 2; k < aParamCount; ++k)
-		if (auto o = dynamic_cast<Object *>(ParamIndexToObject(k)))
-			opts = o;
+	Object *opts;
+	if (GatherOptions(aParam, aParamCount, 2, opts) != OK)
+	{
+		aResultToken.SetExitResult(FAIL);
+		return;
+	}
 
 	JsonParseOpts po;
 	po.container = OptStrIs(opts, _T("Container"), _T("Map")) ? JCON_MAP : JCON_JSONOBJECT;
@@ -1316,7 +1396,6 @@ BIF_DECL(JsonClass_Parse)
 	po.allowTrailingCommas = OptBool(opts, _T("AllowTrailingCommas"), false);
 	po.allowTopLevelScalar = OptBool(opts, _T("AllowTopLevelScalar"), true);
 
-	size_t len = _tcslen(text);
 	// A UTF-8 BOM survives FileRead into U+FEFF; skipping it silently is what
 	// every caller wants and what every library forgets.
 	if (len && text[0] == 0xFEFF)
@@ -1371,12 +1450,16 @@ BIF_DECL(JsonClass_Stringify)
 	JsonWriteOpts wo;
 	TCHAR spaceBuf[64];
 
-	Object *opts = nullptr;
-	if (aParamCount > 4)
-		opts = dynamic_cast<Object *>(ParamIndexToObject(4));
+	Object *opts;
+	if (GatherOptions(aParam, aParamCount, 2, opts) != OK)
+	{
+		aResultToken.SetExitResult(FAIL);
+		return;
+	}
 
-	// Space: an integer width or a literal indent string.
-	if (aParamCount > 3 && !ParamIndexIsOmitted(3))
+	// Space: an integer width or a literal indent string. An object here is the
+	// options object (GatherOptions already took it), never an indent.
+	if (aParamCount > 3 && !ParamIndexIsOmitted(3) && !TokenToObject(*aParam[3]))
 	{
 		if (TokenIsNumeric(*aParam[3]))
 		{

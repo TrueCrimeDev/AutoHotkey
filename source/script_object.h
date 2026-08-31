@@ -458,6 +458,23 @@ public:
 	bool HasMethod(name_t aName);
 	IObject *GetMethod(name_t name);
 
+	// Ordered access to own properties for native consumers such as the JSON
+	// writer. Returns false for a slot holding a dynamic or typed property so
+	// callers skip it: producing that value means invoking script code, which
+	// serializing a value must not do.
+	index_t OwnPropCount() { return mFields.Length(); }
+	bool OwnPropAt(index_t aIndex, LPCTSTR &aName, ExprTokenType &aValue)
+	{
+		if (aIndex >= mFields.Length())
+			return false;
+		FieldType &field = mFields[aIndex];
+		if (field.symbol == SYM_DYNAMIC || field.symbol == SYM_TYPED_FIELD)
+			return false;
+		aName = field.name;
+		field.ToToken(aValue);
+		return true;
+	}
+
 	bool HasOwnProps() { return mFields.Length(); }
 	bool HasOwnProp(name_t aName)
 	{
@@ -1059,6 +1076,7 @@ namespace ErrorPrototype
 	extern Object *Target, *Unset, *Member, *Property, *Method, *Index, *UnsetItem;
 	extern Object *Timeout;
 	extern Object *Syntax;
+	extern Object *Json;
 }
 
 

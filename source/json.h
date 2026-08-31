@@ -5,17 +5,22 @@
 //
 //   JSON.Parse(Text, Reviver?, Options?)              alias: JSON.Load
 //   JSON.Stringify(Value, Replacer?, Space?, Options?) alias: JSON.Dump
-//   JSON.True / JSON.False / JSON.Null                 typed singletons
-//   JSON.Object(Pairs*)                                ordered container
-//   class JSONError extends Error                      Code/Char/Line/Col/Path
+//   JSON.True / JSON.False / JSON.Null                 singletons
+//   JSON.Object                                        ordered container
+//
+// Failures raise JSONError (a ValueError subclass, so existing `catch ValueError`
+// still works) whose Message carries the line, column, 1-based position and a
+// machine-readable [Code]. Structured position fields belong on the planned
+// JSON.Validate result object rather than on the exception.
 //
 // Parameter slots follow the JS/community consensus so existing call sites work
 // unchanged: thqby's `JSON.stringify(obj, expandlevel, space)` lands its space
 // argument in the same slot this uses.
 //
-// Scanning is iterative with an explicit heap stack on BOTH sides, so a deep
-// document raises a catchable JSONError instead of the uncatchable native stack
-// overflow every script-level library dies from.
+// Parsing and writing are recursive with a hard depth cap (default 256, clamped
+// to JSON_MAX_DEPTH), so a deep document raises a catchable JSONError long
+// before the native stack is at risk — where script-level libraries die by
+// stack overflow, which AHK reports as an UNCATCHABLE critical error.
 // ============================================================================
 
 // Records the JSON provenance of a stored value. Script sees true/false/null as
