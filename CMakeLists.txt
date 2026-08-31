@@ -65,6 +65,7 @@ set(AHK_SOURCES
     source/hook.cpp
     source/hotkey.cpp
     source/input_object.cpp
+    source/json.cpp
     source/keyboard_mouse.cpp
     source/mcp_server.cpp
     source/os_version.cpp

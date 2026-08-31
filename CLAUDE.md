@@ -145,6 +145,17 @@ These do not exist in upstream AutoHotkey. Use them directly — no `#include`, 
 - **`Eval(Expression)`** — runtime expression eval. Gated by `#EnableEval` directive or `/Eval` CLI flag. Throws `SyntaxError` on parse failure. See `updates.md` section 1.
 - **`SyntaxError`** — exception class for parse errors. Has `Message`, `What`, `Extra`, `Line`, `Column`.
 - **`Check(Source)`** — validate AHK source with automatic oracle parity: spawns this exe in check mode (`/Diag=json /Check`) against a temp file in a child process, so host state is untouched and the verdict matches the CLI. Returns `{ Ok, Diagnostics, Raw }`: `Ok` is 1/0 (child exit 0 = valid, 13 = syntax error); `Diagnostics` is an Array (empty when Ok=1) of `{ Severity, Type, Code, Message, Extra, File, Line, Column }`; `Raw` is the captured child output. On spawn failure it returns Ok=0 with a synthetic diagnostic (does not throw). The check-mode child only parses (never executes) the temp source, so it is safe by construction. This — not `TSParse(...).HasError` — is the correct 'does it parse?' check.
+- **`JSON`** — native JSON class, no include. `JSON.Parse(Text, Reviver?, Options?)`
+  and `JSON.Stringify(Value, Replacer?, Space?, Options?)`, aliased `Load`/`Dump`;
+  `Space` takes an indent width or a literal string. Objects parse into an ordered,
+  case-sensitive `JSON.Object` (Map-like API plus `.Keys`/`.Values` in document
+  order), so a config file survives parse → edit → stringify byte-exact.
+  `true`/`false`/`null` reach script as `1`/`0`/`""` — the container remembers what
+  they were, so they re-emit as keywords. Options: `Container` ("JSON.Object"|"Map"),
+  `Booleans`/`Null` ("integer"/"empty"|"native" for `JSON.True/False/Null`
+  singletons, which round-trip inside arrays too), `MaxDepth`, `AllowComments`,
+  `AllowTrailingCommas`, `EnsureAscii`, `EscapeSlash`. Depth and circular
+  references raise catchable errors carrying line/col/pos and a `[Code]`.
 - **`TSParse(Source)`** — parse AHK source with the bundled tree-sitter grammar; returns a snapshot tree of plain AHK objects. Lazily loads `bin/tree-sitter-ahk.dll` on first call. Returns `{ Root, Source, HasError }`; each node has `Type`, `StartByte`/`EndByte`, `StartRow`/`StartCol`/`EndRow`/`EndCol`, `Text`, `IsNamed`/`IsMissing`/`IsError`/`IsExtra`/`HasError`, `FieldName`, `Children`, `NamedChildren`, `Truncated`. For **structure only** — the grammar is incomplete (false `HasError` on valid code, e.g. typed Structs, fat-arrow methods, `^j::` hotkeys); do not use `TSParse(...).HasError` as a validity check. For 'does it parse?' use the `Check` BIF above (real-engine oracle), or the `check` CLI subcommand. Full docs: `docs/TREE_SITTER.md`.
 
 Full reference: `updates.md` in the repo root.

@@ -871,6 +871,24 @@ public:
 		return GetItem(aToken, key);
 	}
 
+	// Ordered access for native consumers such as the JSON writer, which must
+	// walk a Map's contents without going through script-level enumeration.
+	index_t ItemCount() const { return mCount; }
+	bool ItemAt(index_t aIndex, ExprTokenType &aKey, ExprTokenType &aValue)
+	{
+		if (aIndex >= mCount)
+			return false;
+		Pair &item = mItem[aIndex];
+		if (aIndex < mKeyOffsetObject)
+			aKey.SetValue((__int64)item.key.i);
+		else if (aIndex < mKeyOffsetString)
+			aKey.SetValue(item.key.p);
+		else
+			aKey.SetValue(item.key.s, _tcslen(item.key.s));
+		item.ToToken(aValue);
+		return true;
+	}
+
 	bool SetItem(ExprTokenType &aKey, ExprTokenType &aValue)
 	{
 		index_t insert_pos;
@@ -1031,6 +1049,7 @@ public:
 
 void DefineComPrototypeMembers();
 void DefineFileClass();
+void DefineJsonClass();
 
 
 

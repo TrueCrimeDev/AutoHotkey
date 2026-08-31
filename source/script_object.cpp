@@ -4440,6 +4440,7 @@ void Object::CreateRootPrototypes()
 	GuiControlType::DefineControlClasses();
 	DefineComPrototypeMembers();
 	DefineFileClass();
+	DefineJsonClass();
 
 	// Permit Object.Call to construct Error objects.
 	ErrorPrototype::Error->mFlags &= ~NativeClassPrototype;

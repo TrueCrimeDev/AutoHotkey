@@ -256,6 +256,7 @@
     <ClCompile Include="source\lib\wait.cpp">
       <Optimization>MinSpace</Optimization>
     </ClCompile>
+    <ClCompile Include="source\json.cpp" />
     <ClCompile Include="source\lib\win.cpp" />
     <ClCompile Include="source\mcp_server.cpp" />
     <ClCompile Include="source\os_version.cpp" />
@@ -303,6 +304,7 @@
     <ClInclude Include="source\hook.h" />
     <ClInclude Include="source\hotkey.h" />
     <ClInclude Include="source\input_object.h" />
+    <ClInclude Include="source\json.h" />
     <ClInclude Include="source\keyboard_mouse.h" />
     <ClInclude Include="source\KuString.h" />
     <ClInclude Include="source\mcp_server.h" />
