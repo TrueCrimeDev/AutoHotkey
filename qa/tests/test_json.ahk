@@ -222,4 +222,48 @@ Assert.throws(() => JSON.Stringify({fn: (*) => 1}.fn), "json.err.unsupported", "
 Assert.throws(() => JSON.Stringify(Buffer(4)), "json.err.unsupported.buffer", "UnsupportedType")
 Assert.eq(JSON.Stringify({}), "{}", "json.dump.empty.literal")
 
+; ---- ParseAt: one value at a time for NDJSON / streaming ------------------
+JsonStream(text) {
+    out := [], pos := 1
+    while (pos <= StrLen(text))
+        out.Push(JSON.ParseAt(text, &pos))
+    return out
+}
+; NDJSON: newline-delimited, the shape of streamed JSON-RPC and log feeds.
+ndj := JsonStream('{"id":1}' Chr(10) '{"id":2}' Chr(10) '{"id":3}' Chr(10))
+Assert.eq(ndj.Length, 3, "json.parseat.ndjson.count")
+Assert.eq(ndj[2]["id"], 2, "json.parseat.ndjson.value")
+; Concatenated with no delimiter at all -- whole-doc Parse cannot do this.
+concat := JsonStream('{"a":1}[2,3]"s"42')
+Assert.eq(concat.Length, 4, "json.parseat.concat.count")
+Assert.eq(JSON.Stringify(concat[2]), "[2,3]", "json.parseat.concat.mixed")
+Assert.eq(concat[4], 42, "json.parseat.concat.scalar")
+; Falsy records must each count -- the reason the loop guards on Pos, not truth.
+falsy := JsonStream('0' Chr(10) 'false' Chr(10) 'null' Chr(10) '""' Chr(10) '5')
+Assert.eq(falsy.Length, 5, "json.parseat.falsy.count")
+Assert.eq(falsy[1], 0, "json.parseat.falsy.zero")
+Assert.eq(falsy[3], "", "json.parseat.falsy.null")
+; Leading/blank whitespace between and around records is skipped.
+Assert.eq(JsonStream(Chr(10) Chr(10) "  " '{"a":1}' Chr(10) "  " '{"b":2}  ' Chr(10)).Length, 2, "json.parseat.blanklines")
+; Pos advances past each value and parks one past the end.
+p := 1
+JSON.ParseAt('{"a":1}  rest', &p)
+; Pos parks on the next VALUE (the 'r' at index 10), trailing whitespace skipped,
+; so the following call needs no cleanup of its own.
+Assert.eq(p, 10, "json.parseat.pos.advance")
+; A mid-stream syntax error throws JSONError and does not run away.
+threw := false
+try {
+    p2 := 1
+    loop 10
+        if (p2 <= StrLen('{"ok":1}' Chr(10) '{oops}'))
+            JSON.ParseAt('{"ok":1}' Chr(10) '{oops}', &p2)
+} catch as e
+    threw := e is ValueError
+Assert.truthy(threw, "json.parseat.error.catchable")
+; Per-call options are honored (native booleans round-trip here too).
+pn := 1
+Assert.eq(JSON.Stringify(JSON.ParseAt('[true,null]', &pn, {Booleans:"native", Null:"native"}))
+    , "[true,null]", "json.parseat.options")
+
 Assert.Summary()

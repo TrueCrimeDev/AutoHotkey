@@ -147,6 +147,9 @@ These do not exist in upstream AutoHotkey. Use them directly — no `#include`, 
 - **`Check(Source)`** — validate AHK source with automatic oracle parity: spawns this exe in check mode (`/Diag=json /Check`) against a temp file in a child process, so host state is untouched and the verdict matches the CLI. Returns `{ Ok, Diagnostics, Raw }`: `Ok` is 1/0 (child exit 0 = valid, 13 = syntax error); `Diagnostics` is an Array (empty when Ok=1) of `{ Severity, Type, Code, Message, Extra, File, Line, Column }`; `Raw` is the captured child output. On spawn failure it returns Ok=0 with a synthetic diagnostic (does not throw). The check-mode child only parses (never executes) the temp source, so it is safe by construction. This — not `TSParse(...).HasError` — is the correct 'does it parse?' check.
 - **`JSON`** — native JSON class, no include. `JSON.Parse(Text, Reviver?, Options?)`
   and `JSON.Stringify(Value, Replacer?, Space?, Options?)`, aliased `Load`/`Dump`;
+  `JSON.ParseAt(Text, &Pos, Options?)` parses one value from `Pos` and advances it
+  (loop `while (pos <= StrLen(text))`) for NDJSON / JSON Lines / concatenated
+  streams — the wire shape of newline-delimited JSON-RPC and streamed feeds.
   `Space` takes an indent width or a literal string. Objects parse into an ordered,
   case-sensitive `JSON.Object` (Map-like API plus `.Keys`/`.Values` in document
   order), so a config file survives parse → edit → stringify byte-exact.

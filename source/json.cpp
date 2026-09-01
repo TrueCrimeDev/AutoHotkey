@@ -1368,6 +1368,35 @@ FResult GatherOptions(ExprTokenType *aParam[], int aParamCount, int aFirst, Obje
 
 // JSON.Parse(Text, Reviver?, Options?)  — Reviver is reserved; passing a Map/
 // Object there is read as Options so thqby-shaped calls keep working.
+// Fills parse options from an options object (nullptr = all defaults).
+void FillParseOpts(Object *opts, JsonParseOpts &po)
+{
+	po.container = OptStrIs(opts, _T("Container"), _T("Map")) ? JCON_MAP : JCON_JSONOBJECT;
+	po.booleans = OptStrIs(opts, _T("Booleans"), _T("native")) ? JBOOL_NATIVE : JBOOL_INTEGER;
+	po.nulls = OptStrIs(opts, _T("Null"), _T("native")) ? JNULL_NATIVE : JNULL_EMPTY;
+	po.maxDepth = ClampDepth(OptInt(opts, _T("MaxDepth"), JSON_DEFAULT_DEPTH));
+	po.allowComments = OptBool(opts, _T("AllowComments"), false);
+	po.allowTrailingCommas = OptBool(opts, _T("AllowTrailingCommas"), false);
+	po.allowTopLevelScalar = OptBool(opts, _T("AllowTopLevelScalar"), true);
+}
+
+// Moves a freshly parsed value into the BIF result token: an object's reference
+// is handed over with an AddRef, and a decoded string's heap buffer is donated
+// rather than copied again. Leaves val holding nothing that still needs freeing.
+void EmitJsonValue(ResultToken &aResultToken, JsonValue &val)
+{
+	aResultToken.CopyValueFrom(val.tok);
+	if (aResultToken.symbol == SYM_OBJECT)
+		aResultToken.object->AddRef();
+	else if (aResultToken.symbol == SYM_STRING && val.ownedStr)
+	{
+		aResultToken.mem_to_free = val.ownedStr;
+		aResultToken.marker = val.ownedStr;
+		val.ownedStr = nullptr;
+	}
+	val.Release();
+}
+
 BIF_DECL(JsonClass_Parse)
 {
 	// Take the length from the token, not _tcslen: an embedded U+0000 is input,
@@ -1388,13 +1417,7 @@ BIF_DECL(JsonClass_Parse)
 	}
 
 	JsonParseOpts po;
-	po.container = OptStrIs(opts, _T("Container"), _T("Map")) ? JCON_MAP : JCON_JSONOBJECT;
-	po.booleans = OptStrIs(opts, _T("Booleans"), _T("native")) ? JBOOL_NATIVE : JBOOL_INTEGER;
-	po.nulls = OptStrIs(opts, _T("Null"), _T("native")) ? JNULL_NATIVE : JNULL_EMPTY;
-	po.maxDepth = ClampDepth(OptInt(opts, _T("MaxDepth"), JSON_DEFAULT_DEPTH));
-	po.allowComments = OptBool(opts, _T("AllowComments"), false);
-	po.allowTrailingCommas = OptBool(opts, _T("AllowTrailingCommas"), false);
-	po.allowTopLevelScalar = OptBool(opts, _T("AllowTopLevelScalar"), true);
+	FillParseOpts(opts, po);
 
 	// A UTF-8 BOM survives FileRead into U+FEFF; skipping it silently is what
 	// every caller wants and what every library forgets.
@@ -1428,19 +1451,103 @@ BIF_DECL(JsonClass_Parse)
 		return;
 	}
 
-	aResultToken.CopyValueFrom(val.tok);
-	if (aResultToken.symbol == SYM_OBJECT)
+	EmitJsonValue(aResultToken, val);
+}
+
+// JSON.ParseAt(Text, &Pos, Options?) — parse ONE value beginning at Pos (1-based),
+// advance Pos past it and any trailing whitespace, and return the value. After
+// each call Pos sits on the next value or, at end of stream, one past the end —
+// so the loop guard is a position check:
+//
+//   pos := 1
+//   while (pos <= StrLen(text)) {
+//       rec := JSON.ParseAt(text, &pos)   ; advances pos
+//       process(rec)                       ; rec may legitimately be 0/""/false
+//   }
+//
+// A position guard rather than a truthy/IsSet test because a record's value can
+// be falsy (0, false→0, null→""), and because a value-returning BIF cannot hand
+// back "unset" to an expression without the v2.1 unset-return raising — the same
+// reason FileRead needs `?? ""`. Called with only whitespace left it returns
+// unset defensively, so the guard is what a caller relies on.
+//
+// This is the primitive for NDJSON / JSON Lines and concatenated JSON — the wire
+// shapes of live connections (newline-delimited JSON-RPC, streamed feeds). Unlike
+// Parse it does not reject trailing content; that content is the next record.
+BIF_DECL(JsonClass_ParseAt)
+{
+	size_t len = 0;
+	LPTSTR text = ParamIndexToString(1, _f_number_buf, &len);
+	if (!text)
 	{
-		aResultToken.object->AddRef();
+		text = _T("");
+		len = 0;
 	}
-	else if (aResultToken.symbol == SYM_STRING && val.ownedStr)
+
+	Var *posVar = ParamIndexToOutputVar(2);
+	if (!posVar)
 	{
-		// Hand the decoded buffer to the caller rather than copying it again.
-		aResultToken.mem_to_free = val.ownedStr;
-		aResultToken.marker = val.ownedStr;
-		val.ownedStr = nullptr;
+		aResultToken.SetExitResult(FError(_T("ParseAt requires a variable reference for Pos, e.g. &pos.")
+			, nullptr, ErrorPrototype::Value) == OK ? OK : FAIL);
+		return;
 	}
-	val.Release();
+
+	Object *opts;
+	if (GatherOptions(aParam, aParamCount, 3, opts) != OK)
+	{
+		aResultToken.SetExitResult(FAIL);
+		return;
+	}
+	JsonParseOpts po;
+	FillParseOpts(opts, po);
+
+	__int64 pos = posVar->ToInt64();
+	if (pos < 1)
+		pos = 1;
+
+	JsonScanner sc(text, len, po);
+	sc.i = (size_t)(pos - 1);
+	if (sc.i > sc.n)
+		sc.i = sc.n;
+	// Skip a leading BOM only at the very start, matching Parse.
+	if (sc.i == 0 && sc.n && text[0] == 0xFEFF)
+		++sc.i;
+
+	sc.SkipWs();
+	if (sc.failed) // an unterminated comment while skipping
+	{
+		posVar->Assign((__int64)(sc.i + 1));
+		aResultToken.SetExitResult(ThrowJsonError(sc.errCode, sc.errMsg, sc.errLine, sc.errCol, sc.errPos) == OK ? OK : FAIL);
+		return;
+	}
+	if (sc.i >= sc.n)
+	{
+		// Only whitespace left: end of stream. Park Pos past the end and return
+		// unset so `while IsSet(v := JSON.ParseAt(...))` terminates here.
+		posVar->Assign((__int64)(sc.n + 1));
+		aResultToken.symbol = SYM_MISSING;
+		return;
+	}
+
+	JsonValue val;
+	if (!ParseValue(sc, val, 0))
+	{
+		val.Release();
+		posVar->Assign((__int64)(sc.errPos + 1));
+		aResultToken.SetExitResult(ThrowJsonError(sc.errCode, sc.errMsg, sc.errLine, sc.errCol, sc.errPos) == OK ? OK : FAIL);
+		return;
+	}
+	if (!po.allowTopLevelScalar && val.tok.symbol != SYM_OBJECT)
+	{
+		val.Release();
+		aResultToken.SetExitResult(ThrowJsonError(_T("UnexpectedChar")
+			, _T("Expected an object or array at the top level"), 1, 1, 0) == OK ? OK : FAIL);
+		return;
+	}
+
+	sc.SkipWs(); // position Pos at the next record for the following call
+	posVar->Assign((__int64)(sc.i + 1));
+	EmitJsonValue(aResultToken, val);
 }
 
 // JSON.Stringify(Value, Replacer?, Space?, Options?) — Replacer is reserved, so
@@ -1528,6 +1635,7 @@ void DefineJsonClass()
 
 	jsonClass->DefineMethod(_T("Parse"), new BuiltInFunc{ _T("JSON.Parse"), JsonClass_Parse, 2, 4 });
 	jsonClass->DefineMethod(_T("Stringify"), new BuiltInFunc{ _T("JSON.Stringify"), JsonClass_Stringify, 2, 5 });
+	jsonClass->DefineMethod(_T("ParseAt"), new BuiltInFunc{ _T("JSON.ParseAt"), JsonClass_ParseAt, 3, 4 });
 	// Aliases: cJson-era code calls Load/Dump, thqby-era code calls parse/stringify
 	// (property lookup is case-insensitive, so the lowercase forms already work).
 	jsonClass->DefineMethod(_T("Load"), new BuiltInFunc{ _T("JSON.Load"), JsonClass_Parse, 2, 4 });
