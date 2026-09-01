@@ -207,8 +207,10 @@ struct JsonScanner
 		}
 	}
 
-	// Decodes a JSON string literal into aOut. Assumes s[i] == '"'.
-	bool ReadString(JsonBuf &aOut)
+	// Decodes a JSON string literal. Assumes s[i] == '"'. aOut may be null to
+	// validate the string (escapes, control chars) while allocating nothing —
+	// so JSON.Validate reuses this exact grammar rather than a second copy.
+	bool ReadString(JsonBuf *aOut)
 	{
 		++i; // opening quote
 		size_t runStart = i;
@@ -219,27 +221,27 @@ struct JsonScanner
 			TCHAR c = s[i];
 			if (c == '"')
 			{
-				aOut.Put(s + runStart, i - runStart); // copy the unescaped run in one go
+				if (aOut) aOut->Put(s + runStart, i - runStart); // one copy of the unescaped run
 				++i;
 				return true;
 			}
 			if (c == '\\')
 			{
-				aOut.Put(s + runStart, i - runStart);
+				if (aOut) aOut->Put(s + runStart, i - runStart);
 				++i;
 				if (i >= n)
 					return Fail(_T("UnexpectedEnd"), _T("Unterminated escape sequence"));
 				TCHAR e = s[i];
 				switch (e)
 				{
-				case '"':  aOut.Put('"');  break;
-				case '\\': aOut.Put('\\'); break;
-				case '/':  aOut.Put('/');  break;
-				case 'b':  aOut.Put((TCHAR)8);  break;
-				case 'f':  aOut.Put((TCHAR)12); break;
-				case 'n':  aOut.Put('\n'); break;
-				case 'r':  aOut.Put('\r'); break;
-				case 't':  aOut.Put('\t'); break;
+				case '"':  if (aOut) aOut->Put('"');  break;
+				case '\\': if (aOut) aOut->Put('\\'); break;
+				case '/':  if (aOut) aOut->Put('/');  break;
+				case 'b':  if (aOut) aOut->Put((TCHAR)8);  break;
+				case 'f':  if (aOut) aOut->Put((TCHAR)12); break;
+				case 'n':  if (aOut) aOut->Put('\n'); break;
+				case 'r':  if (aOut) aOut->Put('\r'); break;
+				case 't':  if (aOut) aOut->Put('\t'); break;
 				case 'u':
 				{
 					if (i + 4 >= n)
@@ -258,7 +260,7 @@ struct JsonScanner
 					i += 4;
 					// AHK strings are UTF-16, so a surrogate pair written as two
 					// \u escapes lands as two correct code units with no work.
-					aOut.Put((TCHAR)v);
+					if (aOut) aOut->Put((TCHAR)v);
 					break;
 				}
 				default:
@@ -911,7 +913,7 @@ bool ParseObject(JsonScanner &sc, JsonValue &aOut, int aDepth)
 		if (sc.i >= sc.n || sc.s[sc.i] != '"')
 			return sc.FailChar(_T("UnexpectedChar"), _T("Expected a quoted property name"));
 		JsonBuf key;
-		if (!sc.ReadString(key))
+		if (!sc.ReadString(&key))
 			return false;
 		key.Terminate();
 		if (key.failed)
@@ -949,7 +951,12 @@ bool ParseObject(JsonScanner &sc, JsonValue &aOut, int aDepth)
 bool ParseArray(JsonScanner &sc, JsonValue &aOut, int aDepth)
 {
 	++sc.i; // '['
-	auto arr = JsonArray::Create();
+	// Container:"Map" is the "plain AHK types" mode, so its arrays are plain
+	// Arrays with no provenance tags — matching its plain Map objects. Only the
+	// ordered JsonObject mode gets the tagged JsonArray, where the tags earn
+	// their keep by making true/false/null round-trip.
+	bool plain = sc.opt.container == JCON_MAP;
+	Array *arr = plain ? Array::Create() : JsonArray::Create();
 	if (!arr)
 		return sc.Fail(_T("OutOfMemory"), _T("Out of memory"));
 	aOut.tok.SetValue(arr);
@@ -972,7 +979,8 @@ bool ParseArray(JsonScanner &sc, JsonValue &aOut, int aDepth)
 		JsonValue val;
 		if (!ParseValue(sc, val, aDepth + 1))
 			return false;
-		bool stored = arr->AppendTagged(val.tok, val.tag);
+		bool stored = plain ? arr->Append(val.tok)
+		                    : ((JsonArray *)arr)->AppendTagged(val.tok, val.tag);
 		val.Release();
 		if (!stored)
 			return sc.Fail(_T("OutOfMemory"), _T("Out of memory"));
@@ -1014,7 +1022,7 @@ bool ParseValue(JsonScanner &sc, JsonValue &aOut, int aDepth)
 	if (c == '"')
 	{
 		JsonBuf str;
-		if (!sc.ReadString(str))
+		if (!sc.ReadString(&str))
 			return false;
 		str.Terminate();
 		if (str.failed)
@@ -1031,6 +1039,82 @@ bool ParseValue(JsonScanner &sc, JsonValue &aOut, int aDepth)
 	if (c == '-' || (c >= '0' && c <= '9'))
 		return ParseNumber(sc, aOut);
 	return ParseKeyword(sc, aOut);
+}
+
+// Validate one value without building anything. Mirrors ParseValue's control
+// flow exactly and shares its string (ReadString(nullptr)), number and keyword
+// grammar, so the two cannot disagree on what is valid — a qa test drives the
+// whole JSONTestSuite corpus through both and asserts they always agree.
+bool SkipValue(JsonScanner &sc, int aDepth)
+{
+	if (aDepth > sc.opt.maxDepth)
+	{
+		TCHAR buf[96];
+		sntprintf(buf, _countof(buf), _T("Maximum nesting depth of %i exceeded"), sc.opt.maxDepth);
+		return sc.Fail(_T("DepthExceeded"), buf);
+	}
+	sc.SkipWs();
+	if (sc.failed)
+		return false;
+	if (sc.i >= sc.n)
+		return sc.Fail(_T("UnexpectedEnd"), _T("Unexpected end of JSON input"));
+
+	TCHAR c = sc.s[sc.i];
+	if (c == '{')
+	{
+		++sc.i;
+		sc.SkipWs();
+		if (sc.i < sc.n && sc.s[sc.i] == '}') { ++sc.i; return true; }
+		for (;;)
+		{
+			sc.SkipWs();
+			if (sc.opt.allowTrailingCommas && sc.i < sc.n && sc.s[sc.i] == '}') { ++sc.i; return true; }
+			if (sc.i >= sc.n || sc.s[sc.i] != '"')
+				return sc.FailChar(_T("UnexpectedChar"), _T("Expected a quoted property name"));
+			if (!sc.ReadString(nullptr))
+				return false;
+			sc.SkipWs();
+			if (sc.i >= sc.n || sc.s[sc.i] != ':')
+				return sc.FailChar(_T("UnexpectedChar"), _T("Expected ':' after the property name"));
+			++sc.i;
+			if (!SkipValue(sc, aDepth + 1))
+				return false;
+			sc.SkipWs();
+			if (sc.i < sc.n && sc.s[sc.i] == ',') { ++sc.i; continue; }
+			if (sc.i < sc.n && sc.s[sc.i] == '}') { ++sc.i; return true; }
+			return sc.FailChar(_T("UnexpectedChar"), _T("Expected ',' or '}'"));
+		}
+	}
+	if (c == '[')
+	{
+		++sc.i;
+		sc.SkipWs();
+		if (sc.i < sc.n && sc.s[sc.i] == ']') { ++sc.i; return true; }
+		for (;;)
+		{
+			sc.SkipWs();
+			if (sc.opt.allowTrailingCommas && sc.i < sc.n && sc.s[sc.i] == ']') { ++sc.i; return true; }
+			if (!SkipValue(sc, aDepth + 1))
+				return false;
+			sc.SkipWs();
+			if (sc.i < sc.n && sc.s[sc.i] == ',') { ++sc.i; continue; }
+			if (sc.i < sc.n && sc.s[sc.i] == ']') { ++sc.i; return true; }
+			return sc.FailChar(_T("UnexpectedChar"), _T("Expected ',' or ']'"));
+		}
+	}
+	if (c == '"')
+		return sc.ReadString(nullptr);
+	if (c == '-' || (c >= '0' && c <= '9'))
+	{
+		JsonValue throwaway;   // ParseNumber writes only to a token, allocates nothing
+		return ParseNumber(sc, throwaway);
+	}
+	{
+		JsonValue throwaway;   // keyword parse may AddRef a singleton; release it
+		bool ok = ParseKeyword(sc, throwaway);
+		throwaway.Release();
+		return ok;
+	}
 }
 
 // ============================================================================
@@ -1397,36 +1481,17 @@ void EmitJsonValue(ResultToken &aResultToken, JsonValue &val)
 	val.Release();
 }
 
-BIF_DECL(JsonClass_Parse)
+// The shared body of every whole-document parse (string, Buffer, or file): scan
+// one value, reject trailing content, enforce the top-level-scalar option, and
+// emit. text/len is borrowed — the caller owns it and frees it after we return.
+void ParseCore(LPTSTR text, size_t len, const JsonParseOpts &po, ResultToken &aResultToken)
 {
-	// Take the length from the token, not _tcslen: an embedded U+0000 is input,
-	// and treating it as a terminator silently hid everything after it.
-	size_t len = 0;
-	LPTSTR text = ParamIndexToString(1, _f_number_buf, &len);
-	if (!text)
-	{
-		text = _T("");
-		len = 0;
-	}
-
-	Object *opts;
-	if (GatherOptions(aParam, aParamCount, 2, opts) != OK)
-	{
-		aResultToken.SetExitResult(FAIL);
-		return;
-	}
-
-	JsonParseOpts po;
-	FillParseOpts(opts, po);
-
-	// A UTF-8 BOM survives FileRead into U+FEFF; skipping it silently is what
-	// every caller wants and what every library forgets.
+	// A UTF-8 BOM survives into U+FEFF; skip it silently, as every caller wants.
 	if (len && text[0] == 0xFEFF)
 	{
 		++text;
 		--len;
 	}
-
 	JsonScanner sc(text, len, po);
 	JsonValue val;
 	if (!ParseValue(sc, val, 0))
@@ -1450,8 +1515,323 @@ BIF_DECL(JsonClass_Parse)
 			, _T("Expected an object or array at the top level"), 1, 1, 0) == OK ? OK : FAIL);
 		return;
 	}
-
 	EmitJsonValue(aResultToken, val);
+}
+
+// Decode raw bytes to a fresh UTF-16 buffer (caller frees). BOM sniffed:
+// EF BB BF => UTF-8, FF FE => UTF-16LE, FE FF => UTF-16BE; otherwise the
+// Encoding option, defaulting to UTF-8. This is the path that sees invalid
+// bytes verbatim, where FileRead's decode would have replaced them with U+FFFD
+// before the parser ever ran — so a Buffer/file parse renders a true verdict.
+// Returns nullptr on conversion failure (aErr set) or allocation failure.
+LPTSTR BytesToWide(const char *bytes, size_t nbytes, LPCTSTR aEncoding, size_t &aOutLen, LPCTSTR &aErr)
+{
+	aErr = nullptr;
+	// Bound before the (int) cast into MultiByteToWideChar can wrap negative.
+	if (nbytes > 0x7FFFFFF0)
+	{
+		aErr = _T("Input is too large to decode");
+		return nullptr;
+	}
+	UINT cp = CP_UTF8;
+	bool utf16le = false, utf16be = false;
+	if (nbytes >= 3 && (unsigned char)bytes[0] == 0xEF && (unsigned char)bytes[1] == 0xBB && (unsigned char)bytes[2] == 0xBF)
+	{
+		bytes += 3; nbytes -= 3; // UTF-8 BOM
+	}
+	else if (nbytes >= 2 && (unsigned char)bytes[0] == 0xFF && (unsigned char)bytes[1] == 0xFE)
+	{
+		utf16le = true; bytes += 2; nbytes -= 2;
+	}
+	else if (nbytes >= 2 && (unsigned char)bytes[0] == 0xFE && (unsigned char)bytes[1] == 0xFF)
+	{
+		utf16be = true; bytes += 2; nbytes -= 2;
+	}
+	else if (aEncoding && !_tcsicmp(aEncoding, _T("UTF-16LE")))
+		utf16le = true;
+	else if (aEncoding && !_tcsicmp(aEncoding, _T("UTF-16BE")))
+		utf16be = true;
+	else if (aEncoding && *aEncoding)
+	{
+		// Resolve the rest through the engine's own encoding-name parser, so
+		// CPnnn / numeric codepages and UTF-16 work exactly as FileRead's do,
+		// and an unrecognized name is a hard error instead of a silent UTF-8
+		// fallback that would decode the wrong bytes.
+		UINT resolved = Line::ConvertFileEncoding(aEncoding);
+		if (resolved == (UINT)-1)
+		{
+			aErr = _T("Unrecognized encoding name");
+			return nullptr;
+		}
+		resolved &= ~CP_AHKNOBOM;
+		if (resolved == 1200)
+			utf16le = true;
+		else
+			cp = resolved;
+	}
+
+	if (utf16le || utf16be)
+	{
+		if (nbytes & 1)
+		{
+			// An odd byte count is a malformed UTF-16 stream; report it rather
+			// than silently dropping the unpaired trailing byte.
+			aErr = _T("UTF-16 input has an odd number of bytes");
+			return nullptr;
+		}
+		size_t units = nbytes / 2;
+		LPTSTR out = (LPTSTR)malloc((units + 1) * sizeof(TCHAR));
+		if (!out) { aErr = _T("Out of memory"); return nullptr; }
+		for (size_t k = 0; k < units; ++k)
+		{
+			unsigned lo = (unsigned char)bytes[2 * k], hi = (unsigned char)bytes[2 * k + 1];
+			out[k] = (TCHAR)(utf16le ? (lo | (hi << 8)) : (hi | (lo << 8)));
+		}
+		out[units] = '\0';
+		aOutLen = units;
+		return out;
+	}
+	if (!nbytes)
+	{
+		LPTSTR out = (LPTSTR)malloc(sizeof(TCHAR));
+		if (!out) { aErr = _T("Out of memory"); return nullptr; }
+		out[0] = '\0'; aOutLen = 0; return out;
+	}
+	// MB_ERR_INVALID_CHARS makes invalid input a real error rather than a silent
+	// U+FFFD substitution — the whole reason to offer a bytes path.
+	int wlen = MultiByteToWideChar(cp, MB_ERR_INVALID_CHARS, bytes, (int)nbytes, nullptr, 0);
+	if (wlen <= 0)
+	{
+		aErr = _T("Input is not valid for the specified encoding");
+		return nullptr;
+	}
+	LPTSTR out = (LPTSTR)malloc((wlen + 1) * sizeof(TCHAR));
+	if (!out) { aErr = _T("Out of memory"); return nullptr; }
+	MultiByteToWideChar(cp, MB_ERR_INVALID_CHARS, bytes, (int)nbytes, out, wlen);
+	out[wlen] = '\0';
+	aOutLen = (size_t)wlen;
+	return out;
+}
+
+// Bytes from a Buffer (or any BufferObject subclass — ClipboardAll, etc.).
+// A direct type check, not property duck-typing: Buffer's Ptr/Size are
+// prototype getters, not own properties, and a hard cast also guarantees a
+// scalar (JSON.Parse(42)) can never be mistaken for a byte source.
+bool AsByteSource(IObject *aObj, const char *&aPtr, size_t &aSize)
+{
+	auto buf = dynamic_cast<BufferObject *>(aObj);
+	if (!buf || !buf->Data())
+		return false;
+	aPtr = (const char *)buf->Data();
+	aSize = buf->Size();
+	return true;
+}
+
+BIF_DECL(JsonClass_Parse)
+{
+	Object *opts;
+	if (GatherOptions(aParam, aParamCount, 2, opts) != OK)
+	{
+		aResultToken.SetExitResult(FAIL);
+		return;
+	}
+	JsonParseOpts po;
+	FillParseOpts(opts, po);
+
+	// A Buffer (or any object with numeric Ptr+Size) parses from its raw bytes,
+	// so invalid encoding is seen rather than pre-repaired. A string parses as-is.
+	const char *bytes; size_t nbytes;
+	if (aParamCount > 1 && AsByteSource(TokenToObject(*aParam[1]), bytes, nbytes))
+	{
+		LPTSTR enc = opts ? opts->GetOwnPropString(_T("Encoding")) : nullptr;
+		size_t wlen; LPCTSTR err;
+		LPTSTR text = BytesToWide(bytes, nbytes, enc, wlen, err);
+		if (!text)
+		{
+			aResultToken.SetExitResult(ThrowJsonError(_T("BadEncoding"), err, 0, 0, 0) == OK ? OK : FAIL);
+			return;
+		}
+		ParseCore(text, wlen, po, aResultToken);
+		free(text);
+		return;
+	}
+
+	// Take the length from the token, not _tcslen: an embedded U+0000 is input,
+	// and treating it as a terminator silently hid everything after it.
+	size_t len = 0;
+	LPTSTR text = ParamIndexToString(1, _f_number_buf, &len);
+	if (!text)
+	{
+		text = _T("");
+		len = 0;
+	}
+	ParseCore(text, len, po, aResultToken);
+}
+
+// JSON.ParseFile(Path, Options?) — read a file's raw bytes and parse them,
+// BOM-sniffing the encoding. Distinct from JSON.Parse(FileRead(path)) in two
+// ways: no UTF-8->UTF-16->UTF-8 double conversion, and invalid bytes surface as
+// a BadEncoding error instead of being silently replaced with U+FFFD.
+BIF_DECL(JsonClass_ParseFile)
+{
+	LPTSTR path = ParamIndexToString(1, _f_number_buf);
+	Object *opts;
+	if (GatherOptions(aParam, aParamCount, 2, opts) != OK)
+	{
+		aResultToken.SetExitResult(FAIL);
+		return;
+	}
+	JsonParseOpts po;
+	FillParseOpts(opts, po);
+
+	HANDLE h = CreateFile(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (h == INVALID_HANDLE_VALUE)
+	{
+		aResultToken.SetExitResult(FError(_T("Could not open the file."), path, ErrorPrototype::OS) == OK ? OK : FAIL);
+		return;
+	}
+	LARGE_INTEGER size;
+	if (!GetFileSizeEx(h, &size) || size.QuadPart < 0 || size.QuadPart > 0x7FFFFFF0)
+	{
+		CloseHandle(h);
+		aResultToken.SetExitResult(FError(_T("File is too large to read."), path, ErrorPrototype::Value) == OK ? OK : FAIL);
+		return;
+	}
+	char *bytes = (char *)malloc((size_t)size.QuadPart + 1);
+	if (!bytes)
+	{
+		CloseHandle(h);
+		aResultToken.SetExitResult(FR_E_OUTOFMEM == OK ? OK : FAIL);
+		return;
+	}
+	size_t off = 0, total = (size_t)size.QuadPart;
+	bool readOk = true;
+	while (off < total)
+	{
+		DWORD want = (DWORD)((total - off > 0x1000000) ? 0x1000000 : total - off), got = 0;
+		if (!ReadFile(h, bytes + off, want, &got, nullptr) || got == 0) { readOk = false; break; }
+		off += got;
+	}
+	CloseHandle(h);
+	if (!readOk)
+	{
+		free(bytes);
+		aResultToken.SetExitResult(FError(_T("Could not read the file."), path, ErrorPrototype::OS) == OK ? OK : FAIL);
+		return;
+	}
+	size_t wlen; LPCTSTR err;
+	LPTSTR text = BytesToWide(bytes, total, opts ? opts->GetOwnPropString(_T("Encoding")) : nullptr, wlen, err);
+	free(bytes);
+	if (!text)
+	{
+		aResultToken.SetExitResult(ThrowJsonError(_T("BadEncoding"), err, 0, 0, 0) == OK ? OK : FAIL);
+		return;
+	}
+	ParseCore(text, wlen, po, aResultToken);
+	free(text);
+}
+
+// JSON.Validate(Text, Options?) -> {Valid, Pos, Line, Col, Code, Message}.
+// Non-materializing: it walks the same grammar as Parse (SkipValue, ReadString
+// with a null buffer) but allocates no containers or strings, so it is a cheap
+// gate on untrusted input. It never throws — the result object carries the
+// verdict — matching the "answer valid/invalid without committing to a parse"
+// use every AHK library declares and none delivers cheaply.
+// Builds the {Valid, Pos, Line, Col, Code, Message} result. On failure the
+// position fields come from the scanner; on a pre-scan failure (bad encoding)
+// aErr carries the message and there is no position.
+Object *MakeValidateResult(bool aOk, JsonScanner *sc, LPCTSTR aErrCode, LPCTSTR aErrMsg)
+{
+	auto result = Object::Create();
+	if (!result)
+		return nullptr;
+	result->SetOwnProp(_T("Valid"), (__int64)(aOk ? 1 : 0));
+	if (aOk)
+	{
+		result->SetOwnProp(_T("Pos"), (__int64)0);
+		result->SetOwnProp(_T("Line"), (__int64)0);
+		result->SetOwnProp(_T("Col"), (__int64)0);
+		result->SetOwnProp(_T("Code"), _T(""));
+		result->SetOwnProp(_T("Message"), _T(""));
+	}
+	else if (sc)
+	{
+		result->SetOwnProp(_T("Pos"), (__int64)(sc->errPos + 1));
+		result->SetOwnProp(_T("Line"), (__int64)sc->errLine);
+		result->SetOwnProp(_T("Col"), (__int64)sc->errCol);
+		result->SetOwnProp(_T("Code"), sc->errCode);
+		result->SetOwnProp(_T("Message"), sc->errMsg);
+	}
+	else
+	{
+		result->SetOwnProp(_T("Pos"), (__int64)0);
+		result->SetOwnProp(_T("Line"), (__int64)0);
+		result->SetOwnProp(_T("Col"), (__int64)0);
+		result->SetOwnProp(_T("Code"), aErrCode);
+		result->SetOwnProp(_T("Message"), aErrMsg);
+	}
+	return result;
+}
+
+BIF_DECL(JsonClass_Validate)
+{
+	Object *opts;
+	if (GatherOptions(aParam, aParamCount, 2, opts) != OK)
+	{
+		aResultToken.SetExitResult(FAIL);
+		return;
+	}
+	JsonParseOpts po;
+	FillParseOpts(opts, po);
+
+	// Validate must accept everything Parse accepts as a source, so a Buffer is
+	// decoded through the same byte path. A decode failure is Valid=false with a
+	// BadEncoding code (Validate never throws), not an exception like Parse's.
+	LPTSTR owned = nullptr;
+	LPTSTR t; size_t n;
+	const char *bytes; size_t nbytes;
+	if (aParamCount > 1 && AsByteSource(TokenToObject(*aParam[1]), bytes, nbytes))
+	{
+		LPCTSTR err;
+		owned = BytesToWide(bytes, nbytes, opts ? opts->GetOwnPropString(_T("Encoding")) : nullptr, n, err);
+		if (!owned)
+		{
+			auto res = MakeValidateResult(false, nullptr, _T("BadEncoding"), err);
+			if (!res) { aResultToken.SetExitResult(FR_E_OUTOFMEM == OK ? OK : FAIL); return; }
+			aResultToken.SetValue(res);
+			return;
+		}
+		t = owned;
+	}
+	else
+	{
+		size_t len = 0;
+		t = ParamIndexToString(1, _f_number_buf, &len);
+		if (!t) { t = _T(""); len = 0; }
+		n = len;
+	}
+	if (n && t[0] == 0xFEFF) { ++t; --n; }
+
+	JsonScanner sc(t, n, po);
+	// The top-level char decides scalar-vs-container up front, so the same
+	// AllowTopLevelScalar gate ParseCore applies can be enforced here too.
+	sc.SkipWs();
+	bool topIsScalar = sc.i < sc.n && sc.s[sc.i] != '{' && sc.s[sc.i] != '[';
+	bool ok = SkipValue(sc, 0);
+	if (ok)
+	{
+		sc.SkipWs();
+		if (sc.i < sc.n)
+			sc.Fail(_T("TrailingContent"), _T("Unexpected content after the JSON value")), ok = false;
+	}
+	if (ok && !po.allowTopLevelScalar && topIsScalar)
+		sc.Fail(_T("UnexpectedChar"), _T("Expected an object or array at the top level")), ok = false;
+
+	free(owned);
+	auto result = MakeValidateResult(ok, &sc, nullptr, nullptr);
+	if (!result) { aResultToken.SetExitResult(FR_E_OUTOFMEM == OK ? OK : FAIL); return; }
+	aResultToken.SetValue(result);
 }
 
 // JSON.ParseAt(Text, &Pos, Options?) — parse ONE value beginning at Pos (1-based),
@@ -1636,6 +2016,8 @@ void DefineJsonClass()
 	jsonClass->DefineMethod(_T("Parse"), new BuiltInFunc{ _T("JSON.Parse"), JsonClass_Parse, 2, 4 });
 	jsonClass->DefineMethod(_T("Stringify"), new BuiltInFunc{ _T("JSON.Stringify"), JsonClass_Stringify, 2, 5 });
 	jsonClass->DefineMethod(_T("ParseAt"), new BuiltInFunc{ _T("JSON.ParseAt"), JsonClass_ParseAt, 3, 4 });
+	jsonClass->DefineMethod(_T("ParseFile"), new BuiltInFunc{ _T("JSON.ParseFile"), JsonClass_ParseFile, 2, 3 });
+	jsonClass->DefineMethod(_T("Validate"), new BuiltInFunc{ _T("JSON.Validate"), JsonClass_Validate, 2, 3 });
 	// Aliases: cJson-era code calls Load/Dump, thqby-era code calls parse/stringify
 	// (property lookup is case-insensitive, so the lowercase forms already work).
 	jsonClass->DefineMethod(_T("Load"), new BuiltInFunc{ _T("JSON.Load"), JsonClass_Parse, 2, 4 });

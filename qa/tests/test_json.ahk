@@ -266,4 +266,123 @@ pn := 1
 Assert.eq(JSON.Stringify(JSON.ParseAt('[true,null]', &pn, {Booleans:"native", Null:"native"}))
     , "[true,null]", "json.parseat.options")
 
+; ---- Container:"Map" is the plain-types mode: plain Map AND plain Array -------
+m := JSON.Parse('{"o":{"t":true},"arr":[true,null]}', {Container:"Map"})
+Assert.eq(Type(m), "Map", "json.map.object.type")
+Assert.eq(Type(m["arr"]), "Array", "json.map.array.type")          ; plain Array, not JSON.Array
+; No tags in Map mode, so keywords collapse to 1/0/"" on the way out.
+Assert.eq(JSON.Stringify(m), '{"arr":[1,""],"o":{"t":1}}', "json.map.no.tags")
+; Default (JSON.Object) mode still round-trips array keywords exactly.
+Assert.eq(JSON.Stringify(JSON.Parse('{"arr":[true,null]}')), '{"arr":[true,null]}', "json.default.array.roundtrip")
+
+; ---- JSON.Validate: verdict without materializing, never throws -------------
+vg := JSON.Validate('{"a":[1,2],"b":true}')
+Assert.truthy(vg.Valid, "json.validate.good")
+Assert.eq(vg.Code, "", "json.validate.good.nocode")
+vb := JSON.Validate('{"a":1} trailing')
+Assert.falsy(vb.Valid, "json.validate.bad")
+Assert.eq(vb.Code, "TrailingContent", "json.validate.bad.code")
+Assert.truthy(vb.Pos > 0 && vb.Line >= 1 && vb.Col >= 1, "json.validate.position")
+Assert.falsy(JSON.Validate('{"a":').Valid, "json.validate.truncated")
+Assert.falsy(JSON.Validate('[1,2,]').Valid, "json.validate.trailingcomma.strict")
+Assert.truthy(JSON.Validate('[1,2,]', {AllowTrailingCommas:true}).Valid, "json.validate.trailingcomma.opt")
+; Validate must agree with Parse on the whole JSONTestSuite corpus, or one has
+; drifted from the other. This is the guard that lets them share one grammar.
+vChecked := 0, vDisagree := 0
+Loop Files, A_ScriptDir "\..\fixtures\jsonsuite\*.json" {
+    k := SubStr(A_LoopFileName, 1, 1)
+    if (k = "i")
+        continue
+    txt := ""
+    try txt := FileRead(A_LoopFileFullPath, "UTF-8")
+    pOk := true
+    try JSON.Parse(txt)
+    catch
+        pOk := false
+    if (pOk != (JSON.Validate(txt).Valid ? true : false))
+        vDisagree++
+    vChecked++
+}
+Assert.eq(vDisagree, 0, "json.validate.agrees.with.parse")
+Assert.truthy(vChecked >= 283, "json.validate.corpus.covered")
+
+; ---- Buffer parse: raw bytes, BOM-sniffed, invalid encoding is an error -----
+MkUtf8Buf(str) {
+    b := Buffer(StrPut(str, "UTF-8") - 1)
+    StrPut(str, b, "UTF-8")
+    return b
+}
+bo := JSON.Parse(MkUtf8Buf('{"from":"buffer","n":42}'))
+Assert.eq(bo["from"], "buffer", "json.buffer.parse")
+Assert.eq(bo["n"], 42, "json.buffer.parse.num")
+; Invalid UTF-8 in a Buffer is a real error, not a silent U+FFFD substitution --
+; the whole reason a byte path exists. (FileRead would have repaired it first.)
+badBuf := Buffer(3)
+NumPut("UChar", 0x22, "UChar", 0xFF, "UChar", 0x22, badBuf)   ; "  <FF>  " inside quotes
+threwEnc := false
+try JSON.Parse(badBuf)
+catch as e
+    threwEnc := InStr(e.Message, "not valid")
+Assert.truthy(threwEnc, "json.buffer.invalid.utf8.errors")
+
+; ---- ParseFile: read+parse a file's bytes directly -------------------------
+jfTmp := A_Temp "\qa_json_" A_TickCount ".json"
+jf := FileOpen(jfTmp, "w", "UTF-8")
+jf.Write('{"file":true,"list":[1,2,3]}')
+jf.Close()
+fo := JSON.ParseFile(jfTmp)
+Assert.eq(fo["file"], 1, "json.parsefile.value")
+Assert.eq(fo["list"].Length, 3, "json.parsefile.array")
+FileDelete(jfTmp)
+threwMissing := false
+try JSON.ParseFile(A_Temp "\qa_json_absent_" A_TickCount ".json")
+catch
+    threwMissing := true
+Assert.truthy(threwMissing, "json.parsefile.missing.throws")
+
+; ---- review fixes: Validate/Parse must agree under non-default options too ---
+; The corpus agreement check runs default options; these pin the option branches.
+JsonAgree(txt, opt) {
+    p := true
+    try JSON.Parse(txt, opt)
+    catch
+        p := false
+    return p = (JSON.Validate(txt, opt).Valid ? true : false)
+}
+; AllowTopLevelScalar:false -- Validate used to accept scalars Parse rejects.
+for badScalar in ["42", '"s"', "true", "null", "3.14"]
+    Assert.truthy(JsonAgree(badScalar, {AllowTopLevelScalar:false}), "json.validate.notoplevel.agree." badScalar)
+Assert.falsy(JSON.Validate("42", {AllowTopLevelScalar:false}).Valid, "json.validate.notoplevel.rejects")
+Assert.truthy(JSON.Validate("[1]", {AllowTopLevelScalar:false}).Valid, "json.validate.notoplevel.array.ok")
+
+; UTF-16 with an odd byte count is malformed, not silently truncated.
+oddBuf := Buffer(5)
+NumPut("UChar", 0xFF, "UChar", 0xFE, "UChar", 0x41, "UChar", 0x00, "UChar", 0xAA, oddBuf)  ; BOM "A" + stray
+threwOdd := false
+try JSON.Parse(oddBuf)
+catch as e
+    threwOdd := InStr(e.Message, "odd number")
+Assert.truthy(threwOdd, "json.buffer.utf16.odd.errors")
+evenBuf := Buffer(8)
+NumPut("UChar", 0xFF, "UChar", 0xFE, "UChar", 0x5B, "UChar", 0x00, "UChar", 0x31, "UChar", 0x00, "UChar", 0x5D, "UChar", 0x00, evenBuf)
+Assert.eq(JSON.Stringify(JSON.Parse(evenBuf)), "[1]", "json.buffer.utf16le.decodes")
+
+; Validate accepts a Buffer (Parse does), and reports bad encoding as Valid=0.
+Assert.truthy(JSON.Validate(MkUtf8Buf('[1,2,3]')).Valid, "json.validate.buffer")
+badEncBuf := Buffer(3)
+NumPut("UChar", 0x22, "UChar", 0xFF, "UChar", 0x22, badEncBuf)
+vbe := JSON.Validate(badEncBuf)
+Assert.falsy(vbe.Valid, "json.validate.buffer.badenc")
+Assert.eq(vbe.Code, "BadEncoding", "json.validate.buffer.badenc.code")
+
+; Unknown Encoding names error rather than silently decoding as UTF-8; CPnnn works.
+cpBuf := Buffer(4)
+NumPut("UChar", 0x22, "UChar", 0x93, "UChar", 0x94, "UChar", 0x22, cpBuf)  ; CP1252 curly quotes
+Assert.eq(JSON.Parse(cpBuf, {Encoding:"CP1252"}), Chr(0x201C) Chr(0x201D), "json.encoding.cp1252")
+threwEnc := false
+try JSON.Parse(MkUtf8Buf('{}'), {Encoding:"NotAnEncoding"})
+catch as e
+    threwEnc := InStr(e.Message, "encoding")
+Assert.truthy(threwEnc, "json.encoding.unknown.errors")
+
 Assert.Summary()
