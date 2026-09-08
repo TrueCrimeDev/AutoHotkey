@@ -11,7 +11,7 @@ as a plain function.
 > file remains the reference implementation and the function-call / client API
 > (`MCP()`, `McpClient`).
 
-Requires the fork engine (`bin/AutoHotkey64.exe`, `2.1-alpha.30+Console`) for the
+Requires the fork engine (`2.1-alpha.31+Console`) for the
 `TSParse` / `Print` BIFs.
 
 ## Three ways to use it

@@ -1,6 +1,6 @@
 # Updates — Fork Changes Reference
 
-This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.29` in this fork. Use it as the entry point for "what's new and how do I use it."
+This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.31` in this fork. Use it as the entry point for "what's new and how do I use it."
 
 ## Overview at a glance
 
@@ -18,13 +18,13 @@ This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.
 | External-signal exit code | `code=130` for Ctrl+C / close | Always on (gate is whether crash log is on) |
 | Interactive / pipe-driven REPL | `repl` subcommand (see §16) | n/a — explicit mode |
 
-Everything else inherited from `v2.1-alpha.29` works as documented upstream (tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc. — see `examples/Alpha29_Example.ahk` for a runnable showcase).
+Everything else inherited from `v2.1-alpha.31` works as documented upstream (implicit `export` for names defined inside a `#Module`, tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc. — see `examples/Alpha31_Example.ahk` for a runnable showcase of the alpha.31 changes).
 
 ---
 
 ## 1. `Eval(expr)` — runtime expression evaluator
 
-Evaluates an AHK expression string against the caller's live scope. Reads and writes caller locals, calls methods, runs alpha.29 expression features (maybe operator, unset propagation) — anything you could type as the right-hand side of `x := ...` works inside `Eval(...)`.
+Evaluates an AHK expression string against the caller's live scope. Reads and writes caller locals, calls methods, runs alpha.31 expression features (maybe operator, unset propagation) — anything you could type as the right-hand side of `x := ...` works inside `Eval(...)`.
 
 ### Quick example
 
@@ -303,7 +303,7 @@ Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] ke
 ### Example log
 
 ```
-[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.29+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64.exe /CrashLog=C:\logs\ahk.log app.ahk"
+[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.31+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64.exe /CrashLog=C:\logs\ahk.log app.ahk"
 [2026-05-13 21:43:22] [ERROR] pid=12345 type=TypeError mode=Exit
   Message: This value of type "String" has no method named "DoStuff".
   File: C:\Users\me\Lib\Clip.ahk

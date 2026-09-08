@@ -5,7 +5,7 @@ errors go to `stderr` (as text **or** JSON), failures return meaningful exit cod
 can be suppressed, and the debugger speaks DBGp so an LLM can drive it. Everything else is
 stock AutoHotkey.
 
-![engine](https://img.shields.io/badge/engine-2.1--alpha.30%2BConsole-5B9FEF)
+![engine](https://img.shields.io/badge/engine-2.1--alpha.31%2BConsole-5B9FEF)
 ![based on](https://img.shields.io/badge/based%20on-AutoHotkey%20v2.1--alpha-22D3EE)
 [![Build AutoHotkey](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml/badge.svg)](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml)
 ![license](https://img.shields.io/badge/license-GPL--2.0-7BC96F)
@@ -51,7 +51,7 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 | **stdout helper** | `FileOpen("*","w")` boilerplate | `Print(fmt, args*)` — UTF-8, `Format`-aware |
 | **Debugger** | DBGp (desktop-oriented) | Same DBGp, wired to an MCP server for LLM-driven debugging |
 
-None of this touches the language. Scripts that run on upstream `v2.1-alpha.30` run here
+None of this touches the language. Scripts that run on upstream `v2.1-alpha.31` run here
 unchanged; the additions are flags, subcommands, and a few opt-in built-ins.
 
 ---
@@ -214,7 +214,7 @@ Print("{ok: true}")                 ; single-arg form is literal — braces surv
 ### `Eval(expr)` — evaluate an expression in live scope *(opt-in)*
 
 Runs any AHK expression string against the caller's variables — reads and writes locals, calls
-methods, supports alpha.30 expression features. Gated behind `#EnableEval` (or the `/Eval`
+methods, supports alpha.31 expression features. Gated behind `#EnableEval` (or the `/Eval`
 flag) so it can never run unless you ask for it.
 
 ```ahk
@@ -252,7 +252,7 @@ live.
 
 ```text
 $ bin\AutoHotkey64.exe repl
-AutoHotkey v2.1-alpha.30+Console REPL - one expression per line; .help for commands
+AutoHotkey v2.1-alpha.31+Console REPL - one expression per line; .help for commands
 >>> x := 10
 10
 >>> x * 4
@@ -290,7 +290,7 @@ last events survive even a hard crash. It works regardless of how the script was
 including launchers that discard `stderr`.
 
 ```text
-[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.30+Console script=C:\app\app.ahk ...
+[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.31+Console script=C:\app\app.ahk ...
 [2026-05-13 21:43:22] [ERROR] pid=12345 type=TypeError mode=Exit
   Message: This value of type "String" has no method named "DoStuff".
   File: C:\app\Lib\Clip.ahk

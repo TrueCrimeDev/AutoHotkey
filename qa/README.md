@@ -31,7 +31,7 @@ cannot survive a test that fails to load.
 Create `qa/tests/test_<topic>.ahk`:
 
 ```autohotkey
-#Requires AutoHotkey v2.1-alpha.30
+#Requires AutoHotkey v2.1-alpha.31
 #Include ..\Assert.ahk
 
 Assert.eq(actual, expected, "label")

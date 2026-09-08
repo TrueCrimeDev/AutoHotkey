@@ -189,10 +189,13 @@ Key commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`,
 
 ---
 
-# Current State & Open Items (updated 2026-08-26)
+# Current State & Open Items (updated 2026-09-08)
 
-- `bin/AutoHotkey64.exe` = TSParse-enabled CI build, `2.1-alpha.30+Console`.
-  The engine **cannot be built in WSL** (MSVC-only for CI; canonical local
+- `bin/AutoHotkey64.exe` = TSParse-enabled CI build. Source is at
+  `2.1-alpha.31+Console` (upstream merged in `c73ae823`), but the binary on
+  disk is still `2.1-alpha.30+Console` until the running app releases its lock
+  and `bin/` is rebuilt; `bin_harness/AutoHotkey64Harness.exe` carries alpha.31
+  today. The engine **cannot be built in WSL** (MSVC-only for CI; canonical local
   route is `build.bat` via mingw-w64/`C:\msys64` from Windows). To verify
   source/ changes, use the GitHub Actions PR build and `gh run download`.
 - `qa/` is the fork regression suite (subprocess-per-test; see `qa/README.md`).
@@ -206,6 +209,16 @@ Open items:
   `examples/AlphaNN_Example.ahk`, `examples/alpha_tricks.ahk`,
   `examples/combined_alpha22_23.ahk` (+ `examples/particle_gui.ahk` via
   `#Include`). Removed by upstream commits `7427d3bc` / `34b17011`.
+- [ ] Fix the **7 stale module example files** (5 examples + 2 libs) that use the `export` keyword,
+  removed in upstream alpha.31 (names defined inside a `#Module` are now
+  exported implicitly; `#Import Export Name` re-exports an import):
+  `examples/alpha21/02_module_basics.ahk`, `examples/alpha21/04_import_selective.ahk`,
+  `examples/alpha21/05_lazy_module_init.ahk`, `examples/alpha21/06_module_file_scoping.ahk`
+  (+ `examples/alpha21/lib/StringUtils.ahk` / `lib/Collections.ahk` via
+  `#Import`), `examples/alpha22/05_export_function_call.ahk`. `export Foo(x)`
+  now parses as a call to an unassigned global `export` — exit 12 ("Return's
+  parameter should be blank except inside a function") or exit 10 at runtime.
+  Merged in `c73ae823` (upstream range `34b17011..v2.1-alpha.31`).
 - [ ] Faster tree-sitter path: build `tree-sitter-ahk.wasm` + `web-tree-sitter`
   for in-process, incremental parsing in a Node host. Needs the grammar
   **source** — only the `.dll` is vendored.

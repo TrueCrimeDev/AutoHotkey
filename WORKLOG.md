@@ -11,8 +11,9 @@ green `build.bat` rebuild; leave the tree green.
 
 **How to run things:**
 - Interpreter: `bin\AutoHotkey64.exe /ErrorStdOut <script>` — console
-  build, stdout works headless, exit codes propagate. Currently
-  `2.1-alpha.30+Console`.
+  build, stdout works headless, exit codes propagate. Source is at
+  `2.1-alpha.31+Console`; `bin\` is still the alpha.30 build until rebuilt
+  (`bin_harness\AutoHotkey64Harness.exe` carries alpha.31).
 - Build (only after source/ changes): `build.bat` from repo root
   (mingw-w64 GCC via `C:\msys64`, ~static binary to `bin\`).
 - Test suite: NONE YET (see Next). `tests/` holds 36 ad-hoc scripts,
@@ -174,3 +175,50 @@ unlogged loop session between 3 and now.)
   pin intended behavior with a qa test (upstream v2 documents "" for an
   empty file); check whether this is an alpha change or a fork regression.
 - Suite green from WSL: **72 passed, 0 failed, 0 crashed** across 6 files.
+
+### Session 5 (2026-09-08) — upstream v2.1-alpha.31 merge
+
+- Merged upstream tag `v2.1-alpha.31` into `alpha` as `c73ae823` (23 upstream
+  commits, range `34b17011..v2.1-alpha.31`, incl. the v2.0.27 merge). Single
+  conflict in `source/script.cpp`: the fork had hoisted a `class_export_type`
+  declaration above a `goto`; upstream removed the `export` parsing that fed
+  it, so both the declaration and its assignment were dropped. Version bump in
+  `cec42523` (`source/ahkversion.h`, `build_local.bat`); the engine now
+  identifies as `2.1-alpha.31+Console` (`A_AhkVersion` probed).
+- Verified with a mingw harness build to `bin_harness/AutoHotkey64Harness.exe`
+  and `qa\run.ahk` on it: **615 passed, 29 failed, 0 crashed across 10 files**.
+  All 29 failures are `test_json_regressions.ahk`, which pins JSON code parked
+  in the user's stash (pre-existing, not merge-related); every committed suite
+  is green. `tests/test_console_cli.py::test_numeric_file_version_matches_alpha31`
+  passes against the harness (file version `2.1.0.31`).
+- `bin/AutoHotkey64.exe` is **still the alpha.30 build** — locked by the
+  running app, not rebuilt; only `bin_harness/` carries alpha.31.
+- Stale `export` examples (upstream removed the keyword; names defined inside a
+  `#Module` are exported implicitly, `#Import Export Name` re-exports an
+  import): `examples/alpha21/02_module_basics.ahk`, `04_import_selective.ahk`,
+  `05_lazy_module_init.ahk`, `06_module_file_scoping.ahk` (+ its
+  `lib/StringUtils.ahk` / `lib/Collections.ahk`) exit 12 — `export Foo(x)` with
+  a `{` block on the next line now parses as a call to `export`, so the body's
+  `return` is "outside a function"; `examples/alpha22/05_export_function_call.ahk`
+  loads with a warning and exits 10 ("This global variable has not been assigned
+  a value. Specifically: export"); it ran clean (exit 0) on the alpha.30
+  `bin/` engine. Logged as a CLAUDE.md open item; example files untouched.
+- New this session (sibling agents): `docs/alpha/v2.1-alpha.31.md` (with a
+  **Next** link added to `docs/alpha/v2.1-alpha.30.md` and its "latest release"
+  blurb removed), `examples/Alpha31_Example.ahk`, `qa/tests/test_alpha31.ahk`
+  (59 asserts, counted in the suite total above).
+- Identity bump alpha.30 → alpha.31 in README.md, CLAUDE.md, updates.md,
+  qa/README.md, debugger-tool/mcp-ahk/README.md, its `conformance_native.py`,
+  and `tests/test_console_cli.py`. Historical "verified on alpha.30" statements,
+  `@since` tags, `docs/alpha/*`, and existing `#Requires v2.1-alpha.30` lines
+  left as-is (still satisfied by alpha.31).
+- Review pass: the CLAUDE.md engine bullet and the mcp-ahk README requirement
+  no longer claim `bin/` is alpha.31 (it is alpha.30 until rebuilt);
+  updates.md `Eval` blurb and crash-log sample bumped alpha.29 → alpha.31
+  (log line shape verified on the harness: `ahk=2.1-alpha.31+Console`).
+- After restoring the parked console-review work on top of the five commits:
+  harness rebuilt (`revision=d466022e-dirty`), full gate
+  `tests/run_console_gate.py` **9/9 suites**, `qa: 645 passed, 0 failed,
+  0 crashed across 10 file(s)` (`test_json_regressions.ahk` green again once
+  its JSON code was back). `tests/test_console_cli.py` and
+  `tests/test_powershell_cli.py` (both still uncommitted) now expect alpha.31.
