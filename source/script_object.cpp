@@ -690,8 +690,9 @@ Object::~Object()
 				ASSERT(nested_size >= sizeof(Object));
 				for (size_t i = 0; i < count; ++i)
 				{
-					auto nested = (Object*)(nest -= nested_size); // Destruct right to left.
-					nested->~Object();
+					auto p = (Object*)(nest -= nested_size); // Destruct right to left.
+					if (*(UINT_PTR*)p) // vftbl initialized
+						p->~Object();
 				}
 			}
 		}
@@ -1705,7 +1706,7 @@ Object *Object::CreateClass(LPTSTR aClassName, Object *aBase, Object *aPrototype
 		ctor->Release();
 	}
 
-	auto var = g_script.FindOrAddVar(aClassName, 0, VAR_DECLARE_GLOBAL | VAR_EXPORTED);
+	auto var = g_script.FindOrAddVar(aClassName, 0, VAR_DECLARE_GLOBAL);
 	var->AssignSkipAddRef(class_obj);
 	var->MakeReadOnly();
 
@@ -3333,9 +3334,13 @@ Object::PropEnum::PropEnum(Object *aObject)
 }
 
 
-Object::PropEnum::PropEnum(Object *aObject, ExprTokenType &aThisToken)
+Object::PropEnum::PropEnum(Object *aObject, ExprTokenType &aThisToken, LPTSTR aMemToFree)
 	: PropEnum(aObject)
 {
+	// When called by the debugger, any string or reference in aThisToken will outlive
+	// this PropEnum.  Other callers must utilize aMemToFree for strings (which would
+	// occur with Props(a:="b"), relevant when String.Prototype is modified).
+	mMemToFree = aMemToFree;
 	mThisToken.CopyValueFrom(aThisToken);
 }
 
@@ -3344,6 +3349,7 @@ Object::PropEnum::~PropEnum()
 {
 	mObject->Release();
 	delete[] mIndex;
+	free(mMemToFree);
 }
 
 
