@@ -736,6 +736,14 @@ private:
 
 	index_t ParamToZeroIndex(ExprTokenType &aParam);
 
+protected:
+	// Containers with per-item metadata must follow every storage mutation,
+	// including calls made through Array. Plain arrays need no extra work.
+	virtual ResultType OnInsert(index_t aIndex, index_t aCount) { return OK; }
+	virtual void OnRemove(index_t aIndex, index_t aCount) {}
+	virtual void OnSet(index_t aIndex) {}
+	bool CloneArrayTo(Array &aClone); // Releases aClone on failure, like CloneTo.
+
 public:
 	enum : index_t
 	{
@@ -757,7 +765,7 @@ public:
 	bool Append(LPTSTR aValue, size_t aValueLength = -1) { ExprTokenType t(aValue, aValueLength); return Append(t); }
 	bool Append(__int64 aValue) { ExprTokenType t(aValue); return Append(t); }
 
-	Array *Clone();
+	virtual Array *Clone();
 
 	bool ItemToToken(index_t aIndex, ExprTokenType &aToken);
 	ResultType GetEnumItem(UINT &aIndex, Var *, Var *, int);

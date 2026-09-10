@@ -4,6 +4,34 @@ project(AutoHotkey VERSION 2.1.0 LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Keep source identity separate from the language version (#Requires compares it).
+# Release packagers without Git may supply -DAHK_BUILD_REVISION=<revision>.
+if(NOT DEFINED AHK_BUILD_REVISION)
+    set(AHK_BUILD_REVISION "unknown")
+    find_package(Git QUIET)
+    if(Git_FOUND)
+        execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short=12 HEAD
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" OUTPUT_VARIABLE AHK_GIT_REVISION
+            OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE AHK_GIT_RESULT)
+        if(AHK_GIT_RESULT EQUAL 0)
+            set(AHK_BUILD_REVISION "${AHK_GIT_REVISION}")
+            execute_process(COMMAND "${GIT_EXECUTABLE}" diff --quiet HEAD --
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" RESULT_VARIABLE AHK_GIT_DIRTY)
+            if(AHK_GIT_DIRTY EQUAL 1)
+                string(APPEND AHK_BUILD_REVISION "-dirty")
+            endif()
+            foreach(git_file HEAD index)
+                execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --git-path "${git_file}"
+                    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" OUTPUT_VARIABLE AHK_GIT_PATH
+                    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+                set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${AHK_GIT_PATH}")
+            endforeach()
+        endif()
+    endif()
+endif()
+set_property(SOURCE source/ahkversion.cpp APPEND PROPERTY COMPILE_DEFINITIONS
+    "AHK_BUILD_REVISION=\"${AHK_BUILD_REVISION}\"")
+
 if(MSVC)
     enable_language(ASM_MASM)
 endif()
@@ -210,8 +238,21 @@ function(configure_ahk_executable target_name output_dir)
 endfunction()
 
 # Standard GUI executable.
+set(AHK_OUTPUT_DIR "bin" CACHE STRING "Runtime output directory, relative to the source tree")
 add_executable(${OUTPUT_NAME} WIN32 ${AHK_SOURCES} ${AHK_RESOURCES})
-configure_ahk_executable(${OUTPUT_NAME} bin)
+configure_ahk_executable(${OUTPUT_NAME} "${AHK_OUTPUT_DIR}")
+
+# Shell-facing engine. The console subsystem gives PowerShell real stdin/stdout
+# handles and makes interactive calls wait until the engine exits.
+set(CONSOLE_OUTPUT_NAME "${OUTPUT_NAME}Console")
+add_executable(${CONSOLE_OUTPUT_NAME} EXCLUDE_FROM_ALL ${AHK_SOURCES} ${AHK_RESOURCES})
+configure_ahk_executable(${CONSOLE_OUTPUT_NAME} "${AHK_OUTPUT_DIR}")
+target_compile_definitions(${CONSOLE_OUTPUT_NAME} PRIVATE AHK_CONSOLE_ENTRYPOINT)
+if(MSVC)
+    target_link_options(${CONSOLE_OUTPUT_NAME} PRIVATE /SUBSYSTEM:CONSOLE /ENTRY:wWinMainCRTStartup)
+elseif(MINGW)
+    target_link_options(${CONSOLE_OUTPUT_NAME} PRIVATE -municode -Wl,--subsystem,console)
+endif()
 
 # Harness test executable: console subsystem with the same WinMain entry point.
 set(HARNESS_OUTPUT_NAME "${OUTPUT_NAME}Harness")
@@ -234,5 +275,5 @@ if(MINGW)
 endif()
 
 message(STATUS "Building AutoHotkey with _ScriptGetLines support")
-message(STATUS "Output: ${CMAKE_SOURCE_DIR}/bin/${OUTPUT_NAME}.exe")
+message(STATUS "Output: ${CMAKE_SOURCE_DIR}/${AHK_OUTPUT_DIR}/${OUTPUT_NAME}.exe")
 message(STATUS "Harness test output: ${CMAKE_SOURCE_DIR}/bin_harness/${HARNESS_OUTPUT_NAME}.exe")

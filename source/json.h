@@ -105,20 +105,23 @@ public:
 // a bare true/false/null inside an array round-trips too. Derives from Array,
 // so `value is Array` and every Array method keep working unchanged.
 //
-// Array's own mutators know nothing about the tags, so any change to the
-// array's length moves elements out from under them; TagAt() detects that and
-// reports no tag rather than mislabelling a value. Untouched arrays — the case
-// that matters for read-modify-write of a config file — keep full fidelity.
+// Array's storage mutation hooks keep tags with untouched items and clear them
+// for assigned values, so an edit never revives the source document's value.
 class JsonArray : public Array
 {
 	JsonTag *mTags = nullptr;
-	index_t mTagCount = 0;  // Length when the tags were recorded
+	index_t mTagCount = 0;
+
+	ResultType OnInsert(index_t aIndex, index_t aCount) override;
+	void OnRemove(index_t aIndex, index_t aCount) override;
+	void OnSet(index_t aIndex) override;
 
 public:
 	static Object *sPrototype;
 
 	~JsonArray() { free(mTags); }
 	static JsonArray *Create();
+	Array *Clone() override;
 
 	bool AppendTagged(ExprTokenType &aValue, JsonTag aTag);
 	JsonTag TagAt(index_t aIndex)

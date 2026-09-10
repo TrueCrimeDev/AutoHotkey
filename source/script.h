@@ -1196,6 +1196,7 @@ public:
 
 	static LPTSTR LogToText(LPTSTR aBuf, int aBufSize);
 	LPTSTR ToText(LPTSTR aBuf, int aBufSize, bool aCRLF, DWORD aElapsed = 0, bool aLineWasResumed = false, bool aLineNumber = true);
+	void TraceExecution();
 
 	ResultType PreparseError(LPTSTR aErrorText, LPTSTR aExtraInfo = _T(""));
 	// Call this LineError to avoid confusion with Script's error-displaying functions:
@@ -2305,7 +2306,7 @@ public:
 	bool mReplMode; // true when invoked via the `repl` subcommand (interactive/pipe-driven eval session).
 	bool mMcpMode; // true when invoked via the `mcp` subcommand (stdio JSON-RPC MCP server; no script is loaded).
 	bool mDiagJson; // true to emit structured JSON diagnostics.
-	bool mTrace; // true to print each executed line number to stderr.
+	bool mTrace; // true to print executing statements to stderr.
 	bool mErrorStdOut; // true if load-time syntax errors should be sent to stdout vs. a MsgBox.
 	bool mErrorStdOutColor; // true if ANSI colors should be used in /ErrorStdOut output.
 	bool mHasPendingExitCode = false; // true if mPendingExitCode was explicitly set by script/runtime.
@@ -2349,6 +2350,7 @@ public:
 	void SetTrayTip(LPTSTR aText);
 	ResultType AutoExecSection();
 	ResultType ExecuteModule(ScriptModule *aModule);
+	void ReplPrepare(); // Reserve JSON result stdout before the host script can open it.
 	void ReplStart(); // Print banner (interactive), force stderr errors, spawn the stdin reader thread.
 	void ReplDrainInput(); // Main-thread handler for AHK_REPL_INPUT; drains the reader thread's mailbox.
 	bool IsPersistent();

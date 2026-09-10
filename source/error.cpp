@@ -26,6 +26,8 @@ GNU General Public License for more details.
 #include "ahkversion.h" // REPL banner.
 #include "ts_api.h" // TSParse + the mcp verb's ast_outline share the tree-sitter loader.
 #include <richedit.h>
+#include <string>
+#include <stdexcept>
 
 
 ResultType Line::PreparseError(LPTSTR aErrorText, LPTSTR aExtraInfo)
@@ -2407,9 +2409,8 @@ bif_impl FResult Eval(StrArg aExpression, ResultToken &aRetVal)
 
 // Write a wide string + trailing newline to stdout as UTF-8.
 // Shared by BIF_Print and ShowMainWindow's console mirror.
-void PrintWideLine(LPCTSTR text, int wlen)
+static void PrintWideLineToHandle(HANDLE hOut, LPCTSTR text, int wlen)
 {
-	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (hOut == INVALID_HANDLE_VALUE || hOut == NULL)
 		return; // No stdout attached (e.g. GUI app without a console); silently do nothing.
 
@@ -2431,9 +2432,15 @@ void PrintWideLine(LPCTSTR text, int wlen)
 		WideCharToMultiByte(CP_UTF8, 0, text, wlen, buf, u8len, nullptr, nullptr);
 	buf[u8len] = '\n';
 
-	DWORD written;
-	WriteFile(hOut, buf, (DWORD)(u8len + 1), &written, nullptr);
+	DWORD written, offset = 0, size = (DWORD)(u8len + 1);
+	while (offset < size && WriteFile(hOut, buf + offset, size - offset, &written, nullptr) && written)
+		offset += written;
 	free(heap_buf);
+}
+
+void PrintWideLine(LPCTSTR text, int wlen)
+{
+	PrintWideLineToHandle(GetStdHandle(STD_OUTPUT_HANDLE), text, wlen);
 }
 
 BIF_DECL(BIF_Print)
@@ -2486,6 +2493,20 @@ static HANDLE g_ReplLineDone = NULL; // Auto-reset; signaled after each line is 
 static PVOID volatile g_ReplPendingLine = NULL; // Mailbox slot: heap line awaiting the main thread.
 static LONG volatile g_ReplEofPending = 0; // Set when stdin reaches EOF (or the reader gives up).
 static bool g_ReplInteractive = false; // Stdin is a console (banner + prompt) vs a pipe.
+static HANDLE g_ReplProtocolOut = NULL;
+static LONG volatile g_ReplInputError = 0;
+
+void Script::ReplPrepare()
+{
+	if (mReplMode && mDiagJson)
+	{
+		// Reserve stdout before host-script initialization. All normal AHK
+		// output paths (Print/FileAppend/FileOpen) now see stderr; only the
+		// result writer uses the original stdout handle.
+		g_ReplProtocolOut = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetStdHandle(STD_OUTPUT_HANDLE, GetStdHandle(STD_ERROR_HANDLE));
+	}
+}
 
 static void ReplWritePrompt()
 {
@@ -2501,7 +2522,12 @@ static LPTSTR ReplUtf8ToHeapLine(const char *aBytes, size_t aLen)
 {
 	while (aLen && aBytes[aLen - 1] == '\r')
 		--aLen;
-	int wlen = aLen ? MultiByteToWideChar(CP_UTF8, 0, aBytes, (int)aLen, nullptr, 0) : 0;
+	int wlen = aLen ? MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, aBytes, (int)aLen, nullptr, 0) : 0;
+	if (aLen && (!wlen || memchr(aBytes, '\0', aLen)))
+	{
+		InterlockedExchange(&g_ReplInputError, 1);
+		return _tcsdup(_T(""));
+	}
 	LPTSTR line = (LPTSTR)malloc((wlen + 1) * sizeof(TCHAR));
 	if (!line)
 		return nullptr;
@@ -2529,7 +2555,8 @@ static DWORD WINAPI ReplReaderThread(LPVOID)
 	{
 		for (;;)
 		{
-			ReplWritePrompt();
+			if (!g_script.mDiagJson)
+				ReplWritePrompt();
 			WCHAR wbuf[16384];
 			DWORD rd = 0;
 			if (!ReadConsoleW(hIn, wbuf, _countof(wbuf) - 1, &rd, nullptr) || rd == 0)
@@ -2549,6 +2576,7 @@ static DWORD WINAPI ReplReaderThread(LPVOID)
 	{
 		// Pipe/file stdin: accumulate UTF-8 bytes, split on '\n'.
 		size_t cap = 8192, len = 0;
+		bool first_line = true;
 		char *acc = (char *)malloc(cap);
 		bool eof = !acc;
 		while (!eof)
@@ -2577,7 +2605,11 @@ static DWORD WINAPI ReplReaderThread(LPVOID)
 			size_t line_len = nl ? (size_t)(nl - acc) : len;
 			if (line_len || nl) // Post blank mid-stream lines; skip a zero-length tail at EOF.
 			{
-				LPTSTR line = ReplUtf8ToHeapLine(acc, line_len);
+				size_t bom = first_line && line_len >= 3
+					&& (unsigned char)acc[0] == 0xEF && (unsigned char)acc[1] == 0xBB
+					&& (unsigned char)acc[2] == 0xBF ? 3 : 0;
+				first_line = false;
+				LPTSTR line = ReplUtf8ToHeapLine(acc + bom, line_len - bom);
 				if (!line)
 					break;
 				ReplPostAndWait(line);
@@ -2596,21 +2628,55 @@ static DWORD WINAPI ReplReaderThread(LPVOID)
 
 // Print one REPL outcome.  JSON mode emits exactly one stdout line per input line so a
 // consumer never desynchronizes; text mode prints values to stdout, errors to stderr.
-static void ReplPrintOutcome(bool aOk, LPCTSTR aType, LPCTSTR aValue)
+static void ReplAppendJsonString(std::wstring &out, LPCTSTR value, size_t length)
 {
+	out += L'"';
+	for (size_t i = 0; i < length; ++i)
+	{
+		WCHAR c = value[i];
+		if (c == L'"' || c == L'\\')
+			out += L'\\', out += c;
+		else if (c < 0x20 || (c >= 0xD800 && c <= 0xDFFF))
+		{
+			// Escaping UTF-16 code units preserves pairs and lone surrogates,
+			// and length-based iteration preserves embedded NUL characters.
+			TCHAR escaped[7];
+			sntprintf(escaped, _countof(escaped), _T("\\u%04x"), (unsigned)c);
+			out += escaped;
+		}
+		else
+			out += c;
+	}
+	out += L'"';
+}
+
+static void ReplPrintOutcome(bool aOk, LPCTSTR aType, LPCTSTR aValue, size_t aLength = (size_t)-1)
+{
+	if (aLength == (size_t)-1)
+		aLength = _tcslen(aValue);
 	if (g_script.mDiagJson)
 	{
-		TCHAR esc_type[128], esc_val[4096], out[4400];
-		EscapeJsonText(esc_type, _countof(esc_type), aType);
-		EscapeJsonText(esc_val, _countof(esc_val), aValue);
-		sntprintf(out, _countof(out), _T("{\"kind\":\"result\",\"ok\":%s,\"type\":\"%s\",\"value\":\"%s\"}")
-			, aOk ? _T("true") : _T("false"), esc_type, esc_val);
-		PrintWideLine(out, (int)_tcslen(out));
+		try
+		{
+			std::wstring out = aOk ? L"{\"kind\":\"result\",\"ok\":true,\"type\":" : L"{\"kind\":\"result\",\"ok\":false,\"type\":";
+			ReplAppendJsonString(out, aType, _tcslen(aType));
+			out += L",\"value\":";
+			ReplAppendJsonString(out, aValue, aLength);
+			out += L'}';
+			if (out.size() > INT_MAX)
+				throw std::length_error("REPL result too large");
+			PrintWideLineToHandle(g_ReplProtocolOut, out.c_str(), (int)out.size());
+		}
+		catch (const std::exception &)
+		{
+			static const TCHAR error[] = _T("{\"kind\":\"result\",\"ok\":false,\"type\":\"MemoryError\",\"value\":\"Unable to serialize the complete result.\"}");
+			PrintWideLineToHandle(g_ReplProtocolOut, error, _countof(error) - 1);
+		}
 		return;
 	}
 	if (aOk)
 	{
-		PrintWideLine(aValue, (int)_tcslen(aValue));
+		PrintWideLine(aValue, (int)aLength);
 		return;
 	}
 	TCHAR out[4400];
@@ -2658,14 +2724,25 @@ void Script::ReplDrainInput()
 	while (*expr == ' ' || *expr == '\t')
 		++expr;
 
+	if (InterlockedExchange(&g_ReplInputError, 0))
+	{
+		ReplPrintOutcome(false, _T("SyntaxError"), _T("Input must be valid UTF-8 without NUL bytes."));
+		free(line);
+		SetEvent(g_ReplLineDone);
+		return;
+	}
 	if (!*expr) // Blank line: no-op.
 	{
+		if (mDiagJson)
+			ReplPrintOutcome(true, _T("Unset"), _T(""));
 		free(line);
 		SetEvent(g_ReplLineDone);
 		return;
 	}
 	if (!_tcsicmp(expr, _T(".exit")))
 	{
+		if (mDiagJson)
+			ReplPrintOutcome(true, _T("Unset"), _T(""));
 		free(line);
 		SetEvent(g_ReplLineDone);
 		ExitApp(EXIT_EXIT);
@@ -2674,7 +2751,10 @@ void Script::ReplDrainInput()
 	if (!_tcsicmp(expr, _T(".help")))
 	{
 		static const TCHAR help_text[] = _T("REPL: one expression per line (commas allowed: x := 1, y := 2).  .exit or EOF quits.  Errors do not end the session.");
-		PrintWideLine(help_text, (int)_tcslen(help_text));
+		if (mDiagJson)
+			ReplPrintOutcome(true, _T("String"), help_text);
+		else
+			PrintWideLine(help_text, (int)_tcslen(help_text));
 		free(line);
 		SetEvent(g_ReplLineDone);
 		return;
@@ -2722,7 +2802,8 @@ void Script::ReplDrainInput()
 		{
 			TCHAR num_buf[MAX_NUMBER_SIZE];
 			LPCTSTR value = TokenToString(result, num_buf);
-			ReplPrintOutcome(true, TokenTypeString(result), value);
+			ReplPrintOutcome(true, TokenTypeString(result), value,
+				result.symbol == SYM_STRING ? result.marker_length : (size_t)-1);
 		}
 	}
 	else

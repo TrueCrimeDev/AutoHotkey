@@ -21,6 +21,8 @@ GNU General Public License for more details.
 #include "TextIO.h"
 #include "crashlog.h"
 #include "mcp_server.h" // McpServerMain() for the `mcp` subcommand.
+#include "ahkversion.h"
+#include <string>
 
 // General note:
 // The use of Sleep() should be avoided *anywhere* in the code.  Instead, call MsgSleep().
@@ -34,6 +36,106 @@ ResultType InitForExecution();
 ResultType ParseCmdLineArgs(LPTSTR &script_filespec);
 ResultType CheckPriorInstance();
 int MainExecuteScript(bool aMsgSleep = true);
+
+#ifndef AUTOHOTKEYSC
+enum CliInfoMode { CLI_INFO_NONE, CLI_INFO_HELP, CLI_INFO_VERSION, CLI_INFO_CAPABILITIES, CLI_INFO_SUMMARY };
+static CliInfoMode sCliInfoMode = CLI_INFO_NONE;
+
+static std::wstring CliJsonString(LPCTSTR text)
+{
+	std::wstring out = L"\"";
+	for (; *text; ++text)
+	{
+		if (*text == L'"' || *text == L'\\')
+			out += L'\\';
+		if (*text < 0x20)
+		{
+			TCHAR escaped[7];
+			sntprintf(escaped, _countof(escaped), _T("\\u%04x"), (unsigned)*text);
+			out += escaped;
+		}
+		else
+			out += *text;
+	}
+	return out + L'"';
+}
+
+static ResultType CliUsageError(LPCTSTR message, LPCTSTR detail = nullptr)
+{
+	std::wstring text = message;
+	if (detail)
+		text += std::wstring(L" ") + detail;
+	text += L" Run AutoHotkey --help for usage.";
+	if (g_script.mDiagJson)
+		text = L"{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":2,\"severity\":\"error\","
+			L"\"type\":\"UsageError\",\"code\":64,\"message\":" + CliJsonString(text.c_str())
+			+ L",\"extra\":\"\",\"what\":\"\",\"file\":\"\",\"line\":0,\"column\":0,\"source\":\"\",\"stack\":\"\"}";
+	text += L'\n';
+	// An invalid encoding option must never route this error into a dialog.
+	g_script.mErrorStdOutCP = CP_UTF8;
+	g_script.PrintErrorStdOut(text.c_str(), (int)text.size(), _T("**"));
+	return FAIL;
+}
+
+static void PrintCliInfo()
+{
+	std::wstring out;
+	if (sCliInfoMode == CLI_INFO_HELP)
+	{
+		out = L"Usage: AutoHotkey [options] [run|check|test|repl|mcp] [script.ahk] [script arguments]\n"
+			L"       AutoHotkey --help | --version | --capabilities\n\n"
+			L"Commands:\n"
+			L"  run script.ahk    Run a script (the run keyword is optional).\n"
+			L"  check script.ahk  Validate syntax without executing (exit 0 or 13).\n"
+			L"  test script.ahk   Run a non-persistent test script (exit 0 or 14).\n"
+			L"  repl [script.ahk] Evaluate expressions from stdin; .help describes the session.\n"
+			L"  mcp              Serve MCP over stdin/stdout; no script is loaded.\n\n"
+			L"Options (before the script; may precede or follow the command):\n"
+			L"  /Headless         Report errors without interactive error or instance prompts.\n"
+			L"  /Diag=text|json   Diagnostic output format (stderr).\n"
+			L"  /ErrorStdOut[=encoding]  Diagnostic text encoding; :color or :nocolor.\n"
+			L"  /Eval             Enable Eval() in a script.\n"
+			L"  /Trace            Show executing statements on stderr (no raw key events).\n"
+			L"  /force            Replace an existing script instance.\n"
+			L"  /include file     Include one file before the script.\n"
+			L"  /CPnnn            Script source code page.\n"
+			L"  /CrashLog=path    Append crash and process lifecycle events.\n"
+			L"  /StdErrFile=path  Mirror diagnostics to a file.\n"
+			L"  --                Treat the next argument as the script filename.\n\n"
+			L"All arguments after the script filename are passed unchanged in A_Args.\n"
+			L"--version reports engine and build identity; --capabilities emits JSON.\n"
+			L"Help aliases: help, -h, --h, -help, --help, /help, /?.\n"
+			L"Exit codes: 0 success, 10 runtime, 11 critical, 12 parse, 13 check,\n"
+			L"            14 test, 64 command-line usage, 130 interrupted.";
+	}
+	else if (sCliInfoMode == CLI_INFO_VERSION || sCliInfoMode == CLI_INFO_SUMMARY)
+	{
+		out = T_AHK_NAME_VERSION;
+		out += std::wstring(L"\nrevision=") + T_AHK_BUILD_REVISION
+			+ L" compiler=" + T_AHK_BUILD_COMPILER + L" architecture=" + T_AHK_BUILD_ARCH;
+		if (sCliInfoMode == CLI_INFO_SUMMARY)
+			out += L"\n\n  ahk script.ahk        Run a script\n"
+				L"  ahk run script.ahk    Run a script (same as above)\n"
+				L"  ahk check script.ahk  Check syntax without running\n"
+				L"  ahk test script.ahk   Execute a test script\n"
+				L"  ahk repl              Open the interactive console; .exit to leave\n"
+				L"  ahk help              Show all commands and options (also -h or --help)";
+	}
+	else
+	{
+		out = L"{\"kind\":\"capabilities\",\"schema\":1,\"name\":\"AutoHotkey\",\"version\":"
+			+ CliJsonString(T_AHK_VERSION) + L",\"build\":{\"revision\":" + CliJsonString(T_AHK_BUILD_REVISION)
+			+ L",\"compiler\":" + CliJsonString(T_AHK_BUILD_COMPILER)
+			+ L",\"architecture\":" + CliJsonString(T_AHK_BUILD_ARCH)
+			+ L"},\"commands\":[\"run\",\"check\",\"test\",\"repl\",\"mcp\"],"
+			L"\"diagnostics\":{\"formats\":[\"text\",\"json\"],\"jsonSchema\":2},"
+			L"\"mcp\":{\"transport\":\"stdio\",\"protocolVersions\":[\"2025-06-18\",\"2024-11-05\"]},"
+			L"\"features\":{\"eval\":\"opt-in\",\"json\":true,\"check\":true,\"repl\":true},"
+			L"\"exitCodes\":{\"success\":0,\"runtime\":10,\"critical\":11,\"parse\":12,\"check\":13,\"test\":14,\"usage\":64,\"interrupted\":130}}";
+	}
+	PrintWideLine(out.c_str(), (int)out.size());
+}
+#endif
 
 
 // Performs any initialization that should be done before LoadFromFile().
@@ -86,16 +188,26 @@ int WINAPI _tWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmd
 	CrashLog::InstallConsoleHandler();
 
 	EarlyAppInit();
+	#ifdef AHK_CONSOLE_ENTRYPOINT
+	// A console launch reports load/runtime errors in the terminal too.
+	g_script.SetErrorStdOut(nullptr);
+	#endif
 
 	LPTSTR script_filespec; // Script path as originally specified, or NULL if omitted/defaulted.
 	if (!ParseCmdLineArgs(script_filespec))
 		return AHK_EXIT_CLI_ERROR;
 
 #ifndef AUTOHOTKEYSC
+	if (sCliInfoMode != CLI_INFO_NONE)
+	{
+		PrintCliInfo();
+		return AHK_EXIT_OK;
+	}
 	if (g_script.mMcpMode)
 		return McpServerMain(); // Stdio JSON-RPC loop; never loads a script, opens no windows.
 #endif
 
+	g_script.ReplPrepare();
 	UINT load_result = g_script.LoadFromFile(script_filespec);
 	if (load_result == LOADING_FAILED) // Error during load (was already displayed by the function call).
 	{
@@ -153,26 +265,41 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 	// All args that appear after the filespec are considered to be parameters for the script
 	// and will be stored in A_Args.
 	int i;
+	bool command_seen = false;
+	bool run_command = false;
 	for (i = 1; i < __argc; ++i) // Start at 1 because 0 contains the program name.
 	{
 		LPTSTR param = __targv[i]; // For performance and convenience.
 #ifndef AUTOHOTKEYSC
-		// Support subcommand style: AutoHotkey.exe check script.ahk / AutoHotkey.exe test script.ahk
-		if (i == 1 && !_tcsicmp(param, _T("check")))
+		if (!script_filespec && !command_seen && !_tcsicmp(param, _T("run")))
 		{
+			command_seen = run_command = true;
+			continue;
+		}
+		if (!script_filespec && !command_seen && !_tcsicmp(param, _T("help")))
+		{
+			sCliInfoMode = CLI_INFO_HELP;
+			continue;
+		}
+		// Support subcommand style: AutoHotkey.exe check script.ahk / AutoHotkey.exe test script.ahk
+		if (!script_filespec && !command_seen && !_tcsicmp(param, _T("check")))
+		{
+			command_seen = true;
 			g_script.mCheckMode = true;
 			g_script.mValidateThenExit = true;
 			g_script.SetHeadless();
 			continue;
 		}
-		if (i == 1 && !_tcsicmp(param, _T("test")))
+		if (!script_filespec && !command_seen && !_tcsicmp(param, _T("test")))
 		{
+			command_seen = true;
 			g_script.mTestMode = true;
 			g_script.SetHeadless();
 			continue;
 		}
-		if (i == 1 && !_tcsicmp(param, _T("repl")))
+		if (!script_filespec && !command_seen && !_tcsicmp(param, _T("repl")))
 		{
+			command_seen = true;
 			g_script.mReplMode = true;
 			g_AllowEval = true; // The REPL is an Eval driver; the BIF gate is implied.
 			g_AllowOnlyOneInstance = SINGLE_INSTANCE_OFF; // Parallel sessions are expected.
@@ -180,8 +307,9 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 		}
 		// !script_filespec: a resource-compiled script (detected above) must get
 		// "mcp" as its own A_Args[1], not be hijacked into server mode.
-		if (i == 1 && !script_filespec && !_tcsicmp(param, _T("mcp")))
+		if (!script_filespec && !command_seen && !_tcsicmp(param, _T("mcp")))
 		{
+			command_seen = true;
 			g_script.mMcpMode = true;
 			g_script.SetHeadless();
 			g_AllowOnlyOneInstance = SINGLE_INSTANCE_OFF; // Stdio MCP servers spawn one process per client.
@@ -200,15 +328,37 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 			script_filespec = NULL; // Override compiled script mode, otherwise no effect.
 		else if (script_filespec) // Compiled script mode.
 			break;
+		else if (!_tcsicmp(param, _T("--help")) || !_tcsicmp(param, _T("/help")) || !_tcsicmp(param, _T("/?"))
+			|| !_tcsicmp(param, _T("-h")) || !_tcsicmp(param, _T("--h")) || !_tcsicmp(param, _T("-help")))
+			sCliInfoMode = CLI_INFO_HELP;
+		else if (!_tcsicmp(param, _T("--version")) || !_tcsicmp(param, _T("/version")))
+			sCliInfoMode = CLI_INFO_VERSION;
+		else if (!_tcsicmp(param, _T("--capabilities")))
+			sCliInfoMode = CLI_INFO_CAPABILITIES;
+		else if (!_tcscmp(param, _T("--")))
+		{
+			if (++i >= __argc)
+				return CliUsageError(_T("Expected a script filename after --."));
+			script_filespec = __targv[i++];
+			break;
+		}
 		else if (!_tcsnicmp(param, _T("/ErrorStdOut"), 12) && (param[12] == '\0' || param[12] == '=' || param[12] == ':'))
+		{
 			g_script.SetErrorStdOut(param[12] ? param + 13 : NULL, param[12] == ':');
+			if (!g_script.mErrorStdOut)
+				return CliUsageError(_T("Invalid /ErrorStdOut encoding."));
+		}
 		else if (!_tcsicmp(param, _T("/Headless")) || !_tcsicmp(param, _T("--headless")))
 			g_script.SetHeadless();
 		else if (!_tcsicmp(param, _T("/Trace")) || !_tcsicmp(param, _T("--trace")))
 		{
 			g_script.mTrace = true;
 			g_script.SetHeadless();
-			if (AttachConsole(ATTACH_PARENT_PROCESS))
+			// An inherited pipe/file is already a usable destination. Attaching a
+			// console here would replace it and hide trace output from test runners.
+			HANDLE trace_stderr = GetStdHandle(STD_ERROR_HANDLE);
+			if ((!trace_stderr || trace_stderr == INVALID_HANDLE_VALUE || GetFileType(trace_stderr) == FILE_TYPE_UNKNOWN)
+				&& AttachConsole(ATTACH_PARENT_PROCESS))
 			{
 				// Reopen stderr so WriteFile(GetStdHandle(STD_ERROR_HANDLE)) works
 				freopen("CONOUT$", "w", stderr);
@@ -228,7 +378,7 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 			else if (!_tcsicmp(value, _T("json")))
 				g_script.SetDiagJson(true);
 			else
-				return FAIL;
+				return CliUsageError(_T("Invalid /Diag format; expected text or json."));
 		}
 		else if (!_tcsicmp(param, _T("/Check")) || !_tcsicmp(param, _T("--check")))
 		{
@@ -248,6 +398,8 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 		else if ((!_tcsnicmp(param, _T("/CrashLog="), 10)) || (!_tcsnicmp(param, _T("--crashlog="), 11)))
 		{
 			LPTSTR path = param + (!_tcsnicmp(param, _T("/CrashLog="), 10) ? 10 : 11);
+			if (!*path)
+				return CliUsageError(_T("/CrashLog requires a non-empty path."));
 			if (*path)
 			{
 				free(g_CrashLogPath);
@@ -258,6 +410,8 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 		else if ((!_tcsnicmp(param, _T("/StdErrFile="), 12)) || (!_tcsnicmp(param, _T("--stderrfile="), 13)))
 		{
 			LPTSTR path = param + (!_tcsnicmp(param, _T("/StdErrFile="), 12) ? 12 : 13);
+			if (!*path)
+				return CliUsageError(_T("/StdErrFile requires a non-empty path."));
 			if (*path)
 			{
 				free(g_StdErrFilePath);
@@ -270,7 +424,7 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 			++i; // Consume the next parameter too, because it's associated with this one.
 			if (i >= __argc // Missing the expected filename parameter.
 				|| g_script.mCmdLineInclude) // Only one is supported, so abort if there's more.
-				return FAIL;
+				return CliUsageError(_T("/include requires one filename and may appear only once."));
 			g_script.mCmdLineInclude = __targv[i];
 		}
 		else if (!_tcsicmp(param, _T("/validate")))
@@ -280,7 +434,7 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 		{
 			++i; // Consume the next parameter too, because it's associated with this one.
 			if (i >= __argc) // Missing the expected filename parameter.
-				return FAIL;
+				return CliUsageError(_T("/iLib requires a filename argument."));
 			// The original purpose of /iLib has gone away with the removal of auto-includes,
 			// but some scripts (like Ahk2Exe) use it to validate the syntax of script files.
 			g_script.mValidateThenExit = true;
@@ -333,6 +487,8 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 		else // since this is not a recognized switch, the end of the [Switches] section has been reached (by design).
 		{
 #ifndef AUTOHOTKEYSC
+			if (param[0] == '-' || (param[0] == '/' && !_tcschr(param + 1, '/') && !_tcschr(param + 1, '\\')))
+				return CliUsageError(_T("Unknown option:"), param);
 			script_filespec = param;  // The first unrecognized switch must be the script filespec, by design.
 			++i; // Omit this from the "args" array.
 #endif
@@ -341,10 +497,26 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 	}
 	
 #ifndef AUTOHOTKEYSC
-	if ((g_script.mCheckMode || g_script.mTestMode) && !script_filespec)
-		return FAIL;
+	#ifdef AHK_CONSOLE_ENTRYPOINT
+	if (__argc == 1 && !script_filespec)
+		sCliInfoMode = CLI_INFO_SUMMARY;
+	#endif
+	if (sCliInfoMode != CLI_INFO_NONE)
+		return OK;
+	if (script_filespec && !*script_filespec)
+		return CliUsageError(_T("The script filename must not be empty."));
+	if ((int)run_command + (int)g_script.mCheckMode + (int)g_script.mTestMode + (int)g_script.mReplMode + (int)g_script.mMcpMode > 1)
+		return CliUsageError(_T("Choose only one command: run, check, test, repl or mcp."));
+	if ((run_command || g_script.mCheckMode || g_script.mTestMode) && !script_filespec)
+		return CliUsageError(_T("The run, check and test commands require a script filename. Use repl for an interactive console."));
+	if (g_script.mMcpMode && script_filespec)
+		return CliUsageError(_T("The mcp command does not accept a script filename."));
 	if (g_script.mReplMode && !script_filespec)
 		script_filespec = _T("*REPL"); // Synthetic in-memory script; see LoadIncludedFile().
+	#ifdef AHK_CONSOLE_ENTRYPOINT
+	if (!script_filespec && !g_script.mMcpMode)
+		return CliUsageError(_T("Expected a script filename or command."));
+	#endif
 #endif
 
 	// Pass any remaining args to the script via the A_Args array.

@@ -5460,6 +5460,12 @@ ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Lin
 // Rolls back newly-created local variables in aResolveScope on failure.
 {
 	aOutLine = nullptr;
+	// Ordinary script loading balances delimiters before parsing operands.
+	// Eval must enforce the same precondition, before creating any functions.
+	TCHAR expected[MAX_BALANCEEXPR_DEPTH];
+	int balance = BalanceExpr(aExpr, 0, expected);
+	if (balance != 0)
+		return BalanceExprError(balance, expected, aExpr);
 
 	// 1) Snapshot the local-var count so a failed parse leaks no new implicit vars.
 	//    Variables created during expression parsing are added to g->CurrentFunc->mVars
@@ -5474,6 +5480,38 @@ ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Lin
 
 	// 2) Install aResolveScope as the active function so FindVar/FindOrAddVar use it.
 	UserFunc *saved_current_func = g->CurrentFunc;
+	VarList &eval_vars = aResolveScope ? aResolveScope->mVars : *GlobalVars();
+	Var **saved_vars = nullptr;
+	if (eval_vars.mCount)
+	{
+		saved_vars = (Var **)malloc(eval_vars.mCount * sizeof(Var *));
+		if (!saved_vars)
+			return ScriptError(ERR_OUTOFMEM);
+		memcpy(saved_vars, eval_vars.mItem, eval_vars.mCount * sizeof(Var *));
+	}
+	struct RestoreEvalContext
+	{
+		UserFunc *func;
+		Line *line;
+		VarList &vars;
+		Var **snapshot;
+		int count;
+		bool committed = false;
+		~RestoreEvalContext()
+		{
+			if (!committed)
+			{
+				// Vars are inserted in sorted order, not appended. Restoring
+				// only mCount can remove an existing variable from lookup.
+				if (count)
+					memcpy(vars.mItem, snapshot, count * sizeof(Var *));
+				vars.mCount = count;
+			}
+			free(snapshot);
+			g->CurrentFunc = func;
+			g_script.mCurrLine = line;
+		}
+	} restore_context { saved_current_func, mCurrLine, eval_vars, saved_vars, eval_vars.mCount };
 	g->CurrentFunc = aResolveScope;
 
 	// 3) Duplicate the expression text into a modifiable buffer on the C++ stack.
@@ -5621,8 +5659,29 @@ ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Lin
 		}
 	}
 
+	if (mFuncs.mCount > saved_func_count)
+	{
+		// Tokenizing a new fat-arrow body is only the first load-time pass.
+		// Resolve read references before executing it; otherwise var_deref is
+		// interpreted as Var* (notably for maybe/short-circuit expressions).
+		UserFunc *first_func = mFuncs.mItem[saved_func_count];
+		g->CurrentFunc = first_func;
+		if (!PreparseVarRefs(first_func->mJumpToLine))
+			return FAIL;
+		for (int fi = saved_func_count; fi < mFuncs.mCount; ++fi)
+			if (!PreprocessLocalVars(*mFuncs.mItem[fi]))
+				return FAIL;
+		for (Line *line = first_func->mJumpToLine; line; line = line->mNextLine)
+		{
+			mCurrLine = line;
+			for (int ai = 0; ai < line->mArgc; ++ai)
+				if (line->mArg[ai].postfix && !line->FinalizeExpression(line->mArg[ai]))
+					return FAIL;
+		}
+	}
 	g->CurrentFunc = saved_current_func;
 	aOutLine = scratch;
+	restore_context.committed = true;
 	return OK;
 }
 
@@ -10365,12 +10424,69 @@ void Line::FreeDerefBufIfLarge()
 	sLogTick[sLogNext++] = GetTickCount(); \
 	if (sLogNext >= LINE_LOG_SIZE) \
 		sLogNext = 0; \
-	if (g_script.mTrace) { \
-		char _trace_buf[16]; \
-		int _trace_n = snprintf(_trace_buf, 16, "%u\n", (line)->mLineNumber); \
-		DWORD _trace_written; \
-		WriteFile(GetStdHandle(STD_ERROR_HANDLE), _trace_buf, _trace_n, &_trace_written, NULL); \
-	} \
+	if (g_script.mTrace) \
+		(line)->TraceExecution(); \
+}
+
+
+void Line::TraceExecution()
+{
+	// Omit structural and compiler-generated entries from the execution stream.
+	if (!mLineNumber || mActionType == ACT_INVALID || mActionType == ACT_BLOCK_BEGIN
+		|| mActionType == ACT_BLOCK_END || mActionType == ACT_END_MODULE || mActionType == ACT_HOTKEY_IF)
+		return;
+	DWORD saved_error = GetLastError();
+	TCHAR command[1024];
+	LPTSTR end = ToText(command, _countof(command), false, 0, false, false);
+	if (end - command >= _countof(command) - 1)
+		_tcscpy(command + _countof(command) - 4, _T("..."));
+	LPCTSTR start = command;
+	while (*start && *start <= ' ')
+		++start;
+	if (!*start)
+	{
+		SetLastError(saved_error);
+		return;
+	}
+
+	LPCTSTR file = mFileIndex < sSourceFileCount ? sSourceFile[mFileIndex] : nullptr;
+	LPCTSTR name = file ? file : _T("<script>");
+	for (LPCTSTR p = name; *p; ++p)
+		if (*p == '\\' || *p == '/')
+			name = p + 1;
+	// Separate helper keeps these buffers out of recursive ExecUntil stack frames.
+	TCHAR text[2 * _countof(command) + 320];
+	int length = sntprintf(text, _countof(text), _T("[trace] %.255s:%u  "), name, mLineNumber);
+	for (LPCTSTR p = start; *p; ++p)
+	{
+		if (*p == '\r' || *p == '\n' || *p == '\t')
+		{
+			text[length++] = '`';
+			text[length++] = *p == '\r' ? 'r' : *p == '\n' ? 'n' : 't';
+		}
+		else
+			text[length++] = *p < ' ' || *p == 0x7f ? ' ' : *p;
+	}
+	text[length++] = '\n';
+	text[length] = '\0';
+
+	HANDLE output = GetStdHandle(STD_ERROR_HANDLE);
+	DWORD mode, written;
+	if (GetConsoleMode(output, &mode))
+	{
+		for (DWORD offset = 0; offset < (DWORD)length; offset += written)
+			if (!WriteConsoleW(output, text + offset, length - offset, &written, nullptr) || !written)
+				break;
+	}
+	else
+	{
+		char utf8[3 * _countof(text)];
+		int bytes = WideCharToMultiByte(CP_UTF8, 0, text, length, utf8, sizeof(utf8), nullptr, nullptr);
+		for (DWORD offset = 0; offset < (DWORD)bytes; offset += written)
+			if (!WriteFile(output, utf8 + offset, bytes - offset, &written, nullptr) || !written)
+				break;
+	}
+	SetLastError(saved_error);
 }
 
 
