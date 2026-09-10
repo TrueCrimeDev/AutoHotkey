@@ -30,6 +30,10 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v2
 
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
     - name: Configure CMake
       run: |
         cmake -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
@@ -38,15 +42,27 @@ jobs:
       run: |
         cmake --build build --config Release --parallel
 
+    - name: Native regression gate
+      run: python tests/run_console_gate.py bin/${{ matrix.output_name }}.exe
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.output_name }}
-        path: bin/${{ matrix.output_name }}.exe
+        path: |
+          bin/${{ matrix.output_name }}.exe
         if-no-files-found: error
 
-  # GCC / mingw-w64 build route (non-canonical; verifies the CMake MINGW path).
-  # Does not gate the release job — MSVC stays the distribution build.
+    - name: Upload x64 grammar runtime
+      if: matrix.arch == 'x64'
+      uses: actions/upload-artifact@v4
+      with:
+        name: tree-sitter-ahk-x64
+        path: bin/tree-sitter-ahk.dll
+        if-no-files-found: error
+
+  # GCC / mingw-w64 is the primary local build; MSVC remains the release compiler.
+  # Both supported compiler routes must pass the native gate before release.
   build-mingw:
     runs-on: windows-2022
 
@@ -54,6 +70,10 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
     - name: Setup MSYS2 (mingw-w64)
       uses: msys2/setup-msys2@v2
@@ -74,6 +94,9 @@ jobs:
       shell: msys2 {0}
       run: cmake --build build_mingw --parallel
 
+    - name: Native regression gate (mingw)
+      run: python tests/run_console_gate.py bin/AutoHotkey64.exe
+
     - name: Upload Artifact (mingw)
       uses: actions/upload-artifact@v4
       with:
@@ -82,7 +105,7 @@ jobs:
         if-no-files-found: error
 
   release:
-    needs: build
+    needs: [build, build-mingw]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/alpha'
     permissions:
@@ -103,5 +126,6 @@ jobs:
         files: |
           artifacts/AutoHotkey64/AutoHotkey64.exe
           artifacts/AutoHotkey32/AutoHotkey32.exe
+          artifacts/tree-sitter-ahk-x64/tree-sitter-ahk.dll
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
