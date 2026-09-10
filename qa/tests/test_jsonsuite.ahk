@@ -5,8 +5,10 @@
 ; the LICENSE beside it). Vendored rather than submoduled so the suite runs
 ; offline; upstream has been effectively frozen since 2017.
 ;
-; Naming convention: y_ MUST parse, n_ MUST be rejected, i_ is implementation-
-; defined and only pinned so a change is visible rather than silent.
+; Naming convention: y_ is valid JSON, n_ MUST be rejected, i_ is implementation-
+; defined and only pinned so a change is visible rather than silent. One valid
+; fixture is explicitly rejected because engine object keys cannot contain NUL;
+; UnsupportedKey prevents silently truncating or merging those keys.
 ;
 ; CAVEAT worth knowing before trusting a number here: fixtures are read with
 ; FileRead(..., "UTF-8"), so byte-level-invalid encoding is repaired to U+FFFD
@@ -54,7 +56,10 @@ Loop Files, A_ScriptDir "\..\fixtures\jsonsuite\*.json" {
     counts[kind] := counts.Get(kind, 0) + 1
     ok := Parses(text)
 
-    if (kind = "y")
+    if (name = "y_object_escaped_null_in_key.json") {
+        Assert.falsy(ok, "jsonsuite.unsupported.nul.key")
+        Assert.throws(() => JSON.Parse(text), "jsonsuite.unsupported.nul.key.code", "UnsupportedKey")
+    } else if (kind = "y")
         Assert.truthy(ok, "jsonsuite.must-parse." name)
     else if (kind = "n") {
         Assert.falsy(ok, "jsonsuite.must-reject." name)

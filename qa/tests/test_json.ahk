@@ -73,11 +73,10 @@ Assert.eq(arr[1], 1, "json.array.elem.value")
 Assert.truthy(arr[1], "json.array.elem.truthy")
 Assert.falsy(arr[2], "json.array.elem.falsy")
 Assert.eq(arr.Length, 2, "json.array.length")
-; Array's own mutators know nothing about tags, so a length change drops them
-; rather than risking a value being mislabelled.
+; Mutations preserve source types on untouched items.
 mutated := JSON.Parse('[true,false]')
 mutated.Push(1)
-Assert.eq(JSON.Stringify(mutated), "[1,0,1]", "json.array.mutated.drops.tags")
+Assert.eq(JSON.Stringify(mutated), "[true,false,1]", "json.array.mutated.preserves.tags")
 
 ; ---- large objects use the hash index rather than a linear scan ------------
 big := "{"

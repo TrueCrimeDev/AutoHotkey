@@ -5,7 +5,7 @@
 ;
 ; Mechanism (undocumented elsewhere): `PT.Ptr` is an auto-generated Struct
 ; subclass whose single field is a pointer (size = sizeof(void*)). A `PT.Ptr()`
-; instance is 8 bytes of pointer storage; you overlay it on foreign memory by
+; instance is A_PtrSize bytes of pointer storage; overlay it on foreign memory by
 ; writing the target address into its own `.Ptr` storage, then dereference the
 ; target through `.__Value`, which yields a live `PT` view. Writes through that
 ; view commit to the pointed-to memory.
@@ -25,7 +25,7 @@ Assert.eq(Type(Struct.Ptr()), "Struct.Ptr", "Struct.Ptr() returns a Struct.Ptr i
 Assert.eq(Type(PT.Ptr), "Class", "PT.Ptr (getter) is the pointer Class")
 v := PT.Ptr()
 Assert.eq(Type(v), "PT.Ptr", "PT.Ptr() constructs a PT.Ptr instance")
-Assert.eq(v.Size, 8, "PT.Ptr instance is pointer-sized (8 bytes of storage)")
+Assert.eq(v.Size, A_PtrSize, "PT.Ptr instance storage matches the engine pointer size")
 
 ; ---- overlay a view on foreign memory + dereference via __Value ----
 p := PT()
