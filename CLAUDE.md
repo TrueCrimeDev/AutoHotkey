@@ -191,15 +191,17 @@ Key commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`,
 
 # Current State & Open Items (updated 2026-09-08)
 
-- `bin/AutoHotkey64.exe` = TSParse-enabled CI build. Source is at
-  `2.1-alpha.31+Console` (upstream merged in `c73ae823`), but the binary on
-  disk is still `2.1-alpha.30+Console` until the running app releases its lock
-  and `bin/` is rebuilt; `bin_harness/AutoHotkey64Harness.exe` carries alpha.31
-  today. The engine **cannot be built in WSL** (MSVC-only for CI; canonical local
-  route is `build.bat` via mingw-w64/`C:\msys64` from Windows). To verify
-  source/ changes, use the GitHub Actions PR build and `gh run download`.
+- Local engine builds use `2.1-alpha.31+Console` (upstream `v2.1-alpha.31`
+  merged in `c73ae823`; `bin/AutoHotkey64.exe` on disk is still the alpha.30
+  build until the running app releases its lock and it is rebuilt, while
+  `bin_harness/AutoHotkey64Harness.exe` already carries alpha.31); `--version`
+  identifies the actual source revision, compiler, and architecture. Windows
+  MSVC and mingw-w64 builds are supported. CMake with Ninja from a Visual
+  Studio developer prompt works with Build Tools 18; see BUILD.md for an
+  isolated output directory. Build and test locally when requested; remote
+  publishing is a separate action.
 - `qa/` is the fork regression suite (subprocess-per-test; see `qa/README.md`).
-  Keep it green: `bin\AutoHotkey64.exe /ErrorStdOut qa\run.ahk` → exit 0.
+  Keep it green: `python tests/run_console_gate.py bin/AutoHotkey64.exe` → exit 0.
 - `WORKLOG.md` tracks the verification-layer backlog (struct/language/docs
   tests) and per-session findings.
 
