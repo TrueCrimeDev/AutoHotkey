@@ -16,53 +16,55 @@ section("STRUCT (alpha.22)")
 
 ; Declaration with typed fields
 Struct POINT {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 
-; All supported field types: i8, u8, i16, u16, i32, u32, i64, u64, f32, f64, iptr, uptr
+; Field types are primitive classes (alpha.30 removed the i32/u32 strings):
+;   Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, Float32, Float64, IntPtr
+;   (no UInt64/UIntPtr class exists -- use Int64/IntPtr and mask if needed)
 Struct AllTypes {
-    int8:    i8
-    uint8:   u8
-    int16:   i16
-    uint16:  u16
-    int32:   i32
-    uint32:  u32
-    int64:   i64
-    uint64:  u64
-    float32: f32
-    float64: f64
-    intptr:  iptr
-    uintptr: uptr
+    int8:    Int8
+    uint8:   UInt8
+    int16:   Int16
+    uint16:  UInt16
+    int32:   Int32
+    uint32:  UInt32
+    int64:   Int64
+    uint64:  Int64
+    float32: Float32
+    float64: Float64
+    intptr:  IntPtr
+    uintptr: IntPtr
 }
 
 ; Nested structs
 Struct RECT {
-    left: i32
-    top: i32
-    right: i32
-    bottom: i32
+    left: Int32
+    top: Int32
+    right: Int32
+    bottom: Int32
 }
 
 Struct NMHDR {
-    hwndFrom: uptr
-    idFrom:   uptr
-    code:     i32
+    hwndFrom: IntPtr
+    idFrom:   IntPtr
+    code:     Int32
 }
 
 Struct NMCUSTOMDRAW {
     hdr:         NMHDR    ; nested struct
-    dwDrawStage: u32
-    hdc:         uptr
+    dwDrawStage: UInt32
+    hdc:         IntPtr
     rc:          RECT     ; nested struct
-    dwItemSpec:  uptr
-    uItemState:  u32
-    lItemlParam: iptr
+    dwItemSpec:  IntPtr
+    uItemState:  UInt32
+    lItemlParam: IntPtr
 }
 
 ; Fixed-size byte buffer field
 Struct WithBuffer {
-    reserved: 32          ; 32-byte inline buffer
+    reserved: UInt8[32]   ; 32-byte inline buffer (alpha.30 removed the bare "reserved: 32" form)
 }
 
 ; --- Instantiation and field access ---
@@ -194,7 +196,9 @@ out("unsetVar?.x:       " (unsetVar?.x ?? "safely unset"))
 ; Or-maybe (??) — default value for unset
 GetSetting(key, default?) {
     settings := Map("volume", 80)
-    return settings.Get(key, unset) ?? default ?? 0
+    ; Map.Get with an unset Default throws for a missing key, so resolve the
+    ; fallback first: `default ?? 0` is the or-maybe demo.
+    return settings.Get(key, default ?? 0)
 }
 out("volume:            " GetSetting("volume"))
 out("brightness:        " GetSetting("brightness", 50))
@@ -233,10 +237,10 @@ section("TYPED PROPERTIES (alpha.3)")
 ; ─────────────────────────────────────────────────────────────────────────────
 
 class Color {
-    r: u8
-    g: u8
-    b: u8
-    a: u8
+    r: UInt8
+    g: UInt8
+    b: UInt8
+    a: UInt8
 
     ToString() => Format("rgba({},{},{},{})", this.r, this.g, this.b, this.a)
 }

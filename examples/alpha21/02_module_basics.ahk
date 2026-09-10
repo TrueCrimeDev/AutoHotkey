@@ -2,7 +2,8 @@
 ; alpha.21 Feature: #Module / #Import basics
 ; ============================================================
 ; The module system lets you organize code into isolated
-; namespaces with explicit exports.
+; namespaces. Since alpha.31 every module-level name is exported
+; implicitly (the `export` keyword was removed).
 ;
 ; Key alpha.21 changes:
 ;   - #Module requires a valid identifier
@@ -13,23 +14,23 @@
 ; --- Define a module inline ---
 #Module MathUtils
 
-; Variables and functions in a module are private by default.
-; Use `export` to make them visible to importers.
+; Every module-level name is visible to importers (alpha.31 removed `export`).
+; unless it starts with an underscore, which keeps it out of `{*}` imports.
 
-export global PI := 3.14159265358979
-export global TAU := PI * 2
+global PI := 3.14159265358979
+global TAU := PI * 2
 
-export CircleArea(radius)
+CircleArea(radius)
 {
     return PI * radius ** 2
 }
 
-export DegreesToRadians(degrees)
+DegreesToRadians(degrees)
 {
     return degrees * PI / 180
 }
 
-; This helper is NOT exported — it's internal to MathUtils
+; Leading underscore: kept out of `{*}` imports (the alpha.31 convention for helpers)
 _ValidatePositive(n)
 {
     if n < 0
@@ -37,7 +38,7 @@ _ValidatePositive(n)
     return n
 }
 
-export CircleCircumference(radius)
+CircleCircumference(radius)
 {
     _ValidatePositive(radius)
     return TAU * radius
@@ -46,8 +47,9 @@ export CircleCircumference(radius)
 ; --- Back to default module ---
 #Module __Main
 
-; Import the module
-#Import MathUtils
+; Import every name from the module ({*}); `#Import MathUtils` alone would
+; only bind the module object, reachable as MathUtils.CircleArea(...).
+#Import MathUtils {*}
 
 ; Use exported members
 area := CircleArea(5)

@@ -1,19 +1,19 @@
 ; StringUtils module — imported by 03_import_from_file.ahk
-; In alpha.21, #Module ends at end of file automatically.
+; No #Module line: the whole file is one default module, so
+; `#Import "lib/StringUtils.ahk" {*}` binds every name it defines.
 
-#Module StringUtils
 
-export ToUpper(str)
+ToUpper(str)
 {
     return StrUpper(str)
 }
 
-export ToLower(str)
+ToLower(str)
 {
     return StrLower(str)
 }
 
-export Repeat(str, count)
+Repeat(str, count)
 {
     result := ""
     loop count
@@ -21,7 +21,7 @@ export Repeat(str, count)
     return result
 }
 
-export Reverse(str)
+Reverse(str)
 {
     result := ""
     loop StrLen(str)
@@ -29,7 +29,7 @@ export Reverse(str)
     return result
 }
 
-export Trim(str)
+Trim(str)
 {
     return RTrim(LTrim(str))
 }

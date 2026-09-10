@@ -222,3 +222,38 @@ unlogged loop session between 3 and now.)
   0 crashed across 10 file(s)` (`test_json_regressions.ahk` green again once
   its JSON code was back). `tests/test_console_cli.py` and
   `tests/test_powershell_cli.py` (both still uncommitted) now expect alpha.31.
+
+### Session 6 (2026-09-10) — stale example repair for alpha.31
+
+- Struct type strings: 14 files under `examples/` switched from `i32`/`u8`/…
+  to the primitive classes (`Int32`, `UInt8`, `UInt16`, `UInt32`, `Int64`,
+  `Float32`, `Float64`, `IntPtr`). Probed on the harness: **no `UInt64` or
+  `UIntPtr` class exists**, so `u64` → `Int64` (bit-masking code in
+  `alpha_tricks.ahk` still works under arithmetic shift) and `uptr` → `IntPtr`.
+  `v2.1-alpha-features.ahk` also lost its bare `reserved: 32` field
+  (alpha.30 removed untyped sizes) → `UInt8[32]`.
+- `examples/struct_at_showcase.ahk` had a clobbered header since the alpha.29
+  checkpoint (`afeedbeb`): the `Struct POINT` definition was missing and a
+  stray `}` remained. Restored.
+- `export` removal: keyword stripped from the alpha.21 module examples and
+  libs; `05_export_function_call.ahk` rewritten to explain the alpha.22 →
+  alpha.31 history. The examples had also used `#Import {X} from M` and bare
+  `#Import "file.ahk"` expecting names to bind — both fail on this engine
+  ("Invalid import" / names unset). Rewritten as `#Import M {X}`,
+  `#Import M {X as Y}`, `#Import "file.ahk" {*}`,
+  `#Import "file.ahk:Mod" {Name}`. `lib/StringUtils.ahk` dropped its
+  `#Module` line so it is a true default-module file.
+- Struct prototypes are type `Prototype` on alpha.31 and do not inherit
+  `Object` methods (`HasOwnProp`, `GetOwnPropDesc`…). `Alpha24_Example.ahk`
+  now borrows `Object.Prototype.GetOwnPropDesc.Call(...)`; the descriptor's
+  `Type` is the class object, printed via `.Prototype.__Class`.
+- `Map.Get(key, unset)` throws for a missing key (explicit unset = omitted);
+  `v2.1-alpha-features.ahk` now resolves `default ?? 0` first.
+- Observed: a `#Module` nothing imports **does run**, before `__Main`, on
+  alpha.31 — contradicts the alpha.21 lazy-init note. Logged as an open item.
+- Observed: `/Headless` does not suppress `MsgBox`; headless runs of the
+  MsgBox examples blocked on real dialogs. Verification switched to scratch
+  copies with `MsgBox` → `Print`. Logged as an open item.
+- Result: `check` passes for every file under `examples/` (0 failures) on the
+  alpha.31 harness; all touched examples run to exit 0 (GUI-only ones via
+  `check`).

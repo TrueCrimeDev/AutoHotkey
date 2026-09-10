@@ -6,7 +6,7 @@
 
 #Module Stack
 
-export class Stack
+class Stack
 {
     __New()
     {
@@ -45,7 +45,7 @@ export class Stack
 
 #Module Queue
 
-export class Queue
+class Queue
 {
     __New()
     {

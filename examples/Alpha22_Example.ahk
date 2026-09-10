@@ -28,11 +28,11 @@ PrintLine ""
 PrintLine "── 1. Struct keyword ──"
 
 ; The `Struct` keyword creates classes with defined memory layout.
-; Fields use typed annotations: i32, u8, u16, uptr, etc.
+; Fields use typed annotations: Int32, UInt8, UInt16, IntPtr, etc. (alpha.30 removed the i32/u8 type strings)
 
 Struct POINT {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 
 pt := POINT()
@@ -42,10 +42,10 @@ PrintLine Format("  POINT({}, {}) -- Type={}, Size={} bytes", pt.x, pt.y, Type(p
 
 ; Structs with mixed types
 Struct RECT {
-    left: i32
-    top: i32
-    right: i32
-    bottom: i32
+    left: Int32
+    top: Int32
+    right: Int32
+    bottom: Int32
 }
 
 rc := RECT()
@@ -55,10 +55,10 @@ PrintLine Format("  RECT({},{} to {},{}) -- {} bytes",
 
 ; Small byte-level struct
 Struct Color {
-    r: u8
-    g: u8
-    b: u8
-    a: u8
+    r: UInt8
+    g: UInt8
+    b: UInt8
+    a: UInt8
 }
 
 c := Color()
@@ -67,19 +67,19 @@ PrintLine Format("  Color RGBA({},{},{},{}) -- {} bytes", c.r, c.g, c.b, c.a, c.
 
 ; Nested structs
 Struct NMHDR {
-    hwndFrom: uptr
-    idFrom: uptr
-    code: i32
+    hwndFrom: IntPtr
+    idFrom: IntPtr
+    code: Int32
 }
 
 Struct NMCUSTOMDRAW {
     hdr: NMHDR
-    dwDrawStage: u32
-    hdc: uptr
+    dwDrawStage: UInt32
+    hdc: IntPtr
     rc: RECT
-    dwItemSpec: uptr
-    uItemState: u32
-    lItemlParam: iptr
+    dwItemSpec: IntPtr
+    uItemState: UInt32
+    lItemlParam: IntPtr
 }
 
 ncd := NMCUSTOMDRAW()
@@ -92,14 +92,14 @@ PrintLine Format("  NMCUSTOMDRAW: hdr.code={}, rc.left={} -- {} bytes",
 
 ; DllCall with Struct types
 Struct SYSTEMTIME {
-    wYear: u16
-    wMonth: u16
-    wDayOfWeek: u16
-    wDay: u16
-    wHour: u16
-    wMinute: u16
-    wSecond: u16
-    wMilliseconds: u16
+    wYear: UInt16
+    wMonth: UInt16
+    wDayOfWeek: UInt16
+    wDay: UInt16
+    wHour: UInt16
+    wMinute: UInt16
+    wSecond: UInt16
+    wMilliseconds: UInt16
 }
 
 st := SYSTEMTIME()
@@ -300,15 +300,15 @@ PrintLine "── 8. Practical: Win32 structs ──"
 ; Define once, use everywhere -- type-safe and sized correctly.
 
 Struct MEMORYSTATUSEX {
-    dwLength: u32
-    dwMemoryLoad: u32
-    ullTotalPhys: u64
-    ullAvailPhys: u64
-    ullTotalPageFile: u64
-    ullAvailPageFile: u64
-    ullTotalVirtual: u64
-    ullAvailVirtual: u64
-    ullAvailExtendedVirtual: u64
+    dwLength: UInt32
+    dwMemoryLoad: UInt32
+    ullTotalPhys: Int64
+    ullAvailPhys: Int64
+    ullTotalPageFile: Int64
+    ullAvailPageFile: Int64
+    ullTotalVirtual: Int64
+    ullAvailVirtual: Int64
+    ullAvailExtendedVirtual: Int64
 }
 
 ms := MEMORYSTATUSEX()
@@ -322,8 +322,8 @@ PrintLine Format("  Memory: {:.1f} GB total, {:.1f} GB available ({}% used)",
 
 ; Get cursor position
 Struct CURSORPOINT {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 cp := CURSORPOINT()
 DllCall("GetCursorPos", CURSORPOINT, cp)
@@ -335,7 +335,7 @@ PrintLine ""
 ; ─────────────────────────────────────────────────────
 PrintLine "═══════════════════════════════════════════════"
 PrintLine "Alpha.22 is the foundational Struct release:"
-PrintLine "  • Struct keyword with typed fields (i32, u8, uptr...)"
+PrintLine "  • Struct keyword with typed fields (Int32, UInt8, IntPtr...)"
 PrintLine "  • Auto-generated .Ptr classes (replaces StructFromPtr)"
 PrintLine "  • Nested structs with proper layout"
 PrintLine "  • DllCall integration with Struct types"

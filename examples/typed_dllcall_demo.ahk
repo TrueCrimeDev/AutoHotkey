@@ -8,8 +8,8 @@ y := NumGet(buf, 4, "Int")
 
 ; After: Struct + named fields
 Struct POINT {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 pt := POINT()
 DllCall("GetCursorPos", POINT.Ptr, pt)
@@ -27,7 +27,7 @@ CallbackFree(cb)
 
 ; Union via DefineProp Offset — overlapping fields (alpha.24)
 Struct Color {
-    rgba: u32
+    rgba: UInt32
 }
 DefineProp(Color.Prototype, "r", {Type: UInt8, Offset: 0})
 DefineProp(Color.Prototype, "g", {Type: UInt8, Offset: 1})
@@ -39,7 +39,7 @@ c.rgba := 0xFF00FF80
 
 ; Inline arrays in struct fields (alpha.26)
 Struct Sensor {
-    id: u8
+    id: UInt8
     readings: Float64[3]
 }
 s := Sensor()

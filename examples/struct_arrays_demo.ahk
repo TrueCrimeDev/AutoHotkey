@@ -46,7 +46,7 @@ readings[1] := 3.14159, readings[2] := 2.71828, readings[3] := 1.61803, readings
 Struct Enemy {
     x: Float32
     y: Float32
-    hp: i32
+    hp: Int32
     speed: Float32
 }
 
@@ -126,8 +126,8 @@ loop 8
 ; 5. Struct.At() — pointer views into arrays
 
 Struct POINT {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 
 ; Allocate raw buffer and read it as a POINT array
@@ -158,7 +158,7 @@ p1.x := 999
 
 Struct Measurement {
     value: Float64
-    timestamp: i64
+    timestamp: Int64
 }
 
 ; Add a display method to the struct prototype
@@ -179,8 +179,8 @@ data[3].value := 22.89, data[3].timestamp := 3000
 ; 7. Practical: DllCall with struct array
 
 Struct CURSORPOS {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 
 cp := CURSORPOS()
@@ -191,8 +191,8 @@ DllCall("GetCursorPos", "Ptr", cp)
 
 ; Array of points for a polyline triangle (3 vertices + close)
 Struct PolyPoint {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 
 triangle := PolyPoint[4]()

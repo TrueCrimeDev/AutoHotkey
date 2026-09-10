@@ -206,21 +206,21 @@ Key commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`,
   tests) and per-session findings.
 
 Open items:
-- [ ] Fix the **10 stale example files** using removed alpha.30 Struct
-  type-strings (`i32`/`u32`/`u8`/`uptr` → `Int32`/`UInt32`/`UInt8`/`UIntPtr`):
-  `examples/AlphaNN_Example.ahk`, `examples/alpha_tricks.ahk`,
-  `examples/combined_alpha22_23.ahk` (+ `examples/particle_gui.ahk` via
-  `#Include`). Removed by upstream commits `7427d3bc` / `34b17011`.
-- [ ] Fix the **7 stale module example files** (5 examples + 2 libs) that use the `export` keyword,
-  removed in upstream alpha.31 (names defined inside a `#Module` are now
-  exported implicitly; `#Import Export Name` re-exports an import):
-  `examples/alpha21/02_module_basics.ahk`, `examples/alpha21/04_import_selective.ahk`,
-  `examples/alpha21/05_lazy_module_init.ahk`, `examples/alpha21/06_module_file_scoping.ahk`
-  (+ `examples/alpha21/lib/StringUtils.ahk` / `lib/Collections.ahk` via
-  `#Import`), `examples/alpha22/05_export_function_call.ahk`. `export Foo(x)`
-  now parses as a call to an unassigned global `export` — exit 12 ("Return's
-  parameter should be blank except inside a function") or exit 10 at runtime.
-  Merged in `c73ae823` (upstream range `34b17011..v2.1-alpha.31`).
+- [x] Stale Struct type-string examples (`i32`/`u32`/`u8`/`uptr` → `Int32`/
+  `UInt32`/`UInt8`/`IntPtr`) fixed 2026-09-10 across 14 example files; no
+  `UInt64`/`UIntPtr` class exists, so `u64`/`uptr` became `Int64`/`IntPtr`.
+  `examples/struct_at_showcase.ahk` also had its clobbered `POINT` definition
+  restored. Every file under `examples/` passes `check` on the alpha.31 harness.
+- [x] Stale `export` module examples fixed 2026-09-10: keyword dropped, and the
+  `#Import {X} from M` / bare `#Import "file.ahk"` forms (never valid on this
+  engine) rewritten as `#Import M {X}` / `#Import "file.ahk" {*}`.
+- [ ] **Module init is not lazy on alpha.31**: a `#Module` nothing imports still
+  runs, before `__Main`'s auto-execute section (`examples/alpha21/05_lazy_module_init.ahk`
+  documents the observation). alpha.21 notes promised first-reference init —
+  decide whether this is an upstream change or a fork regression, then pin it.
+- [ ] `/Headless` does **not** suppress `MsgBox` — a headless run of any
+  MsgBox-driven example blocks on a real dialog. Verify such scripts via a
+  scratch copy with `MsgBox` → `Print`, or extend `/Headless`.
 - [ ] Faster tree-sitter path: build `tree-sitter-ahk.wasm` + `web-tree-sitter`
   for in-process, incremental parsing in a Node host. Needs the grammar
   **source** — only the `.dll` is vendored.

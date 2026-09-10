@@ -1,27 +1,29 @@
 ; alpha.22 Change: `export a() => b` is a function call statement (as in v2.0)
-; This reverts the alpha-only behavior where `export a() => b` was treated
-; as an exported fat-arrow function definition.
-; Now it behaves as v2.0: `export` is called as a function with `a() => b` as argument.
-
-; --- The change ---
-; In earlier alphas, this was an exported fat-arrow function definition:
-;   export MyFunc(x) => x * 2
+; alpha.31 Change: the `export` keyword itself was removed.
 ;
-; In alpha.22, that same line is now a FUNCTION CALL: calling export()
-; with the result of the fat-arrow expression.
+; History:
+;   - Early alphas: `export MyFunc(x) => x * 2` defined an exported fat-arrow function.
+;   - alpha.22 reverted that: the line became a CALL to a function named `export`
+;     (v2.0 semantics), so exported functions had to use block syntax.
+;   - alpha.31 removed `export` entirely. Every module-level name is exported
+;     implicitly, so `export Fn(x) {` now parses as a statement starting with the
+;     unassigned global `export` and dies at run time (exit 10).
+;
+; --- Correct way to define module members in alpha.31 ---
+; Just define them. Fat-arrow and block syntax both work.
 
-; --- Correct way to export from a module in alpha.22 ---
-; Use block syntax for exported functions, not fat-arrow.
+#Requires AutoHotkey v2.1-alpha.31
 
 #Module MyLib
 
-export MyFunc(x) {
-    return x * 2
-}
+MyFunc(x) => x * 2
 
-export Add(a, b) {
+Add(a, b) {
     return a + b
 }
+
+; Helpers you want to keep out of `{*}` imports: prefix with an underscore.
+_Internal() => "not for import"
 
 #Module __Main
 

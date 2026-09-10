@@ -79,7 +79,7 @@ PrintLine "── 2. DefineProp Offset (unions) ──"
 
 ; VARIANT-style union: different types at the same offset
 Struct Variant {
-    vtype: u16
+    vtype: UInt16
 }
 ; All three value fields overlap at offset 8
 DefineProp Variant.Prototype, "intVal",  {Type: Int32,   Offset: 8}
@@ -97,7 +97,7 @@ PrintLine Format("  Variant(float): vtype={}, fltVal={:.5f}", v.vtype, v.fltVal)
 
 ; RGBA color with overlapping byte views
 Struct Color {
-    rgba: u32
+    rgba: UInt32
 }
 DefineProp Color.Prototype, "r", {Type: UInt8, Offset: 0}
 DefineProp Color.Prototype, "g", {Type: UInt8, Offset: 1}
@@ -109,14 +109,14 @@ c.rgba := 0xFF8040C0
 PrintLine Format("  Color: rgba=0x{:08X}", c.rgba)
 PrintLine Format("    r=0x{:02X}  g=0x{:02X}  b=0x{:02X}  a=0x{:02X}", c.r, c.g, c.b, c.a)
 
-; Write individual channels, read as u32
+; Write individual channels, read as UInt32
 c.r := 0x00, c.g := 0xFF, c.b := 0x00, c.a := 0xFF
 PrintLine Format("  Set g=0xFF, a=0xFF -> rgba=0x{:08X}", c.rgba)
 
 ; Named offset: reference another field's position
 Struct Register {
-    lo: u16
-    hi: u16
+    lo: UInt16
+    hi: UInt16
 }
 DefineProp Register.Prototype, "full", {Type: UInt32, Offset: "lo"}
 
@@ -141,8 +141,9 @@ Struct Sensor {
 }
 
 for field in ["value", "id", "flags"] {
-    desc := Sensor.Prototype.GetOwnPropDesc(field)
-    PrintLine Format("  Sensor.{}: Type={}", field, desc.Type)
+    ; Struct prototypes do not inherit Object methods on alpha.31 -- borrow GetOwnPropDesc
+    desc := Object.Prototype.GetOwnPropDesc.Call(Sensor.Prototype, field)
+    PrintLine Format("  Sensor.{}: Type={}", field, desc.Type.Prototype.__Class)  ; desc.Type is the class itself
 }
 PrintLine ""
 
@@ -212,7 +213,7 @@ PrintLine "── 6. Bug fixes ──"
 ; Circular reference fix: Struct.Ptr and Struct[N] classes
 ; no longer prevent garbage collection
 Struct Tile {
-    id: u16
+    id: UInt16
     elevation: Float32
 }
 grid := Tile[6]()
@@ -227,11 +228,11 @@ PrintLine Format("  Tile[6]: ids=[{},{},{},{},{},{}]",
 ; Nested struct cleanup: releasing outer struct properly
 ; releases inner struct references
 Struct Inner {
-    data: u32
+    data: UInt32
 }
 Struct Outer {
     header: Inner
-    tag: u16
+    tag: UInt16
 }
 o := Outer()
 o.header.data := 0xCAFEBABE

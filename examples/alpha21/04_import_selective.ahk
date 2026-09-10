@@ -1,22 +1,22 @@
 ; ============================================================
 ; alpha.21 Feature: Selective imports with { } and `as`
 ; ============================================================
-; You can import specific exports by name, rename them with
+; You can import specific names, rename them with
 ; `as`, or use `*` to import everything.
 ;
 ; Syntax variants:
 ;   #Import ModuleName                    ; import module object
-;   #Import {Foo, Bar} from ModuleName    ; import specific names
-;   #Import {Foo as MyFoo} from Module    ; rename on import
-;   #Import * from ModuleName             ; wildcard import
+;   #Import ModuleName {Foo, Bar}         ; import specific names
+;   #Import ModuleName {Foo as MyFoo}     ; rename on import
+;   #Import ModuleName {*}                ; wildcard import
 ; ============================================================
 
 ; Define two modules with overlapping names
 #Module Geometry
 
-export global VERSION := "Geometry v1.0"
+global VERSION := "Geometry v1.0"
 
-export Area(shape, params*)
+Area(shape, params*)
 {
     switch shape
     {
@@ -27,7 +27,7 @@ export Area(shape, params*)
     }
 }
 
-export Describe(shape)
+Describe(shape)
 {
     return "Shape: " shape " (from Geometry)"
 }
@@ -35,20 +35,20 @@ export Describe(shape)
 
 #Module Physics
 
-export global VERSION := "Physics v1.0"
+global VERSION := "Physics v1.0"
 
-export Force(mass, acceleration)
+Force(mass, acceleration)
 {
     return mass * acceleration
 }
 
-export Energy(mass)
+Energy(mass)
 {
     static C := 299792458  ; speed of light m/s
     return mass * C ** 2
 }
 
-export Describe(concept)
+Describe(concept)
 {
     return "Concept: " concept " (from Physics)"
 }
@@ -58,14 +58,14 @@ export Describe(concept)
 #Module __Main
 
 ; Selective import: only Area from Geometry
-#Import {Area} from Geometry
+#Import Geometry {Area}
 
 ; Import Physics module as an object (access via Physics.Method())
 #Import Physics
 
-; Rename to avoid conflict: both modules export "Describe"
-#Import {Describe as DescribeShape} from Geometry
-#Import {Describe as DescribePhysics} from Physics
+; Rename to avoid conflict: both modules define "Describe"
+#Import Geometry {Describe as DescribeShape}
+#Import Physics {Describe as DescribePhysics}
 
 ; --- Demonstrate ---
 MsgBox Format("Circle area: {:.2f}", Area("circle", 7))

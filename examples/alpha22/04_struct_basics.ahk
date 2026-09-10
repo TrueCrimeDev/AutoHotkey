@@ -6,8 +6,8 @@
 ; The `Struct` keyword creates a class with defined memory layout
 
 Struct POINT {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 
 pt := POINT()
@@ -20,10 +20,10 @@ FileAppend("Type: " Type(pt) "`n", "*")
 ; --- Struct with different field types ---
 
 Struct RECT {
-    left:   i32
-    top:    i32
-    right:  i32
-    bottom: i32
+    left:   Int32
+    top:    Int32
+    right:  Int32
+    bottom: Int32
 }
 
 rc := RECT()
@@ -43,10 +43,10 @@ FileAppend("POINT.Ptr exists: " (POINT.HasOwnProp("Ptr") ? "yes" : "no") "`n", "
 ; --- Structs are value types with defined layout ---
 
 Struct Color {
-    r: u8
-    g: u8
-    b: u8
-    a: u8
+    r: UInt8
+    g: UInt8
+    b: UInt8
+    a: UInt8
 }
 
 c := Color()

@@ -17,8 +17,8 @@
 ; internal "Helper" module. These don't conflict because
 ; module names are file-scoped in alpha.21.
 
-#Import "lib/StringUtils.ahk"
-#Import "lib/Collections.ahk:Stack"
+#Import "lib/StringUtils.ahk" {*}
+#Import "lib/Collections.ahk:Stack" {Stack}
 
 ; Both files could internally use `#Module Helper` for private
 ; utilities without any naming collision.
@@ -38,13 +38,13 @@ MsgBox "Stack peek: " s.Peek()
 
 #Module LocalHelper
 
-export Greet(name)
+Greet(name)
 {
     return "Hello, " name "! Welcome to alpha.21."
 }
 
 #Module __Main
 
-#Import {Greet} from LocalHelper
+#Import LocalHelper {Greet}
 
 MsgBox Greet("Developer")

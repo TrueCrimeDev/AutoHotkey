@@ -24,16 +24,17 @@ Hr(label) {
 
 ; ─── Common struct definitions ──────────────────────────────────────────────
 
-
+Struct POINT {
+    x: Int32, y: Int32
 }
 Struct RECT {
-    left: i32, top: i32, right: i32, bottom: i32
+    left: Int32, top: Int32, right: Int32, bottom: Int32
 }
 Struct RGBA {
-    r: u8, g: u8, b: u8, a: u8
+    r: UInt8, g: UInt8, b: UInt8, a: UInt8
 }
 Struct PACKED_U32 {
-    value: u32
+    value: UInt32
 }
 
 
@@ -123,16 +124,16 @@ Print Format("after bottomRight.x := 999   rc.right = {}`n", rc.right)
 Hr("6. peek-then-upgrade dispatch")
 
 Struct NMHDR {
-    hwndFrom: uptr, idFrom: uptr, code: i32
+    hwndFrom: IntPtr, idFrom: IntPtr, code: Int32
 }
 Struct NMCUSTOMDRAW {
     hdr: NMHDR
-    dwDrawStage: u32
-    hdc: uptr
+    dwDrawStage: UInt32
+    hdc: IntPtr
     rc: RECT
-    dwItemSpec: uptr
-    uItemState: u32
-    lItemlParam: uptr
+    dwItemSpec: IntPtr
+    uItemState: UInt32
+    lItemlParam: IntPtr
 }
 
 NM_CUSTOMDRAW := -12
@@ -164,7 +165,7 @@ Dispatch(fakeLParam.Ptr)
 Hr("7. arena allocator")
 
 Struct Particle {
-    x: f32, y: f32, vx: f32, vy: f32, life: f32, _pad: u32
+    x: Float32, y: Float32, vx: Float32, vy: Float32, life: Float32, _pad: UInt32
 }
 
 class ParticlePool {
@@ -199,7 +200,7 @@ Print Format("  one allocation, {} slots, {} bytes total`n", pool.cap, pool.mem.
 
 
 ; ─── 8. Byte-level inspection via a typed-array .At() ───────────────────────
-; Numeric types expose .At() through the [N] form, so a u8[16] window
+; Numeric types expose .At() through the [N] form, so a UInt8[16] window
 ; over any pointer lets you dump raw bytes for layout/debug work.
 
 Hr("8. byte-level inspection")
@@ -236,8 +237,8 @@ Print Format("  cursor (via handle) = {}`n", ReadCursor(handle))
 ;  .At() does NOT extend lifetime — drop the source and the Ptr dangles.
 
 
-; ─── 10. Byte-swap a u32 by viewing it as 4 bytes ───────────────────────────
-; Endian fiddling without bitshifts: alias a u32 as a u8[4] view, swap
+; ─── 10. Byte-swap a UInt32 by viewing it as 4 bytes ───────────────────────────
+; Endian fiddling without bitshifts: alias a UInt32 as a UInt8[4] view, swap
 ; in place. Same bytes, different field labels.
 
 Hr("10. endian flip via aliasing")

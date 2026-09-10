@@ -10,13 +10,13 @@
 ;   - Import order no longer matters for name resolution
 ; ============================================================
 
-; Define modules that reference each other's exports.
+; Define modules that reference each other's names.
 ; In alpha.20, this required careful ordering.
 ; In alpha.21, it "just works" because modules init lazily.
 
 #Module Logger
 
-export Log(msg)
+Log(msg)
 {
     ; Uses FormatTimestamp from Formatter (forward reference)
     OutputDebug "[" FormatTimestamp() "] " msg
@@ -24,17 +24,17 @@ export Log(msg)
 }
 
 ; Import from Formatter — which is defined AFTER Logger
-#Import {FormatTimestamp} from Formatter
+#Import Formatter {FormatTimestamp}
 
 
 #Module Formatter
 
-export FormatTimestamp()
+FormatTimestamp()
 {
     return FormatTime(, "yyyy-MM-dd HH:mm:ss")
 }
 
-export FormatNumber(n, decimals := 2)
+FormatNumber(n, decimals := 2)
 {
     return Format("{:." decimals "f}", n)
 }
@@ -43,8 +43,8 @@ export FormatNumber(n, decimals := 2)
 ; --- Main ---
 #Module __Main
 
-#Import {Log} from Logger
-#Import {FormatNumber} from Formatter
+#Import Logger {Log}
+#Import Formatter {FormatNumber}
 
 ; Logger module initializes only when Log() is first called.
 ; At that point, Formatter is also initialized (because Logger imports from it).
@@ -53,9 +53,11 @@ MsgBox msg
 
 MsgBox "Formatted: " FormatNumber(3.14159, 4)
 
-; Demonstrate that unused modules don't run
+; A module nothing imports.
+; alpha.21 documented that such a module never initializes. Observed on the
+; alpha.31 engine: it DOES run, and before __Main's auto-execute section, so
+; this MsgBox appears first. Do not rely on "unused" modules staying inert.
 #Module NeverUsed
 
-; This code never executes because nothing imports from NeverUsed
-MsgBox "You should never see this!"
+MsgBox "NeverUsed initialized (nothing imports this module)"
 global SideEffect := "This was set by NeverUsed"

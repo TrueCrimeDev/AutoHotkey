@@ -55,9 +55,9 @@ PrintLine "── 2. Struct array alignment (fixed) ──"
 ; Alpha.26 correctly aligns array elements to their natural boundary.
 
 Struct AlignedRecord {
-    id: u8
+    id: UInt8
     values: Float64[3]   ; 8-byte aligned, even after 1-byte id
-    flags: u32
+    flags: UInt32
 }
 
 rec := AlignedRecord()
@@ -96,8 +96,8 @@ PrintLine "── 3. StructClass.Ptr fix ──"
 ; definition, preventing further modification. Now it doesn't.
 
 Struct Header {
-    magic: u32
-    version: u16
+    magic: UInt32
+    version: UInt16
 }
 
 ; Access .Ptr on the class itself -- this no longer seals it
@@ -122,14 +122,14 @@ PrintLine "── 4. DllCall(F, StructType, unset) behavior ──"
 ; output parameters where the DLL fills in the struct.
 
 Struct SYSTEMTIME {
-    wYear: u16
-    wMonth: u16
-    wDayOfWeek: u16
-    wDay: u16
-    wHour: u16
-    wMinute: u16
-    wSecond: u16
-    wMilliseconds: u16
+    wYear: UInt16
+    wMonth: UInt16
+    wDayOfWeek: UInt16
+    wDay: UInt16
+    wHour: UInt16
+    wMinute: UInt16
+    wSecond: UInt16
+    wMilliseconds: UInt16
 }
 
 ; Pass unset -- DllCall creates a SYSTEMTIME() for us
