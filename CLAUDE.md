@@ -189,13 +189,13 @@ Key commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`,
 
 ---
 
-# Current State & Open Items (updated 2026-09-08)
+# Current State & Open Items (updated 2026-09-11)
 
 - Local engine builds use `2.1-alpha.31+Console` (upstream `v2.1-alpha.31`
-  merged in `c73ae823`; `bin/AutoHotkey64.exe` on disk is still the alpha.30
-  build until the running app releases its lock and it is rebuilt, while
-  `bin_harness/AutoHotkey64Harness.exe` already carries alpha.31); `--version`
-  identifies the actual source revision, compiler, and architecture. Windows
+  merged in `c73ae823`; `bin/AutoHotkey64.exe` was rebuilt on 2026-09-11 from
+  `ef2047d4` via the CMake/MSVC route and passes the native gate 9/9, and
+  `bin_harness/AutoHotkey64Harness.exe` carries the mingw alpha.31 build);
+  `--version` identifies the actual source revision, compiler, and architecture. Windows
   MSVC and mingw-w64 builds are supported. CMake with Ninja from a Visual
   Studio developer prompt works with Build Tools 18; see BUILD.md for an
   isolated output directory. Build and test locally when requested; remote

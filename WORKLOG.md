@@ -221,7 +221,7 @@ unlogged loop session between 3 and now.)
   `tests/run_console_gate.py` **9/9 suites**, `qa: 645 passed, 0 failed,
   0 crashed across 10 file(s)` (`test_json_regressions.ahk` green again once
   its JSON code was back). `tests/test_console_cli.py` and
-  `tests/test_powershell_cli.py` (both still uncommitted) now expect alpha.31.
+  `tests/test_powershell_cli.py` (committed in `7614a4f4`) now expect alpha.31.
 
 ### Session 6 (2026-09-10) — stale example repair for alpha.31
 
@@ -257,3 +257,19 @@ unlogged loop session between 3 and now.)
 - Result: `check` passes for every file under `examples/` (0 failures) on the
   alpha.31 harness; all touched examples run to exit 0 (GUI-only ones via
   `check`).
+
+### Session 7 (2026-09-11) — `bin/` engine rebuilt to alpha.31
+
+- The only holder of the `bin/AutoHotkey64.exe` lock was this session's own
+  `.mcp.json` server (`AutoHotkey64.exe mcp`, PID matched by command line),
+  not `_.ahk`; stopped that one PID only.
+- Built the canonical engine the CI way (CMake + Ninja, VS18 BuildTools,
+  `-DAHK_OUTPUT_DIR=bin_review` in `build_console_review/`), which embeds the
+  git revision. `--version`: `v2.1-alpha.31+Console revision=ef2047d49c32
+  compiler=MSVC 195035719`. The msbuild `build_local.bat` route was tried
+  first and produces `revision=unknown` (the vcxproj never defines
+  `AHK_BUILD_REVISION`) — use the CMake route for `bin/`.
+- Gate `tests/run_console_gate.py` 9/9 against `bin_review/` and again
+  against the copied `bin/AutoHotkey64.exe`. Previous alpha.30 exe kept at
+  `tests/tmp/AutoHotkey64.exe.bak` (gitignored scratch).
+
