@@ -52,8 +52,8 @@ Print Format("Float64[3]: [{}, {}, {}] -- {} bytes`n", f[1], f[2], f[3], f.Size)
 
 ; Struct arrays
 Struct POINT {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 pa := POINT[3]()
 pa[1].x := 10,  pa[1].y := 20
@@ -74,8 +74,8 @@ Print Format("... ({} bytes)`n", h.Size)
 
 ; Size fix -- returns struct layout size, not allocated size
 Struct SmallPair {
-    a: u8
-    b: u8
+    a: UInt8
+    b: UInt8
 }
 s := SmallPair()
 s.a := 0xFF, s.b := 0x42
@@ -83,10 +83,10 @@ Print Format("SmallPair(0x{:02X}, 0x{:02X}) -- Size={} bytes`n", s.a, s.b, s.Siz
 
 ; RGBQUAD color palette using struct arrays
 Struct RGBQUAD {
-    blue: u8
-    green: u8
-    red: u8
-    reserved: u8
+    blue: UInt8
+    green: UInt8
+    red: UInt8
+    reserved: UInt8
 }
 pal := RGBQUAD[256]()
 loop 256

@@ -210,7 +210,7 @@ struct JsonScanner
 	// Decodes a JSON string literal. Assumes s[i] == '"'. aOut may be null to
 	// validate the string (escapes, control chars) while allocating nothing —
 	// so JSON.Validate reuses this exact grammar rather than a second copy.
-	bool ReadString(JsonBuf *aOut)
+	bool ReadString(JsonBuf *aOut, bool aIsKey = false)
 	{
 		++i; // opening quote
 		size_t runStart = i;
@@ -258,6 +258,11 @@ struct JsonScanner
 						v = v * 16 + d;
 					}
 					i += 4;
+					// Object/Map keys are NUL-terminated engine strings. Reject a
+					// key we cannot represent rather than silently merging it with
+					// another key. String values still retain embedded U+0000.
+					if (aIsKey && v == 0)
+						return Fail(_T("UnsupportedKey"), _T("Object keys containing U+0000 are not supported"));
 					// AHK strings are UTF-16, so a surrogate pair written as two
 					// \u escapes lands as two correct code units with no work.
 					if (aOut) aOut->Put((TCHAR)v);
@@ -377,22 +382,67 @@ bool JsonArray::AppendTagged(ExprTokenType &aValue, JsonTag aTag)
 	index_t len = Length();
 	if (aTag != JTAG_NONE || mTags)
 	{
-		// Allocated lazily: an array with no true/false/null needs no tags at all.
-		auto bigger = (JsonTag *)realloc(mTags, len * sizeof(JsonTag));
-		if (!bigger)
+		// OnInsert already expanded existing tags. Allocate lazily when the
+		// first keyword arrives, initializing earlier numeric/string items.
+		if (!mTags)
 		{
-			free(mTags);
-			mTags = nullptr;
-			mTagCount = 0;
-			return true;   // the value is stored; only fidelity is lost
+			mTags = (JsonTag *)calloc(len, sizeof(JsonTag));
+			if (!mTags)
+				return false; // The parser releases the unfinished array.
 		}
-		mTags = bigger;
-		for (index_t k = mTagCount; k + 1 < len; ++k)
-			mTags[k] = JTAG_NONE;
 		mTags[len - 1] = aTag;
 		mTagCount = len;
 	}
 	return true;
+}
+
+ResultType JsonArray::OnInsert(index_t aIndex, index_t aCount)
+{
+	if (!mTags || !aCount)
+		return OK;
+	index_t len = Length();
+	auto bigger = (JsonTag *)realloc(mTags, (len + aCount) * sizeof(JsonTag));
+	if (!bigger)
+		return FAIL;
+	mTags = bigger;
+	memmove(mTags + aIndex + aCount, mTags + aIndex, (len - aIndex) * sizeof(JsonTag));
+	memset(mTags + aIndex, JTAG_NONE, aCount * sizeof(JsonTag));
+	mTagCount = len + aCount;
+	return OK;
+}
+
+void JsonArray::OnRemove(index_t aIndex, index_t aCount)
+{
+	if (!mTags || !aCount)
+		return;
+	index_t len = Length();
+	memmove(mTags + aIndex, mTags + aIndex + aCount, (len - aIndex - aCount) * sizeof(JsonTag));
+	mTagCount = len - aCount;
+}
+
+void JsonArray::OnSet(index_t aIndex)
+{
+	if (mTags && aIndex < mTagCount)
+		mTags[aIndex] = JTAG_NONE;
+}
+
+Array *JsonArray::Clone()
+{
+	auto arr = new JsonArray();
+	if (!CloneArrayTo(*arr))
+		return nullptr; // CloneArrayTo released arr.
+	if (mTags && mTagCount)
+	{
+		arr->mTags = (JsonTag *)malloc(mTagCount * sizeof(JsonTag));
+		if (!arr->mTags)
+		{
+			arr->Release();
+			return nullptr;
+		}
+		memcpy(arr->mTags, mTags, mTagCount * sizeof(JsonTag));
+		arr->mTagCount = mTagCount;
+	}
+	return arr;
 }
 
 JsonObject::~JsonObject()
@@ -763,6 +813,11 @@ struct JsonValue
 	IObject *owned = nullptr;   // reference to release once stored
 	LPTSTR ownedStr = nullptr;  // decoded string buffer to free once copied
 
+	JsonValue() = default;
+	JsonValue(const JsonValue &) = delete;
+	JsonValue &operator=(const JsonValue &) = delete;
+	~JsonValue() { Release(); }
+
 	void Release()
 	{
 		if (owned)
@@ -913,7 +968,7 @@ bool ParseObject(JsonScanner &sc, JsonValue &aOut, int aDepth)
 		if (sc.i >= sc.n || sc.s[sc.i] != '"')
 			return sc.FailChar(_T("UnexpectedChar"), _T("Expected a quoted property name"));
 		JsonBuf key;
-		if (!sc.ReadString(&key))
+		if (!sc.ReadString(&key, true))
 			return false;
 		key.Terminate();
 		if (key.failed)
@@ -1071,7 +1126,7 @@ bool SkipValue(JsonScanner &sc, int aDepth)
 			if (sc.opt.allowTrailingCommas && sc.i < sc.n && sc.s[sc.i] == '}') { ++sc.i; return true; }
 			if (sc.i >= sc.n || sc.s[sc.i] != '"')
 				return sc.FailChar(_T("UnexpectedChar"), _T("Expected a quoted property name"));
-			if (!sc.ReadString(nullptr))
+			if (!sc.ReadString(nullptr, true))
 				return false;
 			sc.SkipWs();
 			if (sc.i >= sc.n || sc.s[sc.i] != ':')
@@ -1501,7 +1556,7 @@ void ParseCore(LPTSTR text, size_t len, const JsonParseOpts &po, ResultToken &aR
 		return;
 	}
 	sc.SkipWs();
-	if (sc.i < sc.n)
+	if (sc.failed || sc.i < sc.n)
 	{
 		val.Release();
 		sc.Fail(_T("TrailingContent"), _T("Unexpected content after the JSON value"));
@@ -1822,7 +1877,9 @@ BIF_DECL(JsonClass_Validate)
 	if (ok)
 	{
 		sc.SkipWs();
-		if (sc.i < sc.n)
+		if (sc.failed)
+			ok = false;
+		else if (sc.i < sc.n)
 			sc.Fail(_T("TrailingContent"), _T("Unexpected content after the JSON value")), ok = false;
 	}
 	if (ok && !po.allowTopLevelScalar && topIsScalar)
@@ -1926,6 +1983,12 @@ BIF_DECL(JsonClass_ParseAt)
 	}
 
 	sc.SkipWs(); // position Pos at the next record for the following call
+	if (sc.failed)
+	{
+		posVar->Assign((__int64)(sc.errPos + 1));
+		aResultToken.SetExitResult(ThrowJsonError(sc.errCode, sc.errMsg, sc.errLine, sc.errCol, sc.errPos) == OK ? OK : FAIL);
+		return;
+	}
 	posVar->Assign((__int64)(sc.i + 1));
 	EmitJsonValue(aResultToken, val);
 }

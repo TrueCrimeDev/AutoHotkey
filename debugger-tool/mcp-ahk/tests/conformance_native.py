@@ -183,7 +183,7 @@ try:
     # server_status
     s = tool_payload(by_id[19])
     check("status.identity", s.get("name") == "ahk-mcp" and s.get("version") == "0.1.0", str(s)[:200])
-    check("status.ahkVersion", "2.1-alpha.30" in s.get("ahkVersion", ""), str(s.get("ahkVersion")))
+    check("status.ahkVersion", "2.1-alpha.31" in s.get("ahkVersion", ""), str(s.get("ahkVersion")))
     check("status.pid", isinstance(s.get("pid"), int) and s["pid"] > 0)
     check("status.toolsRegistered", s.get("toolsRegistered") == 5, str(s.get("toolsRegistered")))
     # 21 method-bearing messages were sent (19 with ids + 2 notifications)

@@ -14,11 +14,11 @@ Print(text) => stdout.Write(text)
 ; Real RECT/POINT for DllCall — no more Buffer+NumPut
 
 Struct RECT {
-    left: i32, top: i32, right: i32, bottom: i32
+    left: Int32, top: Int32, right: Int32, bottom: Int32
 }
 Struct POINT {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 
 ; Get cursor position via DllCall + struct
@@ -44,15 +44,15 @@ Print Format("POINT.At(buf): ({}, {}) — no copy, same memory`n", view.x, view.
 ; POINT[N] — contiguous array, perfect for DllCall that fills arrays
 
 Struct MONITORINFO {
-    cbSize: u32
+    cbSize: UInt32
     rcMonitor: RECT
     rcWork: RECT
-    dwFlags: u32
+    dwFlags: UInt32
 }
 
 ; Typed array as a pixel buffer (e.g., for GDI operations)
 Struct RGBQUAD {
-    b: u8, g: u8, r: u8, a: u8
+    b: UInt8, g: UInt8, r: UInt8, a: UInt8
 }
 pixels := RGBQUAD[8]()
 loop 8 {
@@ -89,11 +89,11 @@ Print Format("Temps avg: {:.1f}°C`n", sum / temps.Length)
 ; Struct for a custom packet header + byte payload
 
 Struct PacketHeader {
-    magic: u16
-    version: u8
-    flags: u8
-    length: u32
-    checksum: u32
+    magic: UInt16
+    version: UInt8
+    flags: UInt8
+    length: UInt32
+    checksum: UInt32
 }
 
 pkt := PacketHeader()
@@ -166,17 +166,17 @@ ValidateConfig("localhost", 8080)
 ; Struct.Ptr is auto-generated — use directly in DllCall type signatures
 
 Struct SYSTEM_INFO {
-    wProcessorArchitecture: u16
-    wReserved: u16
-    dwPageSize: u32
-    lpMinAppAddress: uptr
-    lpMaxAppAddress: uptr
-    dwActiveProcessorMask: uptr
-    dwNumberOfProcessors: u32
-    dwProcessorType: u32
-    dwAllocationGranularity: u32
-    wProcessorLevel: u16
-    wProcessorRevision: u16
+    wProcessorArchitecture: UInt16
+    wReserved: UInt16
+    dwPageSize: UInt32
+    lpMinAppAddress: IntPtr
+    lpMaxAppAddress: IntPtr
+    dwActiveProcessorMask: IntPtr
+    dwNumberOfProcessors: UInt32
+    dwProcessorType: UInt32
+    dwAllocationGranularity: UInt32
+    wProcessorLevel: UInt16
+    wProcessorRevision: UInt16
 }
 
 si := SYSTEM_INFO()
@@ -188,9 +188,9 @@ Print Format("CPU: {} cores, page={}KB, arch={}`n",
 ; ─── 9. Nested structs + Struct.At for callback data ─────────────────────────
 
 Struct NMHDR {
-    hwndFrom: uptr
-    idFrom: uptr
-    code: i32
+    hwndFrom: IntPtr
+    idFrom: IntPtr
+    code: Int32
 }
 
 ; Simulate reading a WM_NOTIFY lParam — write raw bytes, read as struct
@@ -207,20 +207,20 @@ Print Format("NMHDR.At: hwnd=0x{:X} id={} code={} — same memory`n",
 ; ─── 10. Size fix demo — layout size vs allocation size ───────────────────────
 
 Struct Tiny {
-    a: u8
+    a: UInt8
 }
 
 Struct Pair {
-    a: u8, b: u8
+    a: UInt8, b: UInt8
 }
 
 Struct Triple {
-    a: u8, b: u8, c: u8
+    a: UInt8, b: UInt8, c: UInt8
 }
 
 Struct Mixed {
-    flag: u8
-    value: Float64  ; padding between u8 and f64
+    flag: UInt8
+    value: Float64  ; padding between UInt8 and Float64
 }
 
 Print Format("Sizes: Tiny={} Pair={} Triple={} Mixed={}`n",

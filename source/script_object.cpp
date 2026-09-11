@@ -690,8 +690,9 @@ Object::~Object()
 				ASSERT(nested_size >= sizeof(Object));
 				for (size_t i = 0; i < count; ++i)
 				{
-					auto nested = (Object*)(nest -= nested_size); // Destruct right to left.
-					nested->~Object();
+					auto p = (Object*)(nest -= nested_size); // Destruct right to left.
+					if (*(UINT_PTR*)p) // vftbl initialized
+						p->~Object();
 				}
 			}
 		}
@@ -1433,6 +1434,8 @@ bool Array::Append(ExprTokenType &aValue)
 {
 	if (mLength == MaxIndex || !EnsureCapacity(mLength + 1))
 		return false;
+	if (!OnInsert(mLength, 1))
+		return false;
 	auto &item = mItem[mLength++];
 	item.Minit();
 	return item.Assign(aValue);
@@ -1705,7 +1708,7 @@ Object *Object::CreateClass(LPTSTR aClassName, Object *aBase, Object *aPrototype
 		ctor->Release();
 	}
 
-	auto var = g_script.FindOrAddVar(aClassName, 0, VAR_DECLARE_GLOBAL | VAR_EXPORTED);
+	auto var = g_script.FindOrAddVar(aClassName, 0, VAR_DECLARE_GLOBAL);
 	var->AssignSkipAddRef(class_obj);
 	var->MakeReadOnly();
 
@@ -2933,6 +2936,8 @@ ResultType Array::InsertAt(index_t aIndex, TokenT aValue[], index_t aCount)
 
 	if (!EnsureCapacity(mLength + aCount))
 		return FAIL;
+	if (!OnInsert(aIndex, aCount))
+		return FAIL;
 
 	if (aIndex < mLength)
 	{
@@ -2953,6 +2958,7 @@ template ResultType Array::InsertAt(index_t, ExprTokenType [], index_t);
 void Array::RemoveAt(index_t aIndex, index_t aCount)
 {
 	ASSERT(aIndex + aCount <= mLength);
+	OnRemove(aIndex, aCount);
 
 	for (index_t i = 0; i < aCount; ++i)
 	{
@@ -2973,6 +2979,8 @@ ResultType Array::SetLength(index_t aNewLength)
 		return OK;
 	}
 	if (aNewLength > mCapacity && !SetCapacity(aNewLength))
+		return FAIL;
+	if (!OnInsert(mLength, aNewLength - mLength))
 		return FAIL;
 	for (index_t i = mLength; i < aNewLength; ++i)
 	{
@@ -3001,23 +3009,31 @@ Array *Array::Create(ExprTokenType *aValue[], index_t aCount)
 Array *Array::Clone()
 {
 	auto arr = new Array();
-	if (!CloneTo(*arr))
-		return nullptr; // CloneTo() released arr.
-	if (!arr->SetCapacity(mCapacity))
-		return nullptr;
+	return CloneArrayTo(*arr) ? arr : nullptr;
+}
+
+bool Array::CloneArrayTo(Array &aClone)
+{
+	if (!CloneTo(aClone))
+		return false; // CloneTo() released aClone.
+	if (!aClone.SetCapacity(mCapacity))
+	{
+		aClone.Release();
+		return false;
+	}
 	for (index_t i = 0; i < mLength; ++i)
 	{
-		auto &new_item = arr->mItem[arr->mLength++];
+		auto &new_item = aClone.mItem[aClone.mLength++];
 		new_item.Minit();
 		ExprTokenType value;
 		mItem[i].ToToken(value);
 		if (!new_item.Assign(value))
 		{
-			arr->Release();
-			return nullptr;
+			aClone.Release();
+			return false;
 		}
 	}
-	return arr;
+	return true;
 }
 
 bool Array::ItemToToken(index_t aIndex, ExprTokenType &aToken)
@@ -3058,6 +3074,7 @@ void Array::Invoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType
 		auto &item = mItem[index];
 		if (IS_INVOKE_SET)
 		{
+			OnSet(index);
 			if (!item.Assign(*aParam[0]))
 				_o_throw_oom;
 			return;
@@ -3166,6 +3183,7 @@ void Array::Invoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType
 			_o_throw_param(0);
 		mItem[index].ReturnMove(aResultToken);
 		mItem[index].AssignMissing();
+		OnSet(index);
 		_o_return_retval;
 	}
 
@@ -3333,9 +3351,13 @@ Object::PropEnum::PropEnum(Object *aObject)
 }
 
 
-Object::PropEnum::PropEnum(Object *aObject, ExprTokenType &aThisToken)
+Object::PropEnum::PropEnum(Object *aObject, ExprTokenType &aThisToken, LPTSTR aMemToFree)
 	: PropEnum(aObject)
 {
+	// When called by the debugger, any string or reference in aThisToken will outlive
+	// this PropEnum.  Other callers must utilize aMemToFree for strings (which would
+	// occur with Props(a:="b"), relevant when String.Prototype is modified).
+	mMemToFree = aMemToFree;
 	mThisToken.CopyValueFrom(aThisToken);
 }
 
@@ -3344,6 +3366,7 @@ Object::PropEnum::~PropEnum()
 {
 	mObject->Release();
 	delete[] mIndex;
+	free(mMemToFree);
 }
 
 

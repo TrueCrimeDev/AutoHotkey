@@ -1110,9 +1110,12 @@ void SendKey(vk_type aVK, sc_type aSC, modLR_type aModifiersLR, modLR_type aModi
 		// v1.0.42.04: Mouse clicks are now handled here in the same loop as keystrokes so that the modifiers
 		// will be readjusted (above) if the user presses/releases modifier keys during the mouse clicks.
 		if (vk_is_mouse && !aTargetWindow)
+		{
 			MouseClick(aVK, aX, aY, 1, g->DefaultMouseSpeed, aEventType, aMoveOffset);
 			// Above: Since it's rare to send more than one click, it seems best to simplify and reduce code size
-			// by not doing more than one click at a time event when mode is SendInput/Play.
+			// by not doing more than one click at a time when mode is SendInput/Play.
+			aX = aY = COORD_UNSPECIFIED; // Don't repeat the move, only the click.
+		}
 		else
 			// Sending mouse clicks via ControlSend is not supported, so in that case fall back to the
 			// old method of sending the VK directly (which probably has no effect 99% of the time):

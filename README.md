@@ -5,7 +5,7 @@ errors go to `stderr` (as text **or** JSON), failures return meaningful exit cod
 can be suppressed, and the debugger speaks DBGp so an LLM can drive it. Everything else is
 stock AutoHotkey.
 
-![engine](https://img.shields.io/badge/engine-2.1--alpha.30%2BConsole-5B9FEF)
+![engine](https://img.shields.io/badge/engine-2.1--alpha.31%2BConsole-5B9FEF)
 ![based on](https://img.shields.io/badge/based%20on-AutoHotkey%20v2.1--alpha-22D3EE)
 [![Build AutoHotkey](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml/badge.svg)](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml)
 ![license](https://img.shields.io/badge/license-GPL--2.0-7BC96F)
@@ -21,6 +21,7 @@ stock AutoHotkey.
 - [Error reporting](#error-reporting)
 - [Exit codes](#exit-codes)
 - [Language additions](#language-additions)
+- [Native JSON and local tools](#native-json-and-local-tools)
 - [REPL](#repl)
 - [Crash logging](#crash-logging)
 - [AI-assisted debugging](#ai-assisted-debugging)
@@ -51,7 +52,7 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 | **stdout helper** | `FileOpen("*","w")` boilerplate | `Print(fmt, args*)` — UTF-8, `Format`-aware |
 | **Debugger** | DBGp (desktop-oriented) | Same DBGp, wired to an MCP server for LLM-driven debugging |
 
-None of this touches the language. Scripts that run on upstream `v2.1-alpha.30` run here
+None of this touches the language. Scripts that run on upstream `v2.1-alpha.31` run here
 unchanged; the additions are flags, subcommands, and a few opt-in built-ins.
 
 ---
@@ -83,6 +84,35 @@ invocations, and the CMake flags — are in [`BUILD.md`](BUILD.md) and [`updates
 bin\AutoHotkey64.exe script.ahk
 ```
 
+Use `bin\AutoHotkey64.exe --help` to discover commands, `--version` to identify the
+engine, compiler, architecture, and source revision, or `--capabilities` for JSON.
+An uncommitted source build reports its base revision with a `-dirty` suffix.
+
+For PowerShell, build `AutoHotkey64Console` as described in [BUILD.md](BUILD.md)
+and dot-source `tools/ahk.ps1` from this checkout (or from your PowerShell profile).
+It registers `ahk` as a native alias to `bin/AutoHotkey64Console.exe`, so the
+terminal waits for scripts and the REPL receives keyboard input directly.
+
+```powershell
+. .\tools\ahk.ps1
+ahk                       # Version and quick guide
+ahk help                  # Also: -h, --h, -help, --help
+ahk run .\script.ahk       # Or: ahk .\script.ahk
+ahk check .\script.ahk
+ahk repl                  # Type .exit to return to PowerShell
+```
+
+The console executable reports script errors in the terminal by default. The
+standard `AutoHotkey64.exe` remains available for GUI launches. See the
+[PowerShell repair notes](docs/powershell-cli-20260907.md) for troubleshooting.
+
+The four current executables in `bin/` share the same source: x64/x86 and
+console/GUI launch options. For everyday terminal use, choose
+`AutoHotkey64Console.exe` through `ahk`. Older local executables are kept under
+`bin/archive/`; `bin/archive-index.json` maps their original names to archived
+paths and hashes. Keep future backup copies in the archive so they do not obscure
+the current launchers. `bin/README.txt` provides a short guide beside the files.
+
 ### Confirm the console behavior
 
 ```powershell
@@ -110,12 +140,21 @@ One executable, selected into different modes by its first arguments:
 | `AutoHotkey64.exe check script.ahk` | Parse only — exit `0` (ok) / `13` (fail) |
 | `AutoHotkey64.exe test script.ahk` | Run as a test — exit `0` (pass) / `14` (fail) |
 | `AutoHotkey64.exe repl [script.ahk]` | Interactive / pipe-driven eval session ([REPL](#repl)) |
+| `AutoHotkey64.exe mcp` | Native local tools over stdin/stdout |
+| `AutoHotkey64.exe --help` | Commands, flags, and usage |
+| `AutoHotkey64.exe --version` | Engine version and build identity |
+| `AutoHotkey64.exe --capabilities` | Machine-readable feature and protocol information |
+| `AutoHotkey64Console.exe /Trace script.ahk` | Stream readable executing statements to stderr; quiet while idle ([trace notes](docs/console-trace-20260907.md)) |
 
 Flags compose. A typical unattended invocation:
 
 ```powershell
 bin\AutoHotkey64.exe /Headless /Diag=json script.ahk 2>diagnostics.jsonl
 ```
+
+Global flags can precede a command: `/Headless /Diag=json check script.ahk`.
+Arguments after the script filename belong to the script. Use `--` before a script
+filename which would otherwise be interpreted as a command or flag.
 
 ---
 
@@ -214,7 +253,7 @@ Print("{ok: true}")                 ; single-arg form is literal — braces surv
 ### `Eval(expr)` — evaluate an expression in live scope *(opt-in)*
 
 Runs any AHK expression string against the caller's variables — reads and writes locals, calls
-methods, supports alpha.30 expression features. Gated behind `#EnableEval` (or the `/Eval`
+methods, supports alpha.31 expression features. Gated behind `#EnableEval` (or the `/Eval`
 flag) so it can never run unless you ask for it.
 
 ```ahk
@@ -243,6 +282,27 @@ for line in _ScriptGetLines(A_LineFile, A_LineNumber, -3)   ; 3 lines either sid
 
 ---
 
+## Native JSON and local tools
+
+`JSON.Parse`, `JSON.Stringify`, and `JSON.Validate` are built in:
+
+```autohotkey
+values := JSON.Parse('[true,false,null]')
+values[1] := "edited"
+Print(JSON.Stringify(values)) ; ["edited",false,null]
+```
+
+Parsed arrays preserve untouched boolean/null types through edits, insertion,
+removal, resizing, and cloning. Assignment clears the original element's type tag;
+use `JSON.True`, `JSON.False`, or `JSON.Null` when explicitly assigning those types.
+String values support embedded NUL characters. Object keys containing NUL are
+rejected with `UnsupportedKey` to prevent truncation and key collisions.
+
+`bin\AutoHotkey64.exe mcp` provides the native MCP tools to a local client over
+stdin/stdout. It does not need a network listener. `--capabilities` reports the
+supported protocol versions and engine features. The optional bundled tree-sitter
+grammar DLL supports x64 only.
+
 ## REPL
 
 `repl` turns the binary into a persistent interpreter session: expressions arrive on
@@ -252,7 +312,7 @@ live.
 
 ```text
 $ bin\AutoHotkey64.exe repl
-AutoHotkey v2.1-alpha.30+Console REPL - one expression per line; .help for commands
+AutoHotkey v2.1-alpha.31+Console REPL - one expression per line; .help for commands
 >>> x := 10
 10
 >>> x * 4
@@ -265,11 +325,14 @@ AutoHotkey v2.1-alpha.30+Console REPL - one expression per line; .help for comma
 
 - `repl script.ahk` loads the script, runs its auto-execute section, then opens the
   session against its state — hotkeys, timers and GUI events keep firing throughout.
-- **Errors never end the session**: parse and runtime errors print one line (stderr in
-  text mode) and the loop continues with prior state intact.
+- Recoverable parse and runtime errors print one line (stderr in text mode) and the
+  loop continues. Invalid syntax preserves existing variable lookup state.
 - EOF or `.exit` exits `0`; `ExitApp(n)` exits with `n`.
-- `/Diag=json` makes every input line produce exactly one JSON result line on stdout —
-  the agent-friendly wire format:
+- `/Diag=json` produces one JSON result per input line, including blank lines,
+  `.help`, and `.exit`. Results use the full string length, including escaped NULs.
+  Ordinary script output (`Print`, `FileAppend`, `FileOpen`, and startup output)
+  goes to stderr so stdout remains readable as JSON. Explicit `ExitApp` or a fatal
+  process failure can end the session before a result is written.
 
 ```json
 {"kind":"result","ok":true,"type":"Integer","value":"42"}
@@ -290,7 +353,7 @@ last events survive even a hard crash. It works regardless of how the script was
 including launchers that discard `stderr`.
 
 ```text
-[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.30+Console script=C:\app\app.ahk ...
+[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.31+Console script=C:\app\app.ahk ...
 [2026-05-13 21:43:22] [ERROR] pid=12345 type=TypeError mode=Exit
   Message: This value of type "String" has no method named "DoStuff".
   File: C:\app\Lib\Clip.ahk

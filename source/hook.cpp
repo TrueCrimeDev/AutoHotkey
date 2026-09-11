@@ -449,21 +449,6 @@ LRESULT LowLevelCommon(const HHOOK aHook, int aCode, WPARAM wParam, LPARAM lPara
 	// The following is done even if key history is disabled because sAltTabMenuIsVisible relies on it:
 	pKeyHistoryCurr->event_type = is_ignored ? 'i' : (is_artificial ? 'a' : ' '); // v1.0.42.04: 'a' was added, but 'i' takes precedence over 'a'.
 
-	if (g_script.mTrace && g_KeyHistory)
-	{
-		TCHAR _key_name[128];
-		GetKeyName(aVK, aSC, _key_name, _countof(_key_name));
-		char _buf[256];
-		int _n = snprintf(_buf, sizeof(_buf), "%02X %03X %c %c %0.2f %ls\n"
-			, (unsigned)aVK, (unsigned)aSC
-			, (char)pKeyHistoryCurr->event_type
-			, aKeyUp ? 'u' : 'd'
-			, pKeyHistoryCurr->elapsed_time
-			, _key_name);
-		DWORD _written;
-		WriteFile(GetStdHandle(STD_ERROR_HANDLE), _buf, _n, &_written, NULL);
-	}
-
 	// v2.1: Process any InputHooks which have the H option.  This requires translating the event to text, which
 	// is done only once for each event.  If there are no InputHooks with the H option, the translation is done
 	// later to avoid any change in behaviour compared to v2.0 (such as dead keys affecting the translation prior

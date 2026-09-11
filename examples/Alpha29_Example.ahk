@@ -208,8 +208,8 @@ Print("")
 Print("── 9. Struct.Array.Prototype no longer takes typed props ──")
 
 Struct Point29 {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 
 pts := Point29[4]()

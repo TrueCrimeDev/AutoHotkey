@@ -58,3 +58,4 @@ cmake -G */
 
 # Test run artifacts
 tests/tmp/
+__pycache__/

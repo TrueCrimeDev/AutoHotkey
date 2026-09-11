@@ -1,6 +1,6 @@
 # Updates — Fork Changes Reference
 
-This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.29` in this fork. Use it as the entry point for "what's new and how do I use it."
+This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.31` in this fork. Use it as the entry point for "what's new and how do I use it."
 
 ## Overview at a glance
 
@@ -18,13 +18,13 @@ This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.
 | External-signal exit code | `code=130` for Ctrl+C / close | Always on (gate is whether crash log is on) |
 | Interactive / pipe-driven REPL | `repl` subcommand (see §16) | n/a — explicit mode |
 
-Everything else inherited from `v2.1-alpha.29` works as documented upstream (tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc. — see `examples/Alpha29_Example.ahk` for a runnable showcase).
+Everything else inherited from `v2.1-alpha.31` works as documented upstream (implicit `export` for names defined inside a `#Module`, tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc. — see `examples/Alpha31_Example.ahk` for a runnable showcase of the alpha.31 changes).
 
 ---
 
 ## 1. `Eval(expr)` — runtime expression evaluator
 
-Evaluates an AHK expression string against the caller's live scope. Reads and writes caller locals, calls methods, runs alpha.29 expression features (maybe operator, unset propagation) — anything you could type as the right-hand side of `x := ...` works inside `Eval(...)`.
+Evaluates an AHK expression string against the caller's live scope. Reads and writes caller locals, calls methods, runs alpha.31 expression features (maybe operator, unset propagation) — anything you could type as the right-hand side of `x := ...` works inside `Eval(...)`.
 
 ### Quick example
 
@@ -91,9 +91,13 @@ Both flip the same internal flag. If both are set, no conflict.
 
 It cannot create new locals — that protects you from accidentally polluting the caller's scope with typos.
 
-### Known v1 limitation
+### Runtime parser repairs (September 2026)
 
-The combination `Eval("(() => unsetLocal? || 42)()")` (IIFE + maybe-operator + `||`) currently crashes through `Eval` even though the inline form works. The runtime-preparse path doesn't fully replicate the inline alpha.29 path for that specific combo. Documented in `tests/test_eval.ahk` Section F. Won't bite typical use; avoid IIFEs with the maybe operator inside `Eval` for now.
+Runtime parsing now checks balanced delimiters before creating functions, restores
+existing variable lookup order after failed parses, and resolves references in new
+fat-arrow bodies before execution. `Eval("(() => unsetLocal? || 42)()")` now returns
+unset, matching the inline expression. This formerly crashing case is tested in
+`tests/test_eval.ahk` Section F and `tests/test_console_repl.py`.
 
 ### Test coverage
 
@@ -303,7 +307,7 @@ Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] ke
 ### Example log
 
 ```
-[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.29+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64.exe /CrashLog=C:\logs\ahk.log app.ahk"
+[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.31+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64.exe /CrashLog=C:\logs\ahk.log app.ahk"
 [2026-05-13 21:43:22] [ERROR] pid=12345 type=TypeError mode=Exit
   Message: This value of type "String" has no method named "DoStuff".
   File: C:\Users\me\Lib\Clip.ahk
@@ -598,8 +602,8 @@ bin\AutoHotkey64.exe repl /Diag=json script.ahk :: JSON result lines on stdout
 
 ### Semantics
 
-- `repl` must be the **first** argument (same rule as `check` / `test`); flags and the
-  optional script follow.
+- Global flags can appear before or after `repl` (also `check`, `test`, and `mcp`),
+  before the optional script. Arguments after the script remain script arguments.
 - One expression per line; comma compounds work (`x := 1, y := 2`). Expressions are
   evaluated in **global scope**, so the loaded script's globals, functions and classes
   are all reachable.
@@ -608,20 +612,25 @@ bin\AutoHotkey64.exe repl /Diag=json script.ahk :: JSON result lines on stdout
   pseudo-thread.
 - `Eval()` is implicitly enabled (`g_AllowEval`), `#SingleInstance` is forced off, and
   the script is treated as persistent for the lifetime of the session.
-- **Errors never end the session.** The REPL acts as an implicit try/catch: parse
+- Recoverable errors do not end the session. The REPL acts as an implicit try/catch: parse
   errors and runtime errors print one line and the loop continues, with prior state
   intact. (`SyntaxError: Missing operand.` on stderr in text mode.)
 - EOF or `.exit` → clean exit `0`. `ExitApp(n)` typed into the session exits with `n`.
-- Interactive consoles get a banner and a `>>> ` prompt; piped stdin gets neither.
+- Interactive text consoles get a banner and a `>>> ` prompt; piped stdin and JSON
+  mode get neither. An initial UTF-8 BOM is accepted; malformed UTF-8 input yields
+  an error result and leaves the next input available.
 - Meta-commands: `.exit`, `.help`.
 
 ### Output
 
-Text mode: the expression's value prints to stdout; void/unset results print nothing;
+Text mode: the expression's value prints to stdout; void/unset results print an empty line;
 objects print as `<ClassName object>`; errors print one line to stderr.
 
-JSON mode (`/Diag=json`): exactly **one stdout line per input line**, so a consumer
-never desynchronizes:
+JSON mode (`/Diag=json`): one stdout result per input line, including blank lines,
+`.help`, and `.exit`. Ordinary script stdout is redirected to stderr before the
+host script loads; this covers `Print`, `FileAppend`, and `FileOpen`. Results are
+ordered with input and use dynamic, length-aware serialization. Explicit
+`ExitApp` or a fatal process failure may terminate before a result can be emitted.
 
 ```json
 {"kind":"result","ok":true,"type":"Integer","value":"42"}
@@ -646,10 +655,11 @@ never desynchronizes:
 
 - Single-line expressions only (no multi-line blocks; use commas or load a script).
 - No `ToString` dispatch for object results (`<Array object>`, not contents).
-- JSON values are capped at ~4K characters per line.
-- Inherits the `Eval` §1 known edge case (IIFE + maybe-operator combo).
+- Scratch expression allocations remain in the process heap until exit; very long
+  sessions and oversized expressions still need a separate resource-use review.
 
 Implementation: `source/error.cpp` (reader thread, mailbox, `ReplDrainInput`,
 `EvalCore` shared with the `Eval` BIF), dispatch via `AHK_REPL_INPUT` in
 `MainWindowProc`. Design: `docs/superpowers/specs/2026-06-12-repl-mode-design.md`.
-Tests: `tests/test_repl.sh`.
+Tests: `tests/test_repl.sh`, `tests/test_console_repl.py`. Run the aggregate checks
+with `python tests/run_console_gate.py bin/AutoHotkey64.exe`.

@@ -562,6 +562,7 @@ BIF_DECL(BIF_ComObjQuery)
 			if (SUCCEEDED(hr = punk->QueryInterface<IServiceProvider>(&pprov)))
 			{
 				hr = pprov->QueryService(sid, iid, (void **)&pint);
+				pprov->Release();
 			}
 		}
 	}

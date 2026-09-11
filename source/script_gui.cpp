@@ -8629,7 +8629,8 @@ LRESULT CALLBACK GuiWindowProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lPara
 			case NM_RCLICK:
 			case NM_RDBLCLK:
 				gui_event = GUI_EVENT_CONTEXTMENU;
-				event_info = 1 + ((LPNMITEMACTIVATE)lParam)->iItem;
+				if (control.hwnd == nmhdr.hwndFrom) // It's a ListView (not Header) notification.
+					event_info = 1 + ((LPNMITEMACTIVATE)lParam)->iItem;
 				// Post the event unconditionally rather than calling Event(), so that the Gui's
 				// ContextMenu handler can be called even if the control doesn't have one:
 				POST_AHK_GUI_ACTION(pgui->mHwnd, control_index, gui_event, event_info);
@@ -9679,6 +9680,12 @@ bool GuiType::ControlWmNotify(GuiControlType &aControl, LPNMHDR aNmHdr, INT_PTR 
 
 bool GuiType::MsgMonitor(GuiControlType *aControl, UINT aMsg, WPARAM awParam, LPARAM alParam, MSG *apMsg, INT_PTR *aRetVal)
 {
+	if (g_nThreads >= g_MaxThreadsTotal)
+		return false;
+
+	if (g->Priority > 0)
+		return false;
+
 	ExprTokenType param[] = { aControl ? (IObject*)aControl : this, (__int64)awParam, (__int64)(DWORD_PTR)alParam, (__int64)aMsg };
 	InitNewThread(0, false, true);
 	g_script.mLastPeekTime = GetTickCount();

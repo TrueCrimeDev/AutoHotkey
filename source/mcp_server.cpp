@@ -233,6 +233,8 @@ struct JParser
 				++i;
 				continue;
 			}
+			if (c < 0x20)
+				return Fail(L"JSON: unescaped control character at position " + Pos());
 			out += c;
 			++i;
 		}
@@ -243,25 +245,34 @@ struct JParser
 		size_t start = i;
 		if (s[i] == L'-')
 			++i;
-		while (i < n)
+		if (i >= n || !IsDig(s[i]))
+			return Fail(L"JSON: expected digit at position " + Pos());
+		if (s[i] == L'0')
 		{
-			wchar_t c = s[i];
-			if (IsDig(c) || c == L'.' || c == L'e' || c == L'E' || c == L'+' || c == L'-')
-				++i;
-			else
-				break;
+			++i;
+			if (i < n && IsDig(s[i]))
+				return Fail(L"JSON: leading zero at position " + Pos());
 		}
-		wstring lex(s + start, i - start);
-		bool is_float = lex.find_first_of(L".eE") != wstring::npos;
-		wchar_t *endp = nullptr;
-		if (is_float)
-			(void)wcstod(lex.c_str(), &endp);
 		else
-			(void)wcstoll(lex.c_str(), &endp, 10);
-		if (!endp || *endp || endp == lex.c_str())
-			return Fail(L"JSON: invalid number at position " + std::to_wstring((long long)start + 1));
+			while (i < n && IsDig(s[i])) ++i;
+		if (i < n && s[i] == L'.')
+		{
+			++i;
+			if (i >= n || !IsDig(s[i]))
+				return Fail(L"JSON: expected fractional digit at position " + Pos());
+			while (i < n && IsDig(s[i])) ++i;
+		}
+		if (i < n && (s[i] == L'e' || s[i] == L'E'))
+		{
+			++i;
+			if (i < n && (s[i] == L'+' || s[i] == L'-'))
+				++i;
+			if (i >= n || !IsDig(s[i]))
+				return Fail(L"JSON: expected exponent digit at position " + Pos());
+			while (i < n && IsDig(s[i])) ++i;
+		}
 		out.kind = JVal::J_NUM;
-		out.num = std::move(lex);
+		out.num.assign(s + start, i - start); // no numeric conversion or precision loss
 		return true;
 	}
 
@@ -1261,15 +1272,12 @@ wstring MakeError(const JVal *id, int code, const wstring &message)
 		+ std::to_wstring(code) + L",\"message\":" + msg + L"}}";
 }
 
-wstring InitializeResult(const JVal &req)
+wstring InitializeResult(const wstring &requested_version)
 {
-	const JVal *params = req.Get(L"params");
-	const JVal *pv = (params && params->kind == JVal::J_OBJ) ? params->Get(L"protocolVersion") : nullptr;
 	wstring ver;
-	if (pv && !(pv->kind == JVal::J_STR && pv->str.empty()))
-		JsonAppend(ver, *pv); // echo whatever the client sent
-	else
-		ver = L"\"2024-11-05\"";
+	// MCP version negotiation: echo a supported version, otherwise offer our latest.
+	// https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle
+	JsonQuote(ver, requested_version == L"2024-11-05" ? L"2024-11-05" : L"2025-06-18");
 	wstring out = L"{\"protocolVersion\":" + ver
 		+ L",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"";
 	out += MCP_SERVER_NAME;
@@ -1317,6 +1325,8 @@ wstring ToolsCall(const JVal *id, const JVal &req)
 		return MakeError(id, -32602, L"Unknown tool: " + name);
 	BumpCount(g_McpStats.tool_calls, name); // before the handler, so server_status counts itself
 	const JVal *args_v = params->Get(L"arguments");
+	if (args_v && args_v->kind != JVal::J_OBJ)
+		return MakeError(id, -32602, L"Invalid params: tool arguments must be an object");
 	const JVal *args = (args_v && args_v->kind == JVal::J_OBJ) ? args_v : &empty_obj;
 	wstring tool_json, err_msg;
 	bool ok;
@@ -1338,6 +1348,61 @@ wstring ToolsCall(const JVal *id, const JVal &req)
 	return MakeResult(id, result);
 }
 
+// MCP requires integer or string IDs, preserving the original numeric lexeme.
+// Test integrality without floating-point rounding (e.g. 1.0000000000000001).
+bool IsRequestId(const JVal *id)
+{
+	if (!id)
+		return false;
+	if (id->kind == JVal::J_STR)
+		return true;
+	if (id->kind != JVal::J_NUM)
+		return false;
+	const wstring &num = id->num;
+	size_t exponent_at = num.find_first_of(L"eE");
+	size_t end = exponent_at == wstring::npos ? num.size() : exponent_at;
+	size_t point = num.find(L'.');
+	__int64 fraction_digits = point == wstring::npos ? 0 : (__int64)(end - point - 1);
+	__int64 trailing_zeros = 0;
+	bool all_zero = true;
+	for (size_t i = 0; i < end; ++i)
+	{
+		if (num[i] == L'-' || num[i] == L'.') continue;
+		if (num[i] == L'0') ++trailing_zeros;
+		else { trailing_zeros = 0; all_zero = false; }
+	}
+	__int64 exponent = 0;
+	if (exponent_at != wstring::npos)
+	{
+		size_t i = exponent_at + 1;
+		bool negative = num[i] == L'-';
+		if (num[i] == L'-' || num[i] == L'+') ++i;
+		// Once the exponent exceeds the entire input length its exact value cannot
+		// affect integrality. Saturate there instead of overflowing an integer.
+		__int64 limit = (__int64)num.size() + 1;
+		for (; i < num.size(); ++i)
+		{
+			exponent = exponent * 10 + (num[i] - L'0');
+			if (exponent > limit) { exponent = limit; break; }
+		}
+		if (negative) exponent = -exponent;
+	}
+	return all_zero || exponent + trailing_zeros >= fraction_digits;
+}
+
+bool ValidateInitialize(const JVal *params)
+{
+	if (!params || params->kind != JVal::J_OBJ)
+		return false;
+	const JVal *version = params->Get(L"protocolVersion"), *caps = params->Get(L"capabilities"),
+		*client = params->Get(L"clientInfo");
+	if (!version || version->kind != JVal::J_STR || version->str.empty()
+		|| !caps || caps->kind != JVal::J_OBJ || !client || client->kind != JVal::J_OBJ)
+		return false;
+	const JVal *name = client->Get(L"name"), *client_version = client->Get(L"version");
+	return name && name->kind == JVal::J_STR && client_version && client_version->kind == JVal::J_STR;
+}
+
 // One request line in -> one response line out ("" = no response, e.g. for
 // notifications).
 wstring McpHandle(const wstring &line)
@@ -1346,24 +1411,37 @@ wstring McpHandle(const wstring &line)
 	JParser parser;
 	if (!parser.Parse(line, req))
 		return MakeError(nullptr, -32700, L"Parse error: " + parser.err);
-	const JVal *method_v = req.kind == JVal::J_OBJ ? req.Get(L"method") : nullptr;
-	if (!method_v || method_v->kind != JVal::J_STR) // JSON-RPC 2.0: method MUST be a string
-	{
-		const JVal *id0 = req.kind == JVal::J_OBJ ? req.Get(L"id") : nullptr;
-		return MakeError(id0, -32600, L"Invalid Request");
-	}
+	if (req.kind != JVal::J_OBJ)
+		return MakeError(nullptr, -32600, L"Invalid Request: expected an object");
 	const JVal *id = req.Get(L"id");
 	bool has_id = id != nullptr;
+	if (has_id && !IsRequestId(id))
+		return MakeError(nullptr, -32600, L"Invalid Request: id must be a string or integer");
+	const JVal *rpc = req.Get(L"jsonrpc");
+	if (!rpc || rpc->kind != JVal::J_STR || rpc->str != L"2.0")
+		return MakeError(id, -32600, L"Invalid Request: jsonrpc must be 2.0");
+	const JVal *method_v = req.kind == JVal::J_OBJ ? req.Get(L"method") : nullptr;
+	if (!method_v || method_v->kind != JVal::J_STR) // JSON-RPC 2.0: method MUST be a string
+		return MakeError(id, -32600, L"Invalid Request: method must be a string");
 	const wstring &method = method_v->str;
 
 	++g_McpStats.requests; // recorded before dispatch, notifications included
 	g_McpStats.last_tick = GetTickCount64();
 	BumpCount(g_McpStats.by_method, method);
 
-	if (method == L"initialize")
-		return MakeResult(id, InitializeResult(req));
-	if (method == L"notifications/initialized" || method == L"notifications/cancelled")
+	// Notifications never produce responses, including known request-only methods.
+	// They must not accidentally execute tools with no caller awaiting a result.
+	if (!has_id)
 		return wstring();
+	const JVal *params = req.Get(L"params");
+	if (params && params->kind != JVal::J_OBJ)
+		return MakeError(id, -32602, L"Invalid params: expected an object");
+	if (method == L"initialize")
+	{
+		if (!ValidateInitialize(params))
+			return MakeError(id, -32602, L"Invalid initialize params: protocolVersion, capabilities, and clientInfo.name/version are required");
+		return MakeResult(id, InitializeResult(params->Get(L"protocolVersion")->str));
+	}
 	if (method == L"ping")
 		return MakeResult(id, L"{}");
 	if (method == L"tools/list")
@@ -1465,6 +1543,7 @@ int McpServerMain()
 	if (!acc)
 		return AHK_EXIT_CRITICAL_ERROR;
 	bool eof = false;
+	bool first_line = true;
 	while (!eof)
 	{
 		char *nl;
@@ -1497,7 +1576,13 @@ int McpServerMain()
 			size_t l = line_len;
 			while (l && acc[l - 1] == '\r')
 				--l;
-			HandleLine(U8ToW(acc, l));
+			// Windows PowerShell can prefix a UTF-8 native pipe with a BOM.
+			// Accept it only at the start of the stream, as the REPL does.
+			size_t start = first_line && l >= 3
+				&& (unsigned char)acc[0] == 0xEF && (unsigned char)acc[1] == 0xBB
+				&& (unsigned char)acc[2] == 0xBF ? 3 : 0;
+			first_line = false;
+			HandleLine(U8ToW(acc + start, l - start));
 		}
 		if (!nl)
 			break; // EOF after the final (possibly unterminated) line

@@ -88,12 +88,12 @@ PrintLine "── 3. DllCall rejects array return types ──"
 ; type caused a crash. Now it raises a proper error.
 ;
 ; Example (would error, not crash):
-;   Struct POINT { x: i32, y: i32 }
+;   Struct POINT { x: Int32, y: Int32 }
 ;   DllCall("SomeFunc", POINT[3])  ; Error in alpha.25, crash before
 
 Struct POINT {
-    x: i32
-    y: i32
+    x: Int32
+    y: Int32
 }
 
 PrintLine "  DllCall now rejects array classes for return type"

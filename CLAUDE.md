@@ -189,23 +189,38 @@ Key commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`,
 
 ---
 
-# Current State & Open Items (updated 2026-08-26)
+# Current State & Open Items (updated 2026-09-11)
 
-- `bin/AutoHotkey64.exe` = TSParse-enabled CI build, `2.1-alpha.30+Console`.
-  The engine **cannot be built in WSL** (MSVC-only for CI; canonical local
-  route is `build.bat` via mingw-w64/`C:\msys64` from Windows). To verify
-  source/ changes, use the GitHub Actions PR build and `gh run download`.
+- Local engine builds use `2.1-alpha.31+Console` (upstream `v2.1-alpha.31`
+  merged in `c73ae823`; `bin/AutoHotkey64.exe` was rebuilt on 2026-09-11 from
+  `ef2047d4` via the CMake/MSVC route and passes the native gate 9/9, and
+  `bin_harness/AutoHotkey64Harness.exe` carries the mingw alpha.31 build);
+  `--version` identifies the actual source revision, compiler, and architecture. Windows
+  MSVC and mingw-w64 builds are supported. CMake with Ninja from a Visual
+  Studio developer prompt works with Build Tools 18; see BUILD.md for an
+  isolated output directory. Build and test locally when requested; remote
+  publishing is a separate action.
 - `qa/` is the fork regression suite (subprocess-per-test; see `qa/README.md`).
-  Keep it green: `bin\AutoHotkey64.exe /ErrorStdOut qa\run.ahk` → exit 0.
+  Keep it green: `python tests/run_console_gate.py bin/AutoHotkey64.exe` → exit 0.
 - `WORKLOG.md` tracks the verification-layer backlog (struct/language/docs
   tests) and per-session findings.
 
 Open items:
-- [ ] Fix the **10 stale example files** using removed alpha.30 Struct
-  type-strings (`i32`/`u32`/`u8`/`uptr` → `Int32`/`UInt32`/`UInt8`/`UIntPtr`):
-  `examples/AlphaNN_Example.ahk`, `examples/alpha_tricks.ahk`,
-  `examples/combined_alpha22_23.ahk` (+ `examples/particle_gui.ahk` via
-  `#Include`). Removed by upstream commits `7427d3bc` / `34b17011`.
+- [x] Stale Struct type-string examples (`i32`/`u32`/`u8`/`uptr` → `Int32`/
+  `UInt32`/`UInt8`/`IntPtr`) fixed 2026-09-10 across 14 example files; no
+  `UInt64`/`UIntPtr` class exists, so `u64`/`uptr` became `Int64`/`IntPtr`.
+  `examples/struct_at_showcase.ahk` also had its clobbered `POINT` definition
+  restored. Every file under `examples/` passes `check` on the alpha.31 harness.
+- [x] Stale `export` module examples fixed 2026-09-10: keyword dropped, and the
+  `#Import {X} from M` / bare `#Import "file.ahk"` forms (never valid on this
+  engine) rewritten as `#Import M {X}` / `#Import "file.ahk" {*}`.
+- [ ] **Module init is not lazy on alpha.31**: a `#Module` nothing imports still
+  runs, before `__Main`'s auto-execute section (`examples/alpha21/05_lazy_module_init.ahk`
+  documents the observation). alpha.21 notes promised first-reference init —
+  decide whether this is an upstream change or a fork regression, then pin it.
+- [ ] `/Headless` does **not** suppress `MsgBox` — a headless run of any
+  MsgBox-driven example blocks on a real dialog. Verify such scripts via a
+  scratch copy with `MsgBox` → `Print`, or extend `/Headless`.
 - [ ] Faster tree-sitter path: build `tree-sitter-ahk.wasm` + `web-tree-sitter`
   for in-process, incremental parsing in a Node host. Needs the grammar
   **source** — only the `.dll` is vendored.

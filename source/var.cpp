@@ -203,7 +203,9 @@ void Var::UpdateVirtualObj(IObject *aTargetRef)
 	ASSERT(!IsObject());
 	mType = VAR_VIRTUAL_OBJ;
 	_SetObject(aTargetRef);
-	mAttrib &= ~VAR_ATTRIB_NOT_NUMERIC; // Let IsNumeric() evaluate the property.
+	// Remove VAR_ATTRIB_NOT_NUMERIC so IsNumeric() will evaluate the property.
+	// Remove VAR_ATTRIB_UNINITIALIZED so IsUninitialized() is false (PerformAssign() relies on this).
+	mAttrib &= ~(VAR_ATTRIB_NOT_NUMERIC | VAR_ATTRIB_UNINITIALIZED);
 	aTargetRef->AddRef();
 }
 
@@ -1426,6 +1428,8 @@ ResultType Var::SelfInitialize()
 			ASSERT(dynamic_cast<ScriptModule*>(var.mObject));
 			mod = (ScriptModule*)var.mObject;
 			cur = var.mAliasFor;
+			if (cur->IsAlias())
+				var.mAliasFor = cur->mAliasFor; // Flatten multi-level alias.
 		}
 		else
 		{
