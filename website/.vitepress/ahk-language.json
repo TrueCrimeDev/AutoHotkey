@@ -18,6 +18,10 @@
       "end": "'",
       "patterns": [{ "name": "constant.character.escape.ahk", "match": "`." }]
     },
+    {
+      "name": "keyword.control.directive.ahk",
+      "match": "(?i)^[\\t ]*#Requires\\b[^\\r\\n]*"
+    },
     { "name": "keyword.control.directive.ahk", "match": "(?i)^\\s*#[a-z]+" },
     {
       "match": "(?i)\\b(class|struct|extends)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
