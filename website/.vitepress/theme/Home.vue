@@ -8,16 +8,6 @@ import FeatureExplorer from "./FeatureExplorer.vue";
   <main class="product-home">
     <section class="hero-block" aria-labelledby="line-out-heading">
       <div class="hero-copy">
-        <div class="hero-brand">
-          <img
-            class="hero-logo"
-            :src="withBase('/images/autohotkey-logo.png')"
-            alt="AutoHotkey logo"
-            width="56"
-            height="56"
-          />
-          <div class="eyebrow">AUTOHOTKEY CONSOLE · LINE OUT</div>
-        </div>
         <h1 id="line-out-heading">
           See your script.<br /><em>Line by line.</em>
         </h1>
