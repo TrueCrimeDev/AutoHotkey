@@ -3,7 +3,7 @@ description: How the AutoHotkey Console engine and the ClautoHotkey Claude Code 
 ---
 # Two projects. One useful loop.
 
-**AutoHotkey Console** is a Windows interpreter. **ClautoHotkey** is a Claude Code plugin and development harness. You can use either independently; together, they connect an edit to an observable result.
+**AutoHotkey Console** is a Windows interpreter that exposes failures to coding tools. **ClautoHotkey** is a Claude Code plugin and development harness that connects edits to checks. Together, they let an AI read an error, inspect the source, propose a correction, and verify the next run.
 
 | Layer | Responsibility | What you see |
 | --- | --- | --- |
@@ -14,13 +14,13 @@ description: How the AutoHotkey Console engine and the ClautoHotkey Claude Code 
 
 ## Follow one change through the system
 
-<WorkflowDemo />
+<ErrorFeedbackDemo />
 
-The walkthrough is illustrative. The [session gallery](/showcase) contains actual Claude Code captures and recorded results. This website is static: it does not execute AHK in your browser or connect to your desktop.
+The [error walkthrough](/guide/ai-feedback) uses a captured Console failure, Claude Code's recorded diagnosis, and a verified correction. The [session gallery](/showcase) provides separate hook captures and harness results. This website replays those records; it does not execute AHK in your browser or connect to your desktop.
 
 ## Choose your entry point
 
-- **I write AHK already:** start with the [CLI](/console/cli) and [native JSON](/console/print-json).
+- **I write AHK already:** start with [AI-readable errors](/guide/ai-feedback), then [Line Out](/console/line-out) and [Print](/console/print-json).
 - **I use Claude Code:** install [ClautoHotkey](/clautohotkey/setup) and verify its hooks.
 - **I build libraries:** add [runtime assertions and CI](/recipes/testing-ci).
 - **I build local tools:** explore [ProcessPipe](/console/process-pipe) and [native MCP](/clautohotkey/mcp).

@@ -22,6 +22,26 @@ def run(name, command, expected_code=0, expected_text=None):
 
 for file in examples.glob('*.ahk'):
     run('parse ' + file.name, ['check', str(file)])
+evidence = json.loads((examples / 'ai-error-feedback.json').read_text(encoding='utf-8'))
+result = run('AI feedback error', ['/Headless', '/Diag=json', 'error-demo.ahk'], 10)
+assert result.stdout == '', repr(result.stdout)
+diagnostic = json.loads(result.stderr)
+diagnostic['file'] = Path(diagnostic['file']).name
+assert diagnostic == evidence['failedRun']['diagnostic'], diagnostic
+original = (examples / 'error-demo.ahk').read_text(encoding='utf-8').splitlines()
+corrected = (examples / 'error-demo-fixed.ahk').read_text(encoding='utf-8').splitlines()
+response = evidence['claude']
+assert original[response['line'] - 1] == response['original']
+original[response['line'] - 1] = response['replacement']
+assert original == corrected, 'The downloadable correction must match Claude\'s response'
+result = run('AI feedback corrected rerun', ['/Headless', '/Diag=json', 'error-demo-fixed.ahk'])
+assert result.stdout == '' and result.stderr == '', (result.stdout, result.stderr)
+with tempfile.TemporaryDirectory() as td:
+    assertion = Path(td) / 'verify-error-fix.ahk'
+    assertion.write_text(
+        f'#Include {examples / "error-demo-fixed.ahk"}\n'
+        'if attempts != 3\n    throw Error("Expected attempts = 3")\n', encoding='utf-8')
+    run('AI feedback corrected value', ['/Headless', 'test', str(assertion)])
 result = run('stdout walkthrough', ['/Headless', '/Trace', 'stdout-demo.ahk'])
 assert result.stdout == 'Hello, terminal!\nAnswer: 42\nDone.\n', repr(result.stdout)
 assert result.stderr.splitlines() == [

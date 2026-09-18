@@ -81,6 +81,10 @@ for (const file of htmlFiles) {
 for (const path of [
   "index.html",
   "guide/quick-start.html",
+  "guide/ai-feedback.html",
+  "examples/error-demo.ahk",
+  "examples/error-demo-fixed.ahk",
+  "examples/ai-error-feedback.json",
   "console/overview.html",
   "clautohotkey/harness.html",
   "clautohotkey/mcp.html",

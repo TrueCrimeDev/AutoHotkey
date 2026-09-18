@@ -7,7 +7,7 @@ process.env.VITE_EXTRA_EXTENSIONS = "ahk";
 export default defineConfig({
   title: "Console + ClautoHotkey",
   description:
-    "See your AutoHotkey script, line by line. Line Out brings live execution output to your terminal, with Console tools and ClautoHotkey as extras.",
+    "Give AI the AutoHotkey errors it needs to diagnose, correct, and verify scripts. Structured Console diagnostics, execution tracing, and ClautoHotkey feedback for Claude Code.",
   base: "/AutoHotkey/",
   cleanUrls: false,
   lastUpdated: true,
@@ -56,19 +56,19 @@ export default defineConfig({
     siteTitle: "Console + ClautoHotkey",
     nav: [
       {
-        text: "Line Out",
-        link: "/console/line-out",
-        activeMatch: "/console/line-out",
+        text: "AI feedback",
+        link: "/guide/ai-feedback",
+        activeMatch: "/guide/ai-feedback",
       },
       {
         text: "Start here",
         link: "/guide/quick-start",
-        activeMatch: "/guide/",
+        activeMatch: "/guide/(?!ai-feedback)",
       },
       {
         text: "Console",
         link: "/console/overview",
-        activeMatch: "/console/(?!line-out)",
+        activeMatch: "/console/",
       },
       {
         text: "ClautoHotkey",
@@ -82,7 +82,8 @@ export default defineConfig({
       {
         text: "GET STARTED",
         items: [
-          { text: "Line Out: start here", link: "/console/line-out" },
+          { text: "Errors → AI → verified fix", link: "/guide/ai-feedback" },
+          { text: "Line Out & execution trace", link: "/console/line-out" },
           { text: "The two projects", link: "/guide/overview" },
           { text: "Quick start", link: "/guide/quick-start" },
           { text: "Build & install", link: "/guide/installation" },

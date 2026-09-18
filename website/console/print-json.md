@@ -12,6 +12,12 @@ Print("count={}, hex=0x{:X}", 42, 42)
 
 `Print()` writes a blank line. One argument is literal. With additional arguments, the first argument is a `Format` template. Output is UTF-8 with a newline. You do not need `Print(Format(...))`.
 
+## See stdout in action
+
+<StdoutDemo />
+
+Print supplies script results. For the error information an AI needs to diagnose a failure, see the [error → AI → verified fix walkthrough](/guide/ai-feedback).
+
 ## Parse, update, serialize
 
 ```ahk

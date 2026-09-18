@@ -1,91 +1,111 @@
 <script setup>
 import { withBase } from "vitepress";
-import LineOutDemo from "./LineOutDemo.vue";
+import ErrorFeedbackDemo from "./ErrorFeedbackDemo.vue";
 import FeatureExplorer from "./FeatureExplorer.vue";
 </script>
 
 <template>
   <main class="product-home">
-    <section class="hero-block" aria-labelledby="line-out-heading">
+    <section class="hero-block" aria-labelledby="feedback-heading">
       <div class="hero-copy">
-        <h1 id="line-out-heading">
-          See your script.<br /><em>Line by line.</em>
-        </h1>
+        <h1 id="feedback-heading">Errors your AI<br /><em>can act on.</em></h1>
         <p class="hero-description">
-          Follow your AutoHotkey script as it runs. Line Out streams executing
-          statements straight to your terminal, with the filename and line
-          number. Just add <code>/Trace</code>.
+          Give Claude Code the error, the source line, and a way to check the
+          fix. Console exposes AutoHotkey failures as structured diagnostics.
+          ClautoHotkey brings that feedback into your editing workflow.
         </p>
         <div class="hero-actions">
-          <a class="primary-action" :href="withBase('/console/line-out.html')"
-            >Get started with Line Out <span aria-hidden="true">→</span></a
+          <a class="primary-action" :href="withBase('/guide/ai-feedback.html')"
+            >See the error workflow <span aria-hidden="true">→</span></a
           >
-          <a class="secondary-action" href="#try-line-out"
-            >Try the example <span aria-hidden="true">↓</span></a
+          <a
+            class="secondary-action"
+            :href="withBase('/clautohotkey/setup.html')"
+            >Set up ClautoHotkey <span aria-hidden="true">↗</span></a
           >
         </div>
         <p class="hero-meta">
-          WINDOWS · OPEN SOURCE · BUILT INTO THE CONSOLE FORK
+          READ THE ERROR · CORRECT THE SOURCE · VERIFY THE RESULT
         </p>
       </div>
-      <div class="hero-terminal"><LineOutDemo /></div>
+      <div class="hero-terminal"><ErrorFeedbackDemo /></div>
     </section>
 
-    <div class="line-out-benefits" aria-label="Line Out highlights">
+    <div class="line-out-benefits" aria-label="Three core features">
       <div>
         <span class="benefit-number" aria-hidden="true">01</span>
         <div>
-          <strong>Know which line ran.</strong>
-          <p>Source location and statement text, together.</p>
+          <strong
+            ><a :href="withBase('/guide/ai-feedback.html')"
+              >Errors AI can read.</a
+            ></strong
+          >
+          <p>
+            Structured failures give Claude a specific problem to diagnose and
+            repair.
+          </p>
         </div>
       </div>
       <div>
         <span class="benefit-number" aria-hidden="true">02</span>
         <div>
-          <strong>Follow the actual path.</strong>
-          <p>Watch branches, loops, and handlers execute.</p>
+          <strong
+            ><a :href="withBase('/console/line-out.html')"
+              >Trace what led there.</a
+            ></strong
+          >
+          <p>
+            Line Out shows which statements ran, with source files and line
+            numbers.
+          </p>
         </div>
       </div>
       <div>
         <span class="benefit-number" aria-hidden="true">03</span>
         <div>
-          <strong>Quiet when your script is.</strong>
-          <p>Idle scripts produce no new trace entries.</p>
+          <strong
+            ><a :href="withBase('/console/print-json.html')"
+              >Print useful results.</a
+            ></strong
+          >
+          <p>
+            Send values and JSON to stdout for tools, pipelines, and assertions.
+          </p>
         </div>
       </div>
     </div>
 
     <section
       class="home-section line-out-start"
-      id="try-line-out"
+      id="error-feedback"
       aria-labelledby="try-heading"
     >
       <div>
-        <p class="eyebrow">START WITH LINE OUT</p>
-        <h2 id="try-heading">One flag.<br />A clearer picture.</h2>
+        <p class="eyebrow">THE FEEDBACK LOOP</p>
+        <h2 id="try-heading">Give Claude the<br />missing context.</h2>
         <p>
-          Add <code>/Trace</code> when you launch your script. No logging calls
-          to scatter through your code. Keep the output in view, or save the
-          trace for a closer look.
+          The error class explains what failed. The file, line, and source text
+          show where to look. Claude can use those details to propose a focused
+          edit, then read the next check or runtime result.
         </p>
-        <a class="text-action" :href="withBase('/console/line-out.html')"
-          >Read the Line Out guide <span aria-hidden="true">→</span></a
+        <a class="text-action" :href="withBase('/clautohotkey/workflow.html')"
+          >Connect edits to checks <span aria-hidden="true">→</span></a
         >
       </div>
       <div class="line-out-quickstart">
-        <p class="quickstart-label">1. Get the example</p>
+        <p class="quickstart-label">1. Start with a real failure</p>
         <a
           class="example-download"
-          :href="withBase('/examples/line-out.ahk')"
+          :href="withBase('/examples/error-demo.ahk')"
           download
         >
-          line-out.ahk <span>Download the four-line script ↓</span>
+          error-demo.ahk <span>Download the failing example ↓</span>
         </a>
-        <p class="quickstart-label">2. Run it in PowerShell</p>
+        <p class="quickstart-label">2. Capture an error the AI can read</p>
         <pre
           tabindex="0"
-          aria-label="Run the Line Out example"
-        ><code>ahk /Trace .\line-out.ahk</code></pre>
+          aria-label="Run the error feedback example"
+        ><code>ahk /Headless /Diag=json .\error-demo.ahk</code></pre>
         <p class="quickstart-help">
           First time here?
           <a :href="withBase('/guide/installation.html')"
@@ -102,8 +122,10 @@ import FeatureExplorer from "./FeatureExplorer.vue";
           >.
         </p>
         <p class="line-out-limit">
-          A trace shows a statement starting. Use results and assertions to
-          check whether it completed correctly.
+          stderr carries the diagnostic; exit 10 signals this runtime failure.
+          <a :href="withBase('/guide/ai-feedback.html')"
+            >Read the diagnosis, correction, and verified rerun.</a
+          >
         </p>
       </div>
     </section>
@@ -115,19 +137,22 @@ import FeatureExplorer from "./FeatureExplorer.vue";
     >
       <div class="section-heading">
         <div>
-          <p class="eyebrow">ALSO INCLUDED</p>
-          <h2 id="extras-heading">A few extras, when you need them.</h2>
+          <p class="eyebrow">CONSOLE + CLAUTOHOTKEY</p>
+          <h2 id="extras-heading">Build the repair loop.</h2>
         </div>
-        <p>More tools to support your scripts.</p>
+        <p>Connect the interpreter, editor, and verification tools.</p>
       </div>
       <div class="extra-links">
-        <a :href="withBase('/console/overview.html')">
-          <h3>Console tools <span aria-hidden="true">↗</span></h3>
-          <p>Print, JSON, a REPL, and structured diagnostics.</p>
+        <a :href="withBase('/console/diagnostics.html')">
+          <h3>Readable failures <span aria-hidden="true">↗</span></h3>
+          <p>Error types, source locations, captured stderr, and exit codes.</p>
         </a>
         <a :href="withBase('/clautohotkey/setup.html')">
-          <h3>ClautoHotkey <span aria-hidden="true">↗</span></h3>
-          <p>Optional Claude Code hooks, skills, and local MCP tools.</p>
+          <h3>Claude Code feedback <span aria-hidden="true">↗</span></h3>
+          <p>
+            ClautoHotkey hooks check edits; local MCP tools expose results to
+            the AI.
+          </p>
         </a>
         <a :href="withBase('/recipes/testing-ci.html')">
           <h3>Checks & tests <span aria-hidden="true">↗</span></h3>
@@ -146,8 +171,9 @@ import FeatureExplorer from "./FeatureExplorer.vue";
     <div class="home-version">
       <span>DEVELOPMENT REFERENCE</span>
       <p>
-        The Line Out example targets alpha.30 +Console or newer. Check your
-        executable’s capabilities before using other development features.
+        The error demonstration was recorded with alpha.31 +Console and Claude
+        Code. Check your executable’s capabilities before using development
+        features.
       </p>
       <a :href="withBase('/guide/compatibility.html')">Build compatibility →</a>
     </div>

@@ -1,0 +1,41 @@
+{
+  "recordedOn": "2026-09-18",
+  "interpreter": "AutoHotkey v2.1-alpha.31+Console",
+  "engineRevision": "a72a652123b7-dirty",
+  "method": "Claude Code received the source and captured Console diagnostic with tools disabled. Its returned line replacement was applied, then syntax-checked, executed, and checked by a separate runtime assertion. File paths are shortened to filenames.",
+  "failedRun": {
+    "exitCode": 10,
+    "stdout": "",
+    "diagnostic": {
+      "kind": "diagnostic",
+      "format": "json",
+      "schema": 2,
+      "severity": "error",
+      "type": "UnsetItemError",
+      "code": 10,
+      "message": "Item has no value.",
+      "extra": "[\"retry\"]",
+      "what": "",
+      "file": "error-demo.ahk",
+      "line": 4,
+      "column": 0,
+      "source": "attempts := settings[\"retry\"]",
+      "stack": ""
+    }
+  },
+  "claude": {
+    "diagnosis": "Line 4 reads key \"retry\", but the Map only defines \"retries\". The missing key has no value, so AutoHotkey raises UnsetItemError (code 10).",
+    "file": "error-demo.ahk",
+    "line": 4,
+    "original": "attempts := settings[\"retry\"]",
+    "replacement": "attempts := settings[\"retries\"]"
+  },
+  "verification": {
+    "checkExitCode": 0,
+    "runExitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "assertionExitCode": 0,
+    "assertion": "attempts = 3"
+  }
+}

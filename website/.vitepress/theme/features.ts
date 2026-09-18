@@ -1,5 +1,25 @@
 export const features = [
   {
+    title: "Structured diagnostics",
+    group: "Console",
+    tag: "ERRORS",
+    description:
+      "Give AI the error type, source location, failing statement, and exit code it needs to diagnose a script.",
+    path: "/console/diagnostics",
+    code: "ahk /Headless /Diag=json script.ahk\n# stderr → diagnostic JSON; stdout → results",
+    result: "Runtime error: 10 · check failure: 13 · test failure: 14",
+  },
+  {
+    title: "Line Out & trace",
+    group: "Console",
+    tag: "EXECUTION",
+    description:
+      "Follow the statements that actually ran, with source files and line numbers to explain the path to a failure.",
+    path: "/console/line-out",
+    code: "ahk /Trace .\\script.ahk",
+    result: "stderr: source file · line number · executing statement",
+  },
+  {
     title: "Print & JSON",
     group: "Console",
     tag: "DATA",
@@ -8,16 +28,6 @@ export const features = [
     path: "/console/print-json",
     code: "data := JSON.Parse('{\"ready\":true}')\nPrint(JSON.Stringify(data))",
     result: '{"ready":true}',
-  },
-  {
-    title: "Structured diagnostics",
-    group: "Console",
-    tag: "ERRORS",
-    description:
-      "Give tools a source location, error type, and meaningful process exit code.",
-    path: "/console/diagnostics",
-    code: "ahk /Headless /Diag=json script.ahk\n# stderr → diagnostic JSON; stdout → results",
-    result: "Runtime error: 10 · check failure: 13 · test failure: 14",
   },
   {
     title: "Persistent REPL",
@@ -48,16 +58,6 @@ export const features = [
     path: "/console/process-pipe",
     code: 'p := ProcessPipe(A_AhkPath, ["/Headless", "child.ahk"])\nPrint(p.ReadLine(10))\np.Wait(10)',
     result: "Separate stdout / stderr · timeouts · process-tree cleanup",
-  },
-  {
-    title: "Trace & coverage",
-    group: "Console",
-    tag: "OBSERVABILITY",
-    description:
-      "Follow executing statements and see which instrumented source lines were hit.",
-    path: "/console/trace-coverage",
-    code: "ahk /Headless /Trace=json /Coverage=run.lcov demo.ahk\n# Trace: stderr · LCOV: run.lcov",
-    result: "Demo evidence: 174 JSON trace rows · 77 / 84 lines hit",
   },
   {
     title: "Automatic edit checks",
