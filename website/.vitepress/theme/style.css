@@ -859,6 +859,83 @@ a:focus-visible,
   margin-top: 6px;
   color: var(--vp-c-text-2);
 }
+.repair-flow {
+  margin: 0;
+  padding: 44px 0 0;
+  scroll-margin-top: 90px;
+}
+.repair-flow > .eyebrow {
+  margin-bottom: 20px;
+}
+.repair-flow-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 32px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.repair-flow-steps li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 16px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  background: var(--vp-c-bg-soft);
+}
+.repair-flow-steps li:not(:last-child)::after {
+  content: "→";
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  width: 32px;
+  text-align: center;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: var(--vp-c-text-2);
+}
+.repair-flow-number {
+  font-family: var(--vp-font-family-mono);
+  font-size: 10px;
+  color: var(--vp-c-text-2);
+}
+.repair-flow-steps strong {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.repair-flow-steps li > span:last-child {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--vp-c-text-2);
+}
+.repair-flow-return {
+  position: relative;
+  margin: 0 calc(30% - 6.4px);
+  padding-top: 22px;
+  border: 1px dashed var(--vp-c-border);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--vp-c-text-2);
+}
+.repair-flow-return::before {
+  content: "↑";
+  position: absolute;
+  top: -7px;
+  left: -6px;
+  font-size: 16px;
+}
+.repair-flow-return span {
+  position: relative;
+  top: 9px;
+  padding: 0 10px;
+  background: var(--vp-c-bg);
+}
 .line-out-start {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -990,6 +1067,45 @@ a:focus-visible,
   }
 }
 @media (max-width: 767px) {
+  .repair-flow {
+    padding-top: 32px;
+  }
+  .repair-flow-steps {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .repair-flow-steps li {
+    padding: 14px 18px 14px 48px;
+    gap: 4px;
+  }
+  .repair-flow-number {
+    position: absolute;
+    left: 18px;
+    top: 15px;
+  }
+  .repair-flow-steps li:not(:last-child)::after {
+    content: "↓";
+    top: 100%;
+    left: 50%;
+    width: 28px;
+    line-height: 28px;
+    transform: translateX(-50%);
+  }
+  .repair-flow-return {
+    margin: 20px 0 0;
+    padding: 0 0 0 22px;
+    border: 0;
+    text-align: left;
+  }
+  .repair-flow-return::before {
+    content: "↶";
+    top: 0;
+    left: 0;
+  }
+  .repair-flow-return span {
+    top: 0;
+    padding: 0;
+  }
   .line-out-benefits,
   .line-out-start,
   .extra-links {

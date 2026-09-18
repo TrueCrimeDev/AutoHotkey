@@ -75,6 +75,42 @@ import FeatureExplorer from "./FeatureExplorer.vue";
       </div>
     </div>
 
+    <figure class="repair-flow" id="repair-flow" aria-labelledby="repair-flow-caption">
+      <figcaption class="eyebrow" id="repair-flow-caption">
+        FROM ERROR TO VERIFIED FIX
+      </figcaption>
+      <ol class="repair-flow-steps" role="list">
+        <li>
+          <span class="repair-flow-number" aria-hidden="true">01</span>
+          <strong>Run the script</strong>
+          <span>Execute your AutoHotkey code</span>
+        </li>
+        <li>
+          <span class="repair-flow-number" aria-hidden="true">02</span>
+          <strong>Capture the error</strong>
+          <span>Console reports the error, file &amp; line</span>
+        </li>
+        <li>
+          <span class="repair-flow-number" aria-hidden="true">03</span>
+          <strong>AI reads &amp; fixes</strong>
+          <span>Claude uses the feedback to edit</span>
+        </li>
+        <li>
+          <span class="repair-flow-number" aria-hidden="true">04</span>
+          <strong>Run checks again</strong>
+          <span>Check syntax, runtime &amp; tests</span>
+        </li>
+        <li>
+          <span class="repair-flow-number" aria-hidden="true">05</span>
+          <strong>Fix verified</strong>
+          <span>Checks pass with the expected result</span>
+        </li>
+      </ol>
+      <p class="repair-flow-return">
+        <span>Still failing? Send the new error back to the AI.</span>
+      </p>
+    </figure>
+
     <section
       class="home-section line-out-start"
       id="error-feedback"
