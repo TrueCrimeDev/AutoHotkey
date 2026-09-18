@@ -22,6 +22,14 @@ def run(name, command, expected_code=0, expected_text=None):
 
 for file in examples.glob('*.ahk'):
     run('parse ' + file.name, ['check', str(file)])
+result = run('stdout walkthrough', ['/Headless', '/Trace', 'stdout-demo.ahk'])
+assert result.stdout == 'Hello, terminal!\nAnswer: 42\nDone.\n', repr(result.stdout)
+assert result.stderr.splitlines() == [
+    '[trace] stdout-demo.ahk:2  Print("Hello, terminal!")',
+    '[trace] stdout-demo.ahk:3  value := 40 + 2',
+    '[trace] stdout-demo.ahk:4  Print("Answer: {}", value)',
+    '[trace] stdout-demo.ahk:5  Print("Done.")',
+], repr(result.stderr)
 run('double assertion', ['/Headless', 'test', 'double.test.ahk'], expected_text='PASS: Double(21) = 42')
 result = run('JSON CLI', ['/Headless', '/Diag=json', 'json-summary.ahk', '{"name":"demo","count":21}'])
 assert json.loads(result.stdout) == {'name': 'demo', 'doubled': 42}

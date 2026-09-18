@@ -595,7 +595,8 @@ a:focus-visible,
   align-items: center;
   gap: 9px;
 }
-.line-out-demo-bar button {
+.line-out-demo-bar button,
+.line-out-result-bar button {
   border: 1px solid #555;
   border-radius: 5px;
   padding: 6px 10px;
@@ -605,6 +606,7 @@ a:focus-visible,
   cursor: pointer;
 }
 .line-out-demo-bar button:hover,
+.line-out-result-bar button:hover:not(:disabled),
 .line-out-demo-bar button[aria-pressed="true"] {
   background: #363636;
   border-color: #b6b6b6;
@@ -612,6 +614,10 @@ a:focus-visible,
 .line-out-demo :focus-visible {
   outline-color: #dedede;
   outline-offset: 3px;
+}
+.line-out-result-bar button:disabled {
+  cursor: default;
+  color: #999;
 }
 .line-out-command {
   padding: 24px 22px;
@@ -626,7 +632,7 @@ a:focus-visible,
   margin-right: 10px;
 }
 .line-out-output-label,
-.line-out-result > span {
+.line-out-result-bar > span {
   font-size: 9px;
   letter-spacing: 1.2px;
   color: #b6b6b6;
@@ -635,20 +641,49 @@ a:focus-visible,
   margin: 22px 22px 0;
 }
 .workflow-demo.line-out-demo pre {
-  min-height: 124px;
+  min-height: 142px;
   padding-top: 17px;
   padding-bottom: 17px;
+}
+.line-out-source .line {
+  display: inline-block;
+  min-width: 100%;
+}
+.line-out-source .line.is-executing {
+  background: #303030;
+  box-shadow: -3px 0 #b6b6b6;
 }
 .line-out-result {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   margin: 0 22px 22px;
 }
-.line-out-result strong {
+.line-out-result-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.stdout-output {
   font-family: var(--vp-font-family-mono);
-  font-size: 24px;
-  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.8;
+  min-height: 104px;
+  padding: 13px 15px;
+  border: 1px solid #363636;
+  border-radius: 6px;
+  background: #1c1c1c;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.stdout-waiting {
+  color: #999;
+}
+.line-out-demo .demo-caption a {
+  color: #dedede;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .line-out-benefits {
   display: grid;
