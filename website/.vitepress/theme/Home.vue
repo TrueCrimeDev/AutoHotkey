@@ -8,8 +8,15 @@ import FeatureExplorer from "./FeatureExplorer.vue";
   <main class="product-home">
     <section class="hero-block">
       <div class="hero-copy">
-        <div class="eyebrow">
-          <span></span> AUTOHOTKEY V2, WITH A FEEDBACK LOOP
+        <div class="hero-brand">
+          <img
+            class="hero-logo"
+            :src="withBase('/images/autohotkey-logo.png')"
+            alt="AutoHotkey logo"
+            width="56"
+            height="56"
+          />
+          <div class="eyebrow">AUTOHOTKEY V2, WITH A FEEDBACK LOOP</div>
         </div>
         <h1>
           Your scripts.<br />Your terminal.<br /><em>Working together.</em>

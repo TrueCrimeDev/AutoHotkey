@@ -1,8 +1,11 @@
 :root {
-  --vp-c-brand-1: #267057;
-  --vp-c-brand-2: #205f49;
-  --vp-c-brand-3: #164c39;
-  --vp-c-brand-soft: rgba(57, 139, 102, 0.12);
+  --vp-c-brand-1: #4a7d36;
+  --vp-c-brand-2: #3d6c2b;
+  --vp-c-brand-3: #4a7d36;
+  --vp-c-brand-soft: rgba(96, 151, 65, 0.12);
+  --action-bg: #4a7d36;
+  --action-hover: #3d6c2b;
+  --action-text: #ffffff;
   --vp-font-family-base: Inter, "Segoe UI", Arial, sans-serif;
   --vp-font-family-mono: "Cascadia Code", Consolas, monospace;
   --vp-c-bg: #fafbf8;
@@ -12,7 +15,7 @@
   --vp-c-text-2: #526159;
   --vp-c-divider: #dce3d9;
   --vp-sidebar-width: 274px;
-  --vp-nav-logo-height: 27px;
+  --vp-nav-logo-height: 34px;
 }
 .dark {
   --vp-c-bg: #191919;
@@ -29,14 +32,17 @@
   --vp-c-gray-2: #3d3d3d;
   --vp-c-gray-3: #303030;
   --vp-c-gray-soft: rgba(160, 160, 160, 0.12);
-  --vp-c-brand-1: #85b7ff;
-  --vp-c-brand-2: #5c9fff;
-  --vp-c-brand-3: #2563eb;
-  --vp-c-brand-soft: rgba(92, 159, 255, 0.12);
-  --accent-yellow: #f5cc62;
-  --accent-yellow-soft: rgba(245, 204, 98, 0.12);
-  --accent-coral: #ff8892;
-  --accent-coral-soft: rgba(255, 136, 146, 0.12);
+  --vp-c-brand-1: #b2d582;
+  --vp-c-brand-2: #c2df9c;
+  --vp-c-brand-3: #4a7d36;
+  --vp-c-brand-soft: rgba(161, 196, 113, 0.12);
+  --accent-lime: #95bc43;
+  --accent-lime-soft: rgba(149, 188, 67, 0.12);
+  --accent-sage: #a1c471;
+  --accent-sage-soft: rgba(161, 196, 113, 0.12);
+  --action-bg: #95bc43;
+  --action-hover: #a1c471;
+  --action-text: #17210f;
   --vp-code-block-bg: var(--vp-c-bg-alt);
 }
 * {
@@ -91,6 +97,20 @@ a:focus-visible,
   align-items: center;
   padding: 84px 0 60px;
 }
+.hero-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.hero-logo {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+.hero-brand .eyebrow {
+  margin: 0;
+}
 .eyebrow {
   font-size: 10px;
   font-weight: 760;
@@ -104,7 +124,7 @@ a:focus-visible,
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #61b381;
+  background: #95bc43;
   margin-right: 8px;
 }
 .hero-copy h1 {
@@ -136,14 +156,14 @@ a:focus-visible,
   gap: 28px;
   border-radius: 6px;
   padding: 13px 19px;
-  background: #246c51;
-  color: white !important;
+  background: var(--action-bg);
+  color: var(--action-text) !important;
   font-size: 14px;
   font-weight: 650;
   transition: background 0.15s;
 }
 .primary-action:hover {
-  background: #174b39;
+  background: var(--action-hover);
 }
 .secondary-action {
   font-size: 13px;
@@ -274,8 +294,8 @@ a:focus-visible,
   flex-shrink: 0;
 }
 .harness-icon {
-  color: #aa6c41;
-  background: #ae743715;
+  color: #587a29;
+  background: rgba(149, 188, 67, 0.12);
 }
 .project-strip strong {
   font-size: 14px;
@@ -536,13 +556,7 @@ a:focus-visible,
 }
 /* Dark surfaces stay neutral; color marks actions and project families. */
 .dark .eyebrow span {
-  background: var(--accent-yellow);
-}
-.dark .primary-action {
-  background: var(--vp-c-brand-3);
-}
-.dark .primary-action:hover {
-  background: #1d4ed8;
+  background: var(--accent-lime);
 }
 .dark .workflow-demo {
   background: var(--vp-c-bg-alt);
@@ -560,12 +574,12 @@ a:focus-visible,
   color: var(--vp-c-text-2);
 }
 .dark .workflow-tabs button:nth-child(2) {
-  --step-accent: var(--accent-yellow);
-  --step-soft: var(--accent-yellow-soft);
+  --step-accent: var(--accent-lime);
+  --step-soft: var(--accent-lime-soft);
 }
 .dark .workflow-tabs button:nth-child(3) {
-  --step-accent: var(--accent-coral);
-  --step-soft: var(--accent-coral-soft);
+  --step-accent: var(--accent-sage);
+  --step-soft: var(--accent-sage-soft);
 }
 .dark .workflow-tabs button[aria-selected="true"] {
   color: var(--step-accent);
@@ -579,7 +593,7 @@ a:focus-visible,
   color: var(--vp-c-text-2);
 }
 .dark .terminal-dot {
-  background: var(--accent-coral);
+  background: var(--accent-sage);
 }
 .dark .workflow-demo pre {
   color: var(--vp-c-text-1);
@@ -594,20 +608,20 @@ a:focus-visible,
   color: var(--vp-c-brand-1);
 }
 .dark .harness-icon {
-  color: var(--accent-yellow);
-  background: var(--accent-yellow-soft);
+  color: var(--accent-lime);
+  background: var(--accent-lime-soft);
 }
 .dark [data-group] {
   --feature-accent: var(--vp-c-brand-1);
   --feature-soft: var(--vp-c-brand-soft);
 }
 .dark [data-group="ClautoHotkey"] {
-  --feature-accent: var(--accent-yellow);
-  --feature-soft: var(--accent-yellow-soft);
+  --feature-accent: var(--accent-lime);
+  --feature-soft: var(--accent-lime-soft);
 }
 .dark [data-group="Together"] {
-  --feature-accent: var(--accent-coral);
-  --feature-soft: var(--accent-coral-soft);
+  --feature-accent: var(--accent-sage);
+  --feature-soft: var(--accent-sage-soft);
 }
 .dark .feature-card {
   background: var(--vp-c-bg-soft);
@@ -627,20 +641,20 @@ a:focus-visible,
   color: var(--vp-c-brand-1);
 }
 .dark .evidence-results > div:nth-child(2) strong {
-  color: var(--accent-yellow);
+  color: var(--accent-lime);
 }
 .dark .evidence-results > div:nth-child(3) strong {
-  color: var(--accent-coral);
+  color: var(--accent-sage);
 }
 .dark .learning-paths > a {
   --path-accent: var(--vp-c-brand-1);
   border-top-color: var(--path-accent);
 }
 .dark .learning-paths > a:nth-child(2) {
-  --path-accent: var(--accent-yellow);
+  --path-accent: var(--accent-lime);
 }
 .dark .learning-paths > a:nth-child(3) {
-  --path-accent: var(--accent-coral);
+  --path-accent: var(--accent-sage);
 }
 .dark .learning-paths span,
 .dark .learning-paths b {

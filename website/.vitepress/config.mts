@@ -15,9 +15,35 @@ export default defineConfig({
   head: [
     [
       "link",
-      { rel: "icon", type: "image/svg+xml", href: "/AutoHotkey/favicon.svg" },
+      {
+        rel: "icon",
+        type: "image/png",
+        href: "/AutoHotkey/images/autohotkey-logo.png",
+      },
     ],
-    ["meta", { name: "theme-color", content: "#132c25" }],
+    [
+      "link",
+      {
+        rel: "apple-touch-icon",
+        href: "/AutoHotkey/images/autohotkey-logo.png",
+      },
+    ],
+    [
+      "meta",
+      {
+        name: "theme-color",
+        content: "#fafbf8",
+        media: "(prefers-color-scheme: light)",
+      },
+    ],
+    [
+      "meta",
+      {
+        name: "theme-color",
+        content: "#191919",
+        media: "(prefers-color-scheme: dark)",
+      },
+    ],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:site_name", content: "Console + ClautoHotkey" }],
   ],
@@ -26,7 +52,7 @@ export default defineConfig({
     define: { "import.meta.env.VITE_EXTRA_EXTENSIONS": JSON.stringify("ahk") },
   },
   themeConfig: {
-    logo: "/favicon.svg",
+    logo: { src: "/images/autohotkey-logo.png", alt: "AutoHotkey logo" },
     siteTitle: "Console + ClautoHotkey",
     nav: [
       {
