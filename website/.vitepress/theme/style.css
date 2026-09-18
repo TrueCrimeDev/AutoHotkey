@@ -1,3 +1,10 @@
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono-latin.woff2") format("woff2");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
 :root {
   --vp-c-brand-1: #4a7d36;
   --vp-c-brand-2: #3d6c2b;
@@ -7,7 +14,15 @@
   --action-hover: #3d6c2b;
   --action-text: #ffffff;
   --vp-font-family-base: Inter, "Segoe UI", Arial, sans-serif;
-  --vp-font-family-mono: "Cascadia Code", Consolas, monospace;
+  --vp-font-family-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  --vp-code-font-size: 13.5px;
+  --vp-code-line-height: 1.65;
+  --vp-code-block-bg: #171717;
+  --vp-code-block-color: #9cdcfe;
+  --vp-code-lang-color: #999999;
+  --vp-code-line-number-color: #999999;
+  --vp-code-copy-code-bg: #232323;
+  --vp-code-copy-code-hover-bg: #303030;
   --vp-c-bg: #fafbf8;
   --vp-c-bg-alt: #f1f3ee;
   --vp-c-bg-soft: #f0f3ed;
@@ -18,7 +33,7 @@
   --vp-nav-logo-height: 34px;
 }
 .dark {
-  --vp-c-bg: #191919;
+  --vp-c-bg: #171717;
   --vp-c-bg-alt: #141414;
   --vp-c-bg-elv: #292929;
   --vp-c-bg-soft: #232323;
@@ -43,7 +58,6 @@
   --action-bg: #95bc43;
   --action-hover: #a1c471;
   --action-text: #17210f;
-  --vp-code-block-bg: var(--vp-c-bg-alt);
 }
 * {
   box-sizing: border-box;
@@ -71,6 +85,12 @@ a:focus-visible,
 }
 .vp-doc a {
   text-underline-offset: 3px;
+}
+.vp-doc div[class*="language-"] {
+  border: 1px solid #2a2a2a;
+}
+.vp-doc .line-numbers-wrapper {
+  border-color: #2a2a2a;
 }
 .VPDoc .content-container {
   max-width: 800px !important;
@@ -192,7 +212,7 @@ a:focus-visible,
 }
 .workflow-demo {
   border: 1px solid #344b3c;
-  background: #14221a;
+  background: #171717;
   border-radius: 12px;
   color: #e0ebe1;
   box-shadow: 0 24px 50px -28px #133c3480;
@@ -240,13 +260,13 @@ a:focus-visible,
 .workflow-demo pre {
   font-family: var(--vp-font-family-mono);
   font-size: 12px;
-  line-height: 1.9;
+  line-height: 1.65;
   padding: 24px 22px 16px;
   min-height: 238px;
   margin: 0;
   overflow: auto;
   background: transparent !important;
-  color: #d7edcc;
+  color: #9cdcfe;
 }
 .workflow-demo pre code {
   color: inherit !important;
@@ -538,7 +558,7 @@ a:focus-visible,
 }
 .vp-doc .workflow-demo pre {
   padding: 24px 22px 16px;
-  line-height: 1.9;
+  line-height: 1.65;
 }
 .vp-doc .workflow-demo code {
   background: none;
@@ -559,7 +579,7 @@ a:focus-visible,
   background: var(--accent-lime);
 }
 .dark .workflow-demo {
-  background: var(--vp-c-bg-alt);
+  background: #171717;
   border-color: var(--vp-c-border);
   color: var(--vp-c-text-1);
   box-shadow: 0 24px 50px -28px #00000080;
@@ -594,9 +614,6 @@ a:focus-visible,
 }
 .dark .terminal-dot {
   background: var(--accent-sage);
-}
-.dark .workflow-demo pre {
-  color: var(--vp-c-text-1);
 }
 .dark .terminal-note {
   border-color: var(--vp-c-divider);

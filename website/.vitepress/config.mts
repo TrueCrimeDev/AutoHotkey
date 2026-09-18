@@ -1,5 +1,5 @@
 import { defineConfig } from "vitepress";
-import ahk from "./ahk-language.json";
+import { syntaxOptions } from "./syntax-theme";
 
 // VitePress must treat AHK downloads as files in both build-time and client routing.
 process.env.VITE_EXTRA_EXTENSIONS = "ahk";
@@ -40,14 +40,14 @@ export default defineConfig({
       "meta",
       {
         name: "theme-color",
-        content: "#191919",
+        content: "#171717",
         media: "(prefers-color-scheme: dark)",
       },
     ],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:site_name", content: "Console + ClautoHotkey" }],
   ],
-  markdown: { lineNumbers: true, languages: [ahk] },
+  markdown: { ...syntaxOptions, lineNumbers: true },
   vite: {
     define: { "import.meta.env.VITE_EXTRA_EXTENSIONS": JSON.stringify("ahk") },
   },

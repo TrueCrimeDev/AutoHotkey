@@ -1,5 +1,6 @@
 {
   "name": "ahk",
+  "aliases": ["ahk2", "autohotkey"],
   "displayName": "AutoHotkey v2",
   "scopeName": "source.ahk",
   "patterns": [
@@ -19,8 +20,15 @@
     },
     { "name": "keyword.control.directive.ahk", "match": "(?i)^\\s*#[a-z]+" },
     {
+      "match": "(?i)\\b(class|struct|extends)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.control.ahk" },
+        "3": { "name": "entity.name.type.ahk" }
+      }
+    },
+    {
       "name": "keyword.control.ahk",
-      "match": "(?i)\\b(if|else|try|catch|finally|throw|return|for|in|while|loop|break|continue|class|extends|static|global|local|switch|case|default)\\b"
+      "match": "(?i)\\b(if|else|try|catch|finally|throw|return|for|in|while|loop|break|continue|class|struct|extends|static|global|local|switch|case|default|export|not|and|or|is|this|super|unset)\\b"
     },
     {
       "name": "constant.language.ahk",
@@ -32,12 +40,22 @@
     },
     { "name": "variable.language.ahk", "match": "\\bA_[A-Za-z0-9_]+\\b" },
     {
+      "name": "support.type.ahk",
+      "match": "(?i)\\b(i8|u8|i16|u16|i32|u32|i64|u64|iptr|uptr|Int8|UInt8|Int16|UInt16|Int32|UInt32|Int64|UInt64|IntPtr|UIntPtr|Float32|Float64)\\b"
+    },
+    {
+      "name": "support.function.ahk",
+      "match": "(?i)\\b(MsgBox|InputBox|ToolTip|FileOpen|FileRead|FileAppend|DllCall|CallbackCreate|CallbackFree|ComObject|RegRead|RegWrite|WinExist|WinActive|WinActivate|WinClose|WinWait|WinGetTitle|ControlSend|Send|SendInput|SendEvent|Click|MouseMove|KeyWait|GetKeyState|Hotkey|SetTimer|Sleep|Run|RunWait|Format|StrLen|StrSplit|SubStr|InStr|RegExMatch|RegExReplace|Trim|Type|IsSet|IsObject|Map|Array|Buffer|Gui|Menu|OnMessage|OnExit|OnError|SetWorkingDir|Persistent|NumGet|NumPut|Reload|ExitApp|Suspend|Pause|Print|PrintLine|Eval|Inspect|Check|ProcessPipe|AssertEq|AssertTrue|AssertFalse)\\b"
+    },
+    {
       "name": "entity.name.function.ahk",
       "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()"
     },
     {
       "name": "keyword.operator.ahk",
-      "match": ":=|=>|!=|==|\\+=|-=|[+*/=<>!&|?-]"
-    }
+      "match": ":=|=>|!=|==|\\+=|-=|[+*/=<>!&|?%~^-]"
+    },
+    { "name": "punctuation.ahk", "match": "[()\\[\\]{}:,.]" },
+    { "name": "variable.other.ahk", "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b" }
   ]
 }
