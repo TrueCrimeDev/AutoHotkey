@@ -1,8 +1,8 @@
 ---
 layout: page
 sidebar: false
-title: AutoHotkey, with a feedback loop
-description: Explore the AutoHotkey Console fork and ClautoHotkey together. Terminal tools, automatic validation, native MCP, examples, and real session evidence.
+title: Line Out — see your AutoHotkey script, line by line
+description: Follow your AutoHotkey script as it runs with Line Out. Live statement output, filenames, and line numbers in your terminal. Console tools and ClautoHotkey are included extras.
 ---
 
 <ProductHome />

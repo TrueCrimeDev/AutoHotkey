@@ -1,12 +1,12 @@
 <script setup>
 import { withBase } from "vitepress";
-import WorkflowDemo from "./WorkflowDemo.vue";
+import LineOutDemo from "./LineOutDemo.vue";
 import FeatureExplorer from "./FeatureExplorer.vue";
 </script>
 
 <template>
   <main class="product-home">
-    <section class="hero-block">
+    <section class="hero-block" aria-labelledby="line-out-heading">
       <div class="hero-copy">
         <div class="hero-brand">
           <img
@@ -16,121 +16,148 @@ import FeatureExplorer from "./FeatureExplorer.vue";
             width="56"
             height="56"
           />
-          <div class="eyebrow">AUTOHOTKEY V2, WITH A FEEDBACK LOOP</div>
+          <div class="eyebrow">AUTOHOTKEY CONSOLE · LINE OUT</div>
         </div>
-        <h1>
-          Your scripts.<br />Your terminal.<br /><em>Working together.</em>
+        <h1 id="line-out-heading">
+          See your script.<br /><em>Line by line.</em>
         </h1>
         <p class="hero-description">
-          Console gives AutoHotkey a voice in your terminal. ClautoHotkey gives
-          Claude Code the tools to listen, check, and iterate.
+          Follow your AutoHotkey script as it runs. Line Out streams executing
+          statements straight to your terminal, with the filename and line
+          number. Just add <code>/Trace</code>.
         </p>
         <div class="hero-actions">
-          <a class="primary-action" :href="withBase('/guide/quick-start.html')"
-            >Start building <span aria-hidden="true">→</span></a
+          <a class="primary-action" :href="withBase('/console/line-out.html')"
+            >Get started with Line Out <span aria-hidden="true">→</span></a
           >
-          <a class="secondary-action" :href="withBase('/showcase.html')"
-            >See a real session <span aria-hidden="true">↗</span></a
+          <a class="secondary-action" href="#try-line-out"
+            >Try the example <span aria-hidden="true">↓</span></a
           >
         </div>
-        <p class="hero-meta">WINDOWS · OPEN SOURCE · LOCAL TOOLS</p>
+        <p class="hero-meta">
+          WINDOWS · OPEN SOURCE · BUILT INTO THE CONSOLE FORK
+        </p>
       </div>
-      <div class="hero-terminal"><WorkflowDemo /></div>
+      <div class="hero-terminal"><LineOutDemo /></div>
     </section>
 
-    <div class="project-strip">
+    <div class="line-out-benefits" aria-label="Line Out highlights">
       <div>
-        <span class="project-icon" aria-hidden="true">&gt;_</span>
+        <span class="benefit-number" aria-hidden="true">01</span>
         <div>
-          <strong>AutoHotkey Console</strong>
-          <p>The engine. Output, diagnostics, testing, and inspection.</p>
+          <strong>Know which line ran.</strong>
+          <p>Source location and statement text, together.</p>
         </div>
       </div>
-      <span class="join-mark" aria-hidden="true">+</span>
       <div>
-        <span class="project-icon harness-icon" aria-hidden="true">⌘</span>
+        <span class="benefit-number" aria-hidden="true">02</span>
         <div>
-          <strong>ClautoHotkey</strong>
-          <p>The workflow. Claude Code hooks, skills, and grading gates.</p>
+          <strong>Follow the actual path.</strong>
+          <p>Watch branches, loops, and handlers execute.</p>
+        </div>
+      </div>
+      <div>
+        <span class="benefit-number" aria-hidden="true">03</span>
+        <div>
+          <strong>Quiet when your script is.</strong>
+          <p>Idle scripts produce no new trace entries.</p>
         </div>
       </div>
     </div>
 
-    <section class="home-section" id="explore">
+    <section
+      class="home-section line-out-start"
+      id="try-line-out"
+      aria-labelledby="try-heading"
+    >
+      <div>
+        <p class="eyebrow">START WITH LINE OUT</p>
+        <h2 id="try-heading">One flag.<br />A clearer picture.</h2>
+        <p>
+          Add <code>/Trace</code> when you launch your script. No logging calls
+          to scatter through your code. Keep the output in view, or save the
+          trace for a closer look.
+        </p>
+        <a class="text-action" :href="withBase('/console/line-out.html')"
+          >Read the Line Out guide <span aria-hidden="true">→</span></a
+        >
+      </div>
+      <div class="line-out-quickstart">
+        <p class="quickstart-label">1. Get the example</p>
+        <a
+          class="example-download"
+          :href="withBase('/examples/line-out.ahk')"
+          download
+        >
+          line-out.ahk <span>Download the four-line script ↓</span>
+        </a>
+        <p class="quickstart-label">2. Run it in PowerShell</p>
+        <pre
+          tabindex="0"
+          aria-label="Run the Line Out example"
+        ><code>ahk /Trace .\line-out.ahk</code></pre>
+        <p class="quickstart-help">
+          First time here?
+          <a :href="withBase('/guide/installation.html')"
+            >Build the Console executable</a
+          >
+          and
+          <a
+            :href="
+              withBase(
+                '/guide/installation.html#add-a-temporary-powershell-alias',
+              )
+            "
+            >set up the ahk alias</a
+          >.
+        </p>
+        <p class="line-out-limit">
+          A trace shows a statement starting. Use results and assertions to
+          check whether it completed correctly.
+        </p>
+      </div>
+    </section>
+
+    <section
+      class="home-section extras-section"
+      id="extras"
+      aria-labelledby="extras-heading"
+    >
       <div class="section-heading">
         <div>
-          <p class="eyebrow">THE TOOLKIT</p>
-          <h2>Go beyond “the script ran.”</h2>
+          <p class="eyebrow">ALSO INCLUDED</p>
+          <h2 id="extras-heading">A few extras, when you need them.</h2>
         </div>
-        <p>Understand what happened.<br />Then take the next useful step.</p>
+        <p>More tools to support your scripts.</p>
       </div>
-      <FeatureExplorer />
-    </section>
-
-    <section class="evidence-section">
-      <div>
-        <p class="eyebrow">FROM AN ACTUAL CLAUDE CODE SESSION</p>
-        <h2>A workflow you<br />can inspect.</h2>
-        <p>
-          Real edits, real hooks, real engine calls. The demo gallery includes
-          screenshots, downloadable scripts, test outcomes, and the limits of
-          each check.
-        </p>
-        <a class="text-action" :href="withBase('/showcase.html')"
-          >Explore the evidence <span aria-hidden="true">→</span></a
-        >
+      <div class="extra-links">
+        <a :href="withBase('/console/overview.html')">
+          <h3>Console tools <span aria-hidden="true">↗</span></h3>
+          <p>Print, JSON, a REPL, and structured diagnostics.</p>
+        </a>
+        <a :href="withBase('/clautohotkey/setup.html')">
+          <h3>ClautoHotkey <span aria-hidden="true">↗</span></h3>
+          <p>Optional Claude Code hooks, skills, and local MCP tools.</p>
+        </a>
+        <a :href="withBase('/recipes/testing-ci.html')">
+          <h3>Checks & tests <span aria-hidden="true">↗</span></h3>
+          <p>Syntax checks, runtime assertions, and coverage.</p>
+        </a>
       </div>
-      <div class="evidence-results">
-        <div>
-          <strong>26 / 26</strong><span>Runtime assertions passed</span>
-        </div>
-        <div><strong>174</strong><span>Valid JSON trace records</span></div>
-        <div><strong>77 / 84</strong><span>Instrumented lines hit</span></div>
-        <p>
-          September 17, 2026 · development build<br />Static parse: partial. Raw
-          dry-run output: checker issue recorded.
-        </p>
-      </div>
-    </section>
-
-    <section class="home-section paths-section">
-      <p class="eyebrow">PICK YOUR NEXT STEP</p>
-      <h2>Start small. Keep the signal.</h2>
-      <div class="learning-paths">
-        <a :href="withBase('/guide/quick-start.html')"
-          ><span>01 / FIRST RUN</span>
-          <h3>From script to terminal</h3>
-          <p>
-            Identify your engine, write a small script, and separate results
-            from errors.
-          </p>
-          <b>Quick start →</b></a
-        >
-        <a :href="withBase('/clautohotkey/setup.html')"
-          ><span>02 / YOUR EDITOR</span>
-          <h3>Bring Claude into the loop</h3>
-          <p>
-            Install the plugin, point it at your engine, and verify an actual
-            post-edit hook.
-          </p>
-          <b>Set up ClautoHotkey →</b></a
-        >
-        <a :href="withBase('/recipes/testing-ci.html')"
-          ><span>03 / REPEATABLE RESULTS</span>
-          <h3>Turn checks into a habit</h3>
-          <p>
-            Add behavioral assertions, coverage, and a Windows CI job that
-            records failures.
-          </p>
-          <b>Build a test workflow →</b></a
-        >
-      </div>
+      <details class="extras-details">
+        <summary>Explore the full toolkit</summary>
+        <FeatureExplorer />
+      </details>
+      <p class="extras-evidence">
+        Want to inspect a complete workflow?
+        <a :href="withBase('/showcase.html')">See the real session gallery →</a>
+      </p>
     </section>
     <div class="home-version">
       <span>DEVELOPMENT REFERENCE</span>
       <p>
-        Examples target the demonstrated alpha.31 +Console build. Check your
-        executable’s capabilities before using newer features.
+        The Line Out example targets alpha.30 +Console or newer. Check your
+        executable’s capabilities before using other development features.
       </p>
       <a :href="withBase('/guide/compatibility.html')">Build compatibility →</a>
     </div>

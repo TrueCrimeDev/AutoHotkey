@@ -2,6 +2,8 @@
 
 Tracing tells you **which statement began executing**. Coverage tells you **which instrumented lines were hit**. Assertions tell you **whether the result was correct**.
 
+For readable live output in your terminal, start with [Line Out](/console/line-out). This page covers structured trace events and coverage files.
+
 ## Keep the output channels separate
 
 ```powershell
