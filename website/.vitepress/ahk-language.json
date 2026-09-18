@@ -1,0 +1,43 @@
+{
+  "name": "ahk",
+  "displayName": "AutoHotkey v2",
+  "scopeName": "source.ahk",
+  "patterns": [
+    { "name": "comment.line.semicolon.ahk", "match": ";.*$" },
+    { "name": "comment.block.ahk", "begin": "/\\*", "end": "\\*/" },
+    {
+      "name": "string.quoted.double.ahk",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [{ "name": "constant.character.escape.ahk", "match": "`." }]
+    },
+    {
+      "name": "string.quoted.single.ahk",
+      "begin": "'",
+      "end": "'",
+      "patterns": [{ "name": "constant.character.escape.ahk", "match": "`." }]
+    },
+    { "name": "keyword.control.directive.ahk", "match": "(?i)^\\s*#[a-z]+" },
+    {
+      "name": "keyword.control.ahk",
+      "match": "(?i)\\b(if|else|try|catch|finally|throw|return|for|in|while|loop|break|continue|class|extends|static|global|local|switch|case|default)\\b"
+    },
+    {
+      "name": "constant.language.ahk",
+      "match": "(?i)\\b(true|false|unset)\\b"
+    },
+    {
+      "name": "constant.numeric.ahk",
+      "match": "\\b(0[xX][a-fA-F0-9]+|[0-9]+(?:\\.[0-9]+)?)\\b"
+    },
+    { "name": "variable.language.ahk", "match": "\\bA_[A-Za-z0-9_]+\\b" },
+    {
+      "name": "entity.name.function.ahk",
+      "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()"
+    },
+    {
+      "name": "keyword.operator.ahk",
+      "match": ":=|=>|!=|==|\\+=|-=|[+*/=<>!&|?-]"
+    }
+  ]
+}
