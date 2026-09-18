@@ -15,6 +15,7 @@ const shown = computed(() =>
       <button
         v-for="group in groups"
         :key="group"
+        :data-group="group"
         :aria-pressed="filter === group"
         @click="filter = group"
       >
@@ -27,6 +28,7 @@ const shown = computed(() =>
         v-for="(feature, index) in shown"
         :key="feature.title"
         class="feature-card"
+        :data-group="feature.group"
         :href="withBase(feature.path + '.html')"
       >
         <div class="feature-card-top">

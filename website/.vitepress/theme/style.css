@@ -15,16 +15,29 @@
   --vp-nav-logo-height: 27px;
 }
 .dark {
-  --vp-c-bg: #101915;
-  --vp-c-bg-alt: #0c130f;
-  --vp-c-bg-soft: #17231c;
-  --vp-c-text-1: #e5eee7;
-  --vp-c-text-2: #a8b9ac;
-  --vp-c-divider: #2b3b30;
-  --vp-c-brand-1: #8bdda8;
-  --vp-c-brand-2: #b1e8c3;
-  --vp-c-brand-3: #c4f2d2;
-  --vp-c-brand-soft: rgba(139, 221, 168, 0.1);
+  --vp-c-bg: #191919;
+  --vp-c-bg-alt: #141414;
+  --vp-c-bg-elv: #292929;
+  --vp-c-bg-soft: #232323;
+  --vp-c-text-1: #f0f0f0;
+  --vp-c-text-2: #b6b6b6;
+  --vp-c-text-3: #999999;
+  --vp-c-divider: #363636;
+  --vp-c-border: #484848;
+  --vp-c-gutter: #101010;
+  --vp-c-gray-1: #555555;
+  --vp-c-gray-2: #3d3d3d;
+  --vp-c-gray-3: #303030;
+  --vp-c-gray-soft: rgba(160, 160, 160, 0.12);
+  --vp-c-brand-1: #85b7ff;
+  --vp-c-brand-2: #5c9fff;
+  --vp-c-brand-3: #2563eb;
+  --vp-c-brand-soft: rgba(92, 159, 255, 0.12);
+  --accent-yellow: #f5cc62;
+  --accent-yellow-soft: rgba(245, 204, 98, 0.12);
+  --accent-coral: #ff8892;
+  --accent-coral-soft: rgba(255, 136, 146, 0.12);
+  --vp-code-block-bg: var(--vp-c-bg-alt);
 }
 * {
   box-sizing: border-box;
@@ -520,6 +533,118 @@ a:focus-visible,
 .workflow-demo code {
   font-family: inherit;
   font-weight: 400;
+}
+/* Dark surfaces stay neutral; color marks actions and project families. */
+.dark .eyebrow span {
+  background: var(--accent-yellow);
+}
+.dark .primary-action {
+  background: var(--vp-c-brand-3);
+}
+.dark .primary-action:hover {
+  background: #1d4ed8;
+}
+.dark .workflow-demo {
+  background: var(--vp-c-bg-alt);
+  border-color: var(--vp-c-border);
+  color: var(--vp-c-text-1);
+  box-shadow: 0 24px 50px -28px #00000080;
+}
+.dark .workflow-tabs {
+  background: var(--vp-c-bg-soft);
+  border-color: var(--vp-c-divider);
+}
+.dark .workflow-tabs button {
+  --step-accent: var(--vp-c-brand-1);
+  --step-soft: var(--vp-c-brand-soft);
+  color: var(--vp-c-text-2);
+}
+.dark .workflow-tabs button:nth-child(2) {
+  --step-accent: var(--accent-yellow);
+  --step-soft: var(--accent-yellow-soft);
+}
+.dark .workflow-tabs button:nth-child(3) {
+  --step-accent: var(--accent-coral);
+  --step-soft: var(--accent-coral-soft);
+}
+.dark .workflow-tabs button[aria-selected="true"] {
+  color: var(--step-accent);
+  background: var(--step-soft);
+  border-bottom-color: var(--step-accent);
+}
+.dark .terminal-label,
+.dark .terminal-label > span:last-child,
+.dark .terminal-note,
+.dark .demo-caption {
+  color: var(--vp-c-text-2);
+}
+.dark .terminal-dot {
+  background: var(--accent-coral);
+}
+.dark .workflow-demo pre {
+  color: var(--vp-c-text-1);
+}
+.dark .terminal-note {
+  border-color: var(--vp-c-divider);
+}
+.dark .demo-caption {
+  background: var(--vp-c-bg-soft);
+}
+.dark .project-icon {
+  color: var(--vp-c-brand-1);
+}
+.dark .harness-icon {
+  color: var(--accent-yellow);
+  background: var(--accent-yellow-soft);
+}
+.dark [data-group] {
+  --feature-accent: var(--vp-c-brand-1);
+  --feature-soft: var(--vp-c-brand-soft);
+}
+.dark [data-group="ClautoHotkey"] {
+  --feature-accent: var(--accent-yellow);
+  --feature-soft: var(--accent-yellow-soft);
+}
+.dark [data-group="Together"] {
+  --feature-accent: var(--accent-coral);
+  --feature-soft: var(--accent-coral-soft);
+}
+.dark .feature-card {
+  background: var(--vp-c-bg-soft);
+}
+.dark .feature-card-top,
+.dark .feature-filters button[aria-pressed="true"] {
+  color: var(--feature-accent);
+}
+.dark .feature-filters button[aria-pressed="true"] {
+  background: var(--feature-soft);
+  border-color: var(--feature-accent);
+}
+.dark .feature-card:hover {
+  border-color: var(--feature-accent);
+}
+.dark .evidence-results > div:nth-child(1) strong {
+  color: var(--vp-c-brand-1);
+}
+.dark .evidence-results > div:nth-child(2) strong {
+  color: var(--accent-yellow);
+}
+.dark .evidence-results > div:nth-child(3) strong {
+  color: var(--accent-coral);
+}
+.dark .learning-paths > a {
+  --path-accent: var(--vp-c-brand-1);
+  border-top-color: var(--path-accent);
+}
+.dark .learning-paths > a:nth-child(2) {
+  --path-accent: var(--accent-yellow);
+}
+.dark .learning-paths > a:nth-child(3) {
+  --path-accent: var(--accent-coral);
+}
+.dark .learning-paths span,
+.dark .learning-paths b {
+  color: var(--path-accent);
 }
 @media (min-width: 1440px) {
   .hero-block {
