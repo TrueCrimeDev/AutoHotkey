@@ -51,6 +51,7 @@ _DebugRun_*.ahk
 C:\\*
 
 # Local workspace-only artifacts
+out/
 .claude/worktrees/
 .git_corrupt_*/
 build_*/
@@ -59,3 +60,9 @@ cmake -G */
 # Test run artifacts
 tests/tmp/
 __pycache__/
+
+# Coverage and test reports (CI writes these; see tools/lcov_summary.py)
+coverage/
+*.lcov
+junit.xml
+diag.jsonl
