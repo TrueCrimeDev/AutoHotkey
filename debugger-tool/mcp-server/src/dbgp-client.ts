@@ -4,6 +4,7 @@
 
 import * as net from 'net';
 import { EventEmitter } from 'events';
+import { DBGpFramer } from '@ahk/dbgp-protocol';
 
 export interface DebugResponse {
   command: string;
@@ -52,13 +53,14 @@ export class DBGpClient extends EventEmitter {
   private socket: net.Socket | null = null;
   private transactionId = 1;
   private port: number;
-  private buffer = '';
+  private framer = new DBGpFramer();
+  private pendingCommands = new Map<number, { resolve: (value: DebugResponse) => void; reject: (error: Error) => void }>();
   private connected = false;
   private errorQueue: ErrorInfo[] = [];
   private errorQueueMaxSize = 100;
-  private errorWaiters: Array<(error: ErrorInfo) => void> = [];
+  private errorWaiters: Array<(error: ErrorInfo | null) => void> = [];
 
-  constructor(port: number = 9000) {
+  constructor(port: number = 9000, private commandTimeoutMs: number = 5000) {
     super();
     this.port = port;
   }
@@ -69,16 +71,27 @@ export class DBGpClient extends EventEmitter {
   async listen(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server = net.createServer((socket) => {
+        if (this.socket) {
+          socket.destroy();
+          return;
+        }
+        this.framer.reset();
         this.socket = socket;
         this.connected = true;
         this.emit('connected');
 
-        socket.on('data', (data) => this.handleData(data));
+        socket.on('data', (data) => { if (this.socket === socket) this.handleData(data); });
         socket.on('end', () => {
-          this.connected = false;
-          this.emit('disconnected');
+          if (this.socket === socket) this.disconnect(new Error('Debugger disconnected'));
         });
-        socket.on('error', (err) => this.emit('error', err));
+        socket.on('close', () => {
+          if (this.socket === socket) this.disconnect(new Error('Debugger disconnected'));
+        });
+        socket.on('error', (err) => {
+          if (this.socket !== socket) return;
+          this.disconnect(err);
+          this.emit('error', err);
+        });
       });
 
       this.server.listen(this.port, '127.0.0.1', () => {
@@ -94,26 +107,30 @@ export class DBGpClient extends EventEmitter {
    * Handle incoming data from AutoHotkey
    */
   private handleData(data: Buffer): void {
-    this.buffer += data.toString();
-
-    // DBGp messages are null-terminated with length prefix
-    while (true) {
-      const nullIdx = this.buffer.indexOf('\0');
-      if (nullIdx === -1) break;
-
-      const message = this.buffer.substring(0, nullIdx);
-      this.buffer = this.buffer.substring(nullIdx + 1);
-
-      // Parse length prefix if present
-      if (message.match(/^\d+\0/)) {
-        const parts = message.split('\0', 2);
-        if (parts.length === 2) {
-          this.emit('message', parts[1]);
-        }
-      } else {
+    try {
+      for (const message of this.framer.push(data)) {
+        const response = this.parseResponse(message);
+        const pending = this.pendingCommands.get(Number(response.transaction_id));
+        if (pending) pending.resolve(response);
         this.emit('message', message);
       }
+    } catch (error) {
+      this.disconnect(error as Error);
+      this.emit('error', error);
     }
+  }
+
+  private disconnect(reason: Error): void {
+    const socket = this.socket;
+    const wasConnected = this.connected;
+    this.socket = null;
+    this.connected = false;
+    this.framer.reset();
+    for (const pending of this.pendingCommands.values()) pending.reject(reason);
+    this.pendingCommands.clear();
+    for (const waiter of this.errorWaiters.splice(0)) waiter(null);
+    socket?.destroy();
+    if (wasConnected) this.emit('disconnected');
   }
 
   /**
@@ -128,20 +145,24 @@ export class DBGpClient extends EventEmitter {
     const fullCommand = `${command} -i ${tid}\0`;
 
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Command timeout'));
-      }, 5000);
-
-      const handler = (message: string) => {
-        if (message.includes(`transaction_id="${tid}"`)) {
-          clearTimeout(timeout);
-          this.off('message', handler);
-          resolve(this.parseResponse(message));
-        }
+      const cleanup = () => {
+        clearTimeout(timeout);
+        this.pendingCommands.delete(tid);
       };
-
-      this.on('message', handler);
-      this.socket!.write(fullCommand);
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error('Command timeout'));
+      }, this.commandTimeoutMs);
+      const pending = {
+        resolve: (value: DebugResponse) => { cleanup(); resolve(value); },
+        reject: (error: Error) => { cleanup(); reject(error); }
+      };
+      this.pendingCommands.set(tid, pending);
+      try {
+        this.socket!.write(fullCommand, error => { if (error) pending.reject(error); });
+      } catch (error) {
+        pending.reject(error as Error);
+      }
     });
   }
 
@@ -338,10 +359,7 @@ export class DBGpClient extends EventEmitter {
   }
 
   async close(): Promise<void> {
-    if (this.socket) {
-      this.socket.end();
-      this.socket = null;
-    }
+    this.disconnect(new Error('Debugger connection closed'));
     if (this.server) {
       this.server.close();
       this.server = null;
@@ -355,15 +373,12 @@ export class DBGpClient extends EventEmitter {
    * Queue an error for later retrieval
    */
   queueError(error: ErrorInfo): void {
-    this.errorQueue.push(error);
-    if (this.errorQueue.length > this.errorQueueMaxSize) {
-      this.errorQueue.shift();
-    }
-
-    // Resolve any waiting promises
-    if (this.errorWaiters.length > 0) {
-      const waiter = this.errorWaiters.shift();
-      waiter?.(error);
+    const waiter = this.errorWaiters.shift();
+    if (waiter) {
+      waiter(error);
+    } else {
+      this.errorQueue.push(error);
+      if (this.errorQueue.length > this.errorQueueMaxSize) this.errorQueue.shift();
     }
 
     this.emit('error_captured', error);
@@ -380,16 +395,14 @@ export class DBGpClient extends EventEmitter {
 
     // Wait for next error
     return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        const idx = this.errorWaiters.indexOf(resolve as any);
-        if (idx > -1) this.errorWaiters.splice(idx, 1);
-        resolve(null);
-      }, timeoutMs);
-
-      this.errorWaiters.push((error) => {
+      const waiter = (error: ErrorInfo | null) => {
         clearTimeout(timeout);
+        const idx = this.errorWaiters.indexOf(waiter);
+        if (idx > -1) this.errorWaiters.splice(idx, 1);
         resolve(error);
-      });
+      };
+      const timeout = setTimeout(() => waiter(null), timeoutMs);
+      this.errorWaiters.push(waiter);
     });
   }
 

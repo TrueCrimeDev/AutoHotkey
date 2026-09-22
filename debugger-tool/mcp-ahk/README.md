@@ -6,8 +6,10 @@ as a plain function.
 
 > **Native verb:** the same server is also compiled into the fork engine as
 > `AutoHotkey64.exe mcp` (C++, `source/mcp_server.cpp`) — zero files needed
-> beyond the exe + `tree-sitter-ahk.dll`. Same five tools, same protocol, same
-> payloads; `tests/conformance_native.py` diffs it against this script. This
+> beyond the exe + `tree-sitter-ahk.dll`. The five shared tools retain their
+> payloads; the native server also provides `check`, `run`, and `test`.
+> `tests/conformance_native.py` checks native discovery and compares shared
+> file-tool payloads against this script using the same executable. This
 > file remains the reference implementation and the function-call / client API
 > (`MCP()`, `McpClient`).
 
@@ -126,17 +128,30 @@ bin\AutoHotkey64.exe debugger-tool\mcp-ahk\tests\test_json.ahk        # 38 codec
 bin\AutoHotkey64.exe debugger-tool\mcp-ahk\tests\test_protocol.ahk    # 27 dispatch tests
 bin\AutoHotkey64.exe debugger-tool\mcp-ahk\tests\test_tools.ahk       # 16 tool tests
 
-# Native `mcp` verb: 42 protocol-conformance checks + differential tests that
-# require every tool payload to deep-equal this script's output (from WSL):
-python3 debugger-tool/mcp-ahk/tests/conformance_native.py bin/AutoHotkey64.exe
+# Native protocol and shared-tool differential checks (Windows or WSL):
+python debugger-tool/mcp-ahk/tests/conformance_native.py path/to/AutoHotkey64Console.exe
+
+# Process lifetime, bounded capture, filename/path handling and protocol edges:
+python tests/test_process_mcp_regressions.py path/to/AutoHotkey64Console.exe
 ```
+
+Run these commands from the repository root and select the executable being
+validated. The differential harness invokes `cli.ahk` directly with that same
+engine; neither the `ahkmcp` shell launcher nor a separate installed engine is
+used. It needs the matching-architecture `tree-sitter-ahk.dll` beside the engine.
+The currently vendored DLL is x64; do not place it beside an x86 engine.
+Windows Python uses Windows paths directly. WSL uses `wslpath` for fixture and
+script paths, so the checkout and executable must be on a Windows-accessible
+filesystem. Child processes have timeouts; the junction-cycle fixture is
+removed before its temporary directory is cleaned up.
 
 ## Notes / limits
 
 - JSON object key order is not preserved (AHK `Map` is unordered); irrelevant to
   MCP, which is key-addressed.
-- Deferred: `check` (must shell to a throwaway process — in-process parsing has
-  side-effects), `apply_fix`, `analyze_error`, and the DBGp live-debugger tools.
+- The script implementation does not provide `check`, `run`, or `test`; use
+  the native verb for those tools. `apply_fix`, `analyze_error`, and the DBGp
+  live-debugger tools remain separate from this server.
 
 Deliberate divergences of the native `mcp` verb (native is the better behavior;
 everything else is verified payload-identical by `tests/conformance_native.py`):
@@ -149,3 +164,10 @@ everything else is verified payload-identical by `tests/conformance_native.py`):
   the scan); `Loop Files "R"` follows them.
 - `workspace_symbols` default `root` is the process working directory, as the
   schema documents; this script's default is its own directory (script CWD).
+- Native execution tools cap combined stdout/stderr at 8 MiB of raw bytes.
+  A call exceeding the cap kills its process tree and returns the captured
+  text prefix with `outputLimitExceeded: true`, `captureLimitBytes: 8388608`,
+  and `ok: false`. Timeout and capture-limit outcomes are separate fields.
+- Native context arguments reject negative radii, nonpositive line numbers,
+  and numbers outside the signed 64-bit range. Large valid radii clamp to
+  the available source lines without wrapping.

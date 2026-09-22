@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "Headless AHK error capture for AI coding agents",
   "main": "dist/index.js",
+  "files": ["dist/", "include/", "README.md"],
   "bin": {
     "ahk-error-agent": "./dist/index.js"
   },
   "scripts": {
+    "test": "npm run build && node --test tests/*.test.cjs",
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
@@ -21,6 +23,10 @@
   ],
   "author": "",
   "license": "MIT",
+  "bundledDependencies": ["@ahk/dbgp-protocol"],
+  "dependencies": {
+    "@ahk/dbgp-protocol": "file:../dbgp-protocol"
+  },
   "devDependencies": {
     "@types/node": "^20.10.0",
     "ts-node": "^10.9.2",

@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "description": "MCP server for AutoHotkey v2 debugging - Connect AI tools to AHK debugger via DBGp protocol",
   "main": "build/index.js",
+  "files": ["build/", "README.md"],
   "type": "module",
   "bin": {
     "mcp-autohotkey-debug": "./build/index.js"
   },
   "scripts": {
+    "test": "npm run build && node --test tests/*.test.mjs",
     "build": "tsc",
     "watch": "tsc --watch",
     "prepare": "npm run build"
@@ -23,7 +25,9 @@
   ],
   "author": "Your Name",
   "license": "MIT",
+  "bundledDependencies": ["@ahk/dbgp-protocol"],
   "dependencies": {
+    "@ahk/dbgp-protocol": "file:../dbgp-protocol",
     "@anthropic-ai/sdk": "^0.74.0",
     "@modelcontextprotocol/sdk": "^0.5.0",
     "zod": "^3.22.4"
