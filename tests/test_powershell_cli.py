@@ -15,7 +15,10 @@ import unittest
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--wrapper", type=Path)
+parser.add_argument("--engine", type=Path, help="Use this exact Console executable through the wrapper")
 options, remaining = parser.parse_known_args()
+if options.engine and not options.wrapper:
+    parser.error("--engine requires --wrapper")
 ROOT = Path(__file__).resolve().parents[1]
 SHELLS = [p for p in (shutil.which("pwsh"),
     str(Path(os.environ["WINDIR"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"))
@@ -34,7 +37,10 @@ class PowerShellCliTests(unittest.TestCase):
             args.append("-NoProfile")
             bootstrap += ". " + quote(options.wrapper.resolve()) + "\n"
         encoded = base64.b64encode((bootstrap + command).encode("utf-16le")).decode()
-        return subprocess.run([*args, "-EncodedCommand", encoded], cwd=cwd or ROOT,
+        env = os.environ.copy()
+        if options.engine:
+            env["AHK_CONSOLE_EXE"] = str(options.engine.resolve())
+        return subprocess.run([*args, "-EncodedCommand", encoded], cwd=cwd or ROOT, env=env,
                               capture_output=True, timeout=12)
 
     def check_all(self, command, expected, code=0, cwd=None):
@@ -61,7 +67,7 @@ class PowerShellCliTests(unittest.TestCase):
                        "not found", 12)
 
     def test_script_and_run_alias_preserve_arguments(self):
-        with tempfile.TemporaryDirectory(prefix="ahk-cli-shell-", dir=ROOT / "temp") as td:
+        with tempfile.TemporaryDirectory(prefix="ahk-cli-shell-") as td:
             script = Path(td) / "argument demo.ahk"
             script.write_text('for arg in A_Args\n    Print(arg)\nExitApp(7)\n', encoding="utf-8")
             for prefix in ("", "run "):
@@ -74,7 +80,7 @@ class PowerShellCliTests(unittest.TestCase):
                                'two words\n--help\nquote"inside\n\n', 7, td)
 
     def test_check_and_test_modes(self):
-        with tempfile.TemporaryDirectory(prefix="ahk-cli-shell-", dir=ROOT / "temp") as td:
+        with tempfile.TemporaryDirectory(prefix="ahk-cli-shell-") as td:
             script = Path(td) / "safe.ahk"
             script.write_text('Print("script ran")\n', encoding="utf-8")
             self.check_all("ahk check /Diag=json " + quote(script), '"status":"pass"')

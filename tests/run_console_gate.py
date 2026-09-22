@@ -25,9 +25,14 @@ def main():
         [str(engine), "test", "/Headless", "/Eval", str(ROOT / "tests/test_eval_flag.ahk")],
         *[[sys.executable, str(ROOT / "tests" / suite), str(engine)] for suite in (
             "test_qa_runner.py", "test_console_cli.py", "test_console_repl.py", "test_mcp_protocol.py",
-            "test_console_trace.py"
+            "test_console_trace.py", "test_console_coverage.py", "test_runtime_regressions.py",
+            "test_process_mcp_regressions.py"
         )],
+        [str(engine), "test", "/Headless", str(ROOT / "tests/run.ahk")],
     ]
+    if os.name == "nt" and engine.stem.lower().endswith("console"):
+        suites.append([sys.executable, str(ROOT / "tests/test_powershell_cli.py"),
+                       "--wrapper", str(ROOT / "tools/ahk.ps1"), "--engine", str(engine)])
     failures = 0
     for command in suites:
         print("Running: " + subprocess.list2cmdline(command), flush=True)

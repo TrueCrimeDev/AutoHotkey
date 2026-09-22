@@ -11,6 +11,17 @@ QaTimeoutMs() {
     return Integer(value)
 }
 
+; When AHK_QA_COVERAGE_DIR is set, every child writes an LCOV report there
+; (one file per launch); merge them with tools/lcov_summary.py.
+CoverageFlag(script, seq) {
+    dir := EnvGet("AHK_QA_COVERAGE_DIR")
+    if dir = ""
+        return ""
+    DirCreate(dir)
+    SplitPath(script, , , , &base)
+    return ' /Coverage="' dir '\' base '_' ProcessExist() '_' seq '.lcov"'
+}
+
 RunQaChild(script, args := "", timeoutMs := QaTimeoutMs()) {
     static seq := 0
     seq += 1
@@ -45,7 +56,7 @@ RunQaChild(script, args := "", timeoutMs := QaTimeoutMs()) {
         stdOffset := A_PtrSize = 8 ? 80 : 56
         NumPut("ptr", input, "ptr", output, "ptr", output, startup, stdOffset)
         info := Buffer(A_PtrSize * 2 + 8, 0)
-        command := '"' A_AhkPath '" /Headless /ErrorStdOut "' script '" ' args
+        command := '"' A_AhkPath '"' CoverageFlag(script, seq) ' /Headless /ErrorStdOut "' script '" ' args
         commandBuf := Buffer((StrLen(command) + 1) * 2, 0)
         StrPut(command, commandBuf, "UTF-16")
         if !DllCall("CreateProcessW", "str", A_AhkPath, "ptr", commandBuf,
