@@ -354,5 +354,15 @@ unlogged loop session between 3 and now.)
   `ClearItems`; README no longer claims `/Headless` keeps script `MsgBox`
   dialogs from blocking.
 - Home.vue was a 0-byte file in the working tree; restored from HEAD.
-- #16 is superseded by the workflow in #31; #17 conflicts with the shared
-  dbgp-protocol refactor and needs a rebase.
+- #16 closed as superseded by the workflow in #31. #17 rebased onto the #31
+  branch (its base until #31 merges): `DBGpClient` keeps the stdio transport
+  model plus #31's lifecycle guarantees; the shared `DBGpFramer` gained an
+  opt-in `divertRaw` mode so raw `Print()` bytes on a stdio pipe are captured
+  instead of duplicating framing; `fake-ahk.sh` committed executable (the
+  launcher tests failed with EACCES on Linux without it). Client suites 4/4,
+  23/23 (+2 skipped), 3/3; CI green on both branches.
+- Privacy sweep: 15 tracked files still carried the home-directory path or
+  the old repo id (hooks, `.mcp.json`, test_repl.sh, examples, plan docs).
+  Scripts now derive locations from their own path with `AHK_*` overrides;
+  `.mcp.json` uses `./bin/AutoHotkey64.exe` (verified to answer `initialize`
+  from the repo root); `.claude/settings.local.json` untracked and ignored.
