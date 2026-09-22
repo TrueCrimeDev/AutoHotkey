@@ -217,6 +217,13 @@
     <ClCompile Include="source\AutoHotkey.cpp" />
     <ClCompile Include="source\MdFunc.cpp" />
     <ClCompile Include="source\clipboard.cpp" />
+    <ClCompile Include="source\child_process.cpp" />
+    <ClCompile Include="source\console_check.cpp" />
+    <ClCompile Include="source\console_eval.cpp" />
+    <ClCompile Include="source\console_output.cpp" />
+    <ClCompile Include="source\console_repl.cpp" />
+    <ClCompile Include="source\coverage.cpp" />
+    <ClCompile Include="source\process_pipe.cpp" />
     <ClCompile Include="source\crashlog.cpp" />
     <ClCompile Include="source\Debugger.cpp">
       <Optimization>MinSpace</Optimization>
@@ -226,6 +233,7 @@
     <ClCompile Include="source\hook.cpp" />
     <ClCompile Include="source\hotkey.cpp" />
     <ClCompile Include="source\input_object.cpp" />
+    <ClCompile Include="source\inspect.cpp" />
     <ClCompile Include="source\keyboard_mouse.cpp" />
     <ClCompile Include="source\lib\CCallback.cpp" />
     <ClCompile Include="source\lib\DllCall.cpp" />
@@ -282,6 +290,7 @@
     <ClCompile Include="source\SimpleHeap.cpp" />
     <ClCompile Include="source\StringConv.cpp" />
     <ClCompile Include="source\TextIO.cpp" />
+    <ClCompile Include="source\ts_api.cpp" />
     <ClCompile Include="source\util.cpp" />
     <ClCompile Include="source\var.cpp" />
     <ClCompile Include="source\window.cpp" />
@@ -295,6 +304,11 @@
     <ClInclude Include="source\MdFunc.h" />
     <ClInclude Include="source\clipboard.h" />
     <ClInclude Include="source\config.h" />
+    <ClInclude Include="source\child_process.h" />
+    <ClInclude Include="source\console_eval.h" />
+    <ClInclude Include="source\console_output.h" />
+    <ClInclude Include="source\coverage.h" />
+    <ClInclude Include="source\process_pipe.h" />
     <ClInclude Include="source\crashlog.h" />
     <ClInclude Include="source\debug.h" />
     <ClInclude Include="source\Debugger.h" />
@@ -305,6 +319,9 @@
     <ClInclude Include="source\hotkey.h" />
     <ClInclude Include="source\input_object.h" />
     <ClInclude Include="source\json.h" />
+    <ClInclude Include="source\json_internal.h" />
+    <ClInclude Include="source\inspect.h" />
+    <ClInclude Include="source\native_object_util.h" />
     <ClInclude Include="source\keyboard_mouse.h" />
     <ClInclude Include="source\KuString.h" />
     <ClInclude Include="source\mcp_server.h" />

@@ -33,11 +33,10 @@ _ErrorToStdErr(err, mode) {
         output .= Format("     Stack:`n{1}`n", _IndentStack(err.Stack))
 
     ; Add thread status
-    output .= Format("     {1}`n",
-        (mode == "ExitApp" ? "Script will exit." :
-         mode == "Exit" ? "Thread will exit." :
-         "Thread will continue.")
-    )
+    status := mode == "ExitApp" ? "Script will exit."
+        : mode == "Exit" ? "Thread will exit."
+        : "Thread will continue."
+    output .= Format("     {1}`n", status)
 
     ; Write to stderr
     FileAppend(output, "**")

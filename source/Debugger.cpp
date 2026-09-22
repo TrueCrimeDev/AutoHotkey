@@ -2588,16 +2588,45 @@ void SocketTransport::ExitSyncMode(HWND aWnd)
 
 int StdioTransport::Connect(const char *aAddress, const char *aPort)
 {
+	Disconnect();
 	// Set stdin and stdout to binary mode to prevent CR/LF translation.
 	_setmode(_fileno(stdin), _O_BINARY);
 	_setmode(_fileno(stdout), _O_BINARY);
 	mInput = GetStdHandle(STD_INPUT_HANDLE);
+	if (!mInput || mInput == INVALID_HANDLE_VALUE)
+		return DEBUGGER_E_INTERNAL_ERROR;
+	mStopWatcher = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+	if (!mStopWatcher)
+		return DEBUGGER_E_INTERNAL_ERROR;
+	mWatcher = CreateThread(nullptr, 0, WatchInput, this, 0, nullptr);
+	if (!mWatcher)
+	{
+		CloseHandle(mStopWatcher);
+		mStopWatcher = nullptr;
+		return DEBUGGER_E_INTERNAL_ERROR;
+	}
 	mConnected = true;
 	return DEBUGGER_E_OK;
 }
 
 void StdioTransport::Disconnect()
 {
+	InterlockedExchangePointer(&mAsyncWindow, nullptr);
+	if (mStopWatcher)
+		SetEvent(mStopWatcher);
+	if (mWatcher)
+	{
+		// The watcher never consumes input or waits on the script thread.
+		WaitForSingleObject(mWatcher, INFINITE);
+		CloseHandle(mWatcher);
+		mWatcher = nullptr;
+	}
+	if (mStopWatcher)
+	{
+		CloseHandle(mStopWatcher);
+		mStopWatcher = nullptr;
+	}
+	InterlockedExchange(&mWakePosted, 0);
 	if (mConnected)
 	{
 		fflush(stdout);
@@ -2625,6 +2654,9 @@ int StdioTransport::Recv(char *aBuffer, size_t aBufferSize, int &aBytesRead)
 
 bool StdioTransport::HasPendingData()
 {
+	// A queued wake may be stale if a statement poll already consumed its data.
+	// Acknowledge it here as well as in ExitSyncMode so the next input can wake us.
+	InterlockedExchange(&mWakePosted, 0);
 	if (!mConnected || mInput == INVALID_HANDLE_VALUE)
 		return false;
 
@@ -2633,6 +2665,38 @@ bool StdioTransport::HasPendingData()
 		return available > 0;
 
 	return false;
+}
+
+void StdioTransport::EnterSyncMode(HWND aWnd)
+{
+	InterlockedExchangePointer(&mAsyncWindow, nullptr);
+}
+
+void StdioTransport::ExitSyncMode(HWND aWnd)
+{
+	InterlockedExchange(&mWakePosted, 0);
+	InterlockedExchangePointer(&mAsyncWindow, aWnd);
+}
+
+DWORD WINAPI StdioTransport::WatchInput(LPVOID aTransport)
+{
+	auto &transport = *(StdioTransport *)aTransport;
+	while (WaitForSingleObject(transport.mStopWatcher, 15) == WAIT_TIMEOUT)
+	{
+		HWND window = (HWND)InterlockedCompareExchangePointer(&transport.mAsyncWindow, nullptr, nullptr);
+		if (!window || InterlockedCompareExchange(&transport.mWakePosted, 0, 0))
+			continue;
+		DWORD available = 0;
+		BOOL open = PeekNamedPipe(transport.mInput, nullptr, 0, nullptr, &available, nullptr);
+		if ((available || !open) && !InterlockedCompareExchange(&transport.mWakePosted, 1, 0))
+		{
+			// Match socket transport's window notification, including EOF. Only
+			// the main thread parses commands and changes debugger/script state.
+			if (!PostMessage(window, AHK_CHECK_DEBUGGER, 0, open ? FD_READ : FD_CLOSE))
+				InterlockedExchange(&transport.mWakePosted, 0);
+		}
+	}
+	return 0;
 }
 
 
@@ -2727,6 +2791,9 @@ int Debugger::FatalError(LPCTSTR aMessage)
 	{
 		// In stdio mode, write error to stderr instead of showing a dialog.
 		fprintf(stderr, "Debugger error: %ls\n", aMessage);
+		// MinGW's stdio wrapper can buffer redirected stderr until process exit.
+		// A detached persistent script stays alive, so deliver the notice now.
+		fflush(stderr);
 	}
 	else if (IDNO == MessageBox(g_hWnd, aMessage, g_script.mFileSpec, MB_YESNO | MB_ICONSTOP | MB_SETFOREGROUND | MB_APPLMODAL))
 	{

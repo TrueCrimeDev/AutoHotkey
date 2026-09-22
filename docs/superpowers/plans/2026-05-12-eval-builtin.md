@@ -36,7 +36,7 @@ Each task below ends with a rebuild + test run. The cycle is:
 
 ```bash
 # MSVC build (fastest; canonical)
-cd /mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey
+cd <repo>
 cmd.exe /c build_local.bat
 # kill any lingering AutoHotkey64.exe instances first if the link fails with LNK1104
 cmd.exe /c "taskkill /IM AutoHotkey64.exe /F"
@@ -49,7 +49,7 @@ cmd.exe /c "bin\AutoHotkey64.exe /Eval test tests\test_eval.ahk"
 If you prefer the mingw build (slower; produces a larger static binary):
 
 ```bash
-cd /mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/build_mingw
+cd <repo>/build_mingw
 cmd.exe /c rebuild.bat
 ```
 
@@ -789,9 +789,9 @@ Expected: every Alpha example exits 0 with the expected output; both test script
 - [ ] **Step 2: mingw regression**
 
 ```bash
-cd /mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/build_mingw
+cd <repo>/build_mingw
 cmd.exe /c rebuild.bat
-cd /mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey
+cd <repo>
 cmd.exe /c "bin\AutoHotkey64.exe /Eval test tests\test_eval.ahk"
 cmd.exe /c "bin\AutoHotkey64.exe test tests\test_eval_gated.ahk"
 ```

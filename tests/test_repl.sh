@@ -4,7 +4,7 @@
 # Exit 0 = all pass, 1 = failure (mirrors the binary's test-subcommand contract).
 
 set -u
-AHK="${1:-/mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe}"
+AHK="${1:-$(cd "$(dirname "$0")/.." && pwd)/bin/AutoHotkey64.exe}"
 fails=0
 
 check() { # name expected actual

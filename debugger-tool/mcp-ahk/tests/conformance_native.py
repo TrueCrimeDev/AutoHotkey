@@ -3,19 +3,29 @@
 
 Usage: conformance_native.py <path-to-engine-exe-with-mcp-verb>
 
-Run from WSL; fixtures are created under the repo's temp/ dir (on C:, so the
-Windows engine can read them) and removed afterwards.
+Run directly on Windows or from WSL with a Windows-accessible checkout.
+Fixtures are created under the repo's temp/ dir and removed afterwards. Both
+implementations run on the supplied engine, without a shell launcher or a
+second, possibly stale executable from bin/.
 
 - Protocol conformance: initialize/ping/tools-list/notifications/error codes,
   LF framing, exit 0 on EOF, -32700 recovery, concurrent instances.
 - Differential: every file tool's payload must deep-equal the reference
-  implementation (debugger-tool/mcp-ahk via the ahkmcp in-process CLI).
+  implementation (debugger-tool/mcp-ahk/cli.ahk). Native-only execution tools
+  are checked separately from the shared reference capabilities.
 """
-import json, os, subprocess, sys, tempfile, shutil
+import base64, json, os, subprocess, sys, tempfile, shutil
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-AHKMCP = os.path.join(REPO, "debugger-tool/mcp-ahk/ahkmcp")
-NATIVE = sys.argv[1]
+CLI = os.path.join(REPO, "debugger-tool/mcp-ahk/cli.ahk")
+if len(sys.argv) != 2:
+    raise SystemExit("Usage: conformance_native.py path/to/AutoHotkeyConsole.exe")
+NATIVE = os.path.abspath(sys.argv[1])
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+SHARED_TOOLS = {"ast_outline", "get_source_context", "server_status", "source_outline", "workspace_symbols"}
+NATIVE_ONLY_TOOLS = {"check", "run", "test"}
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 passed = failed = 0
 def check(label, ok, detail=""):
@@ -27,15 +37,31 @@ def check(label, ok, detail=""):
         failed += 1
         print(f"FAIL {label}  {detail}")
 
-def wslpath_w(p):
-    return subprocess.run(["wslpath", "-w", p], capture_output=True, text=True).stdout.strip()
+def windows_path(p):
+    if os.name == "nt":
+        return os.path.abspath(p)
+    return subprocess.run(["wslpath", "-w", p], capture_output=True, text=True,
+                          check=True, timeout=5).stdout.strip()
+
+def communicate(process, payload, timeout):
+    try:
+        return process.communicate(payload, timeout=timeout)
+    except BaseException:
+        process.kill()
+        process.communicate(timeout=5)
+        raise
+
+def init_params(version="2025-06-18"):
+    return {"protocolVersion": version, "capabilities": {},
+            "clientInfo": {"name": "native-conformance", "version": "1"}}
 
 def run_session(lines, timeout=60):
     """Feed JSON-RPC lines to a fresh native server; return (stdout_lines, exit_code)."""
     payload = "".join(l + "\n" for l in lines).encode("utf-8")
     p = subprocess.Popen([NATIVE, "mcp"], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out, err = p.communicate(payload, timeout=timeout)
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=NO_WINDOW)
+    out, err = communicate(p, payload, timeout)
+    check("session.stderr-empty", not err, err.decode("utf-8", "replace")[:500])
     return [l for l in out.decode("utf-8").split("\n") if l.strip()], p.returncode
 
 def rpc(method, id=None, params=None):
@@ -53,11 +79,31 @@ def tool_payload(resp):
     return json.loads(resp["result"]["content"][0]["text"])
 
 def reference(tool, *args):
-    """Run the reference implementation in-process via the ahkmcp CLI."""
-    r = subprocess.run([AHKMCP, tool, *args, "--raw"], capture_output=True, timeout=60)
+    """Run the script reference on the same executable as the native server."""
+    r = subprocess.run([NATIVE, "/Headless", "/ErrorStdOut", windows_path(CLI), tool, *args, "--raw"],
+                       capture_output=True, timeout=30, creationflags=NO_WINDOW)
     if r.returncode != 0:
         return {"__error__": r.stdout.decode("utf-8", "replace") + r.stderr.decode("utf-8", "replace")}
     return json.loads(r.stdout.decode("utf-8"))
+
+def reference_tools():
+    r = subprocess.run([NATIVE, "/Headless", "/ErrorStdOut", windows_path(CLI), "list"],
+                       capture_output=True, timeout=15, creationflags=NO_WINDOW)
+    if r.returncode:
+        raise RuntimeError(r.stdout.decode("utf-8", "replace") + r.stderr.decode("utf-8", "replace"))
+    return {line.split()[0] for line in r.stdout.decode("utf-8").splitlines() if line.strip()}
+
+def remove_junction(path):
+    # Windows rmdir unlinks a directory junction without following its target.
+    # On WSL use the same Windows API through PowerShell, never a recursive
+    # delete through an already linked path.
+    if os.name == "nt":
+        os.rmdir(path)
+    else:
+        script = "[IO.Directory]::Delete('" + windows_path(path).replace("'", "''") + "')"
+        encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+        subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+                       check=True, capture_output=True, timeout=10)
 
 # ---- fixtures on the Windows filesystem ----
 os.makedirs(os.path.join(REPO, "temp"), exist_ok=True)
@@ -88,8 +134,8 @@ for name, content in [("fix.ahk", FIXTURE), ("uni.ahk", UNI), ("empty.ahk", ""),
     p = os.path.join(fixdir, name)
     with open(p, "w", encoding="utf-8", newline="\n") as f:
         f.write(content)
-    paths[name] = wslpath_w(p)
-fixdir_w = wslpath_w(fixdir)
+    paths[name] = windows_path(p)
+fixdir_w = windows_path(fixdir)
 
 try:
     # ================= main scripted session =================
@@ -139,8 +185,11 @@ try:
     # tools/list
     tools = by_id[3]["result"]["tools"]
     names = [t["name"] for t in tools]
-    check("list.names", names == ["ast_outline", "get_source_context", "server_status",
-                                  "source_outline", "workspace_symbols"], str(names))
+    shared_names = reference_tools()
+    check("reference.shared-tools", shared_names == SHARED_TOOLS, str(sorted(shared_names)))
+    check("list.shared-tools", shared_names <= set(names), str(names))
+    check("list.native-only-tools", set(names) - shared_names == NATIVE_ONLY_TOOLS, str(names))
+    check("list.sorted-unique", names == sorted(set(names)), str(names))
     check("list.fields", all(set(t) == {"name", "description", "inputSchema"} for t in tools))
     gsc = next(t for t in tools if t["name"] == "get_source_context")
     check("list.gsc-required", gsc["inputSchema"]["required"] == ["file", "line"], str(gsc["inputSchema"]))
@@ -185,7 +234,7 @@ try:
     check("status.identity", s.get("name") == "ahk-mcp" and s.get("version") == "0.1.0", str(s)[:200])
     check("status.ahkVersion", "2.1-alpha.31" in s.get("ahkVersion", ""), str(s.get("ahkVersion")))
     check("status.pid", isinstance(s.get("pid"), int) and s["pid"] > 0)
-    check("status.toolsRegistered", s.get("toolsRegistered") == 5, str(s.get("toolsRegistered")))
+    check("status.toolsRegistered", s.get("toolsRegistered") == len(tools), str(s.get("toolsRegistered")))
     # 21 method-bearing messages were sent (19 with ids + 2 notifications)
     check("status.requests", s.get("requests") == 21, f"requests={s.get('requests')}")
     check("status.errors", s.get("errors") == 5, f"errors={s.get('errors')}")
@@ -221,18 +270,18 @@ try:
         p = os.path.join(fixdir, name)
         with open(p, "wb") as f:
             f.write(data)
-        edge[name] = wslpath_w(p)
+        edge[name] = windows_path(p)
     jroot = os.path.join(fixdir, "jx")
     os.makedirs(jroot)
     with open(os.path.join(jroot, "a.ahk"), "w") as f:
         f.write("JFn() {\n}\n")
-    jroot_w = wslpath_w(jroot)
+    jroot_w = windows_path(jroot)
     junction_ok = subprocess.run(
         ["cmd.exe", "/c", "mklink", "/J", jroot_w + "\\loop", jroot_w],
-        capture_output=True).returncode == 0
+        capture_output=True, timeout=10, creationflags=NO_WINDOW).returncode == 0
 
     reqs3 = [
-        rpc("initialize", 1, {"protocolVersion": "2025-06-18"}),
+        rpc("initialize", 1, init_params()),
         tool_call(2, "ast_outline", {"file": edge["ansi.ahk"]}),
         tool_call(3, "ast_outline", {"file": edge["nul.ahk"]}),
         tool_call(4, "source_outline", {"file": edge["utf16.ahk"]}),
@@ -270,28 +319,37 @@ try:
         check("edge2.junction-no-hang-no-dupes",
               ws10.get("count") == 1 and ws10.get("truncated") is False
               and "\\loop\\" not in ws10["symbols"][0]["file"], str(ws10)[:300])
-        subprocess.run(["cmd.exe", "/c", "rmdir", jroot_w + "\\loop"], capture_output=True)
+        remove_junction(os.path.join(jroot, "loop"))
     else:
         print("skip junction case (mklink unavailable)")
     check("edge2.null-method--32600", r3[-1].get("error", {}).get("code") == -32600
           and r3[-1].get("id") is None, str(r3[-1]))
 
     # ================= two concurrent instances =================
-    p1 = subprocess.Popen([NATIVE, "mcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    p2 = subprocess.Popen([NATIVE, "mcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    ini = (rpc("initialize", 1, {"protocolVersion": "x"}) + "\n").encode()
-    o1, _ = p1.communicate(ini, timeout=30)
-    o2, _ = p2.communicate(ini, timeout=30)
-    ok1 = json.loads(o1.decode().strip()).get("result", {}).get("protocolVersion") == "x"
-    ok2 = json.loads(o2.decode().strip()).get("result", {}).get("protocolVersion") == "x"
-    check("concurrent.two-instances", ok1 and ok2 and p1.returncode == 0 and p2.returncode == 0)
+    processes = []
+    try:
+        for _ in range(2):
+            processes.append(subprocess.Popen([NATIVE, "mcp"], stdin=subprocess.PIPE,
+                                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                               creationflags=NO_WINDOW))
+        ini = (rpc("initialize", 1, init_params("2099-01-01")) + "\n").encode()
+        outputs = [communicate(p, ini, 15) for p in processes]
+        negotiated = [json.loads(out.decode().strip()).get("result", {}).get("protocolVersion")
+                      for out, err in outputs if not err]
+        check("concurrent.two-instances", negotiated == ["2025-06-18", "2025-06-18"]
+              and all(p.returncode == 0 for p in processes), str(negotiated))
+    finally:
+        for p in processes:
+            if p.poll() is None:
+                p.kill()
+                p.communicate(timeout=5)
 
 finally:
-    # Remove any junction via cmd (unlinks the reparse point only) before the
+    # Remove any junction (unlinks the reparse point only) before the
     # recursive delete, so rmtree can never chase a directory cycle.
     jlink = os.path.join(fixdir, "jx", "loop")
     if os.path.lexists(jlink):
-        subprocess.run(["cmd.exe", "/c", "rmdir", wslpath_w(jlink)], capture_output=True)
+        remove_junction(jlink)
     shutil.rmtree(fixdir, ignore_errors=True)
 
 print(f"\n{passed} passed, {failed} failed")

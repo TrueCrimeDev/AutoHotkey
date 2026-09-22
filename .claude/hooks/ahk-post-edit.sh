@@ -5,7 +5,9 @@
 # JSON parsing uses python3 — jq is NOT installed in this WSL.
 
 # Custom engine with check/diag support; fall back to stock
-CUSTOM_AHK="/mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe"
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$HOOK_DIR/../.." && pwd)"
+CUSTOM_AHK="${AHK_CUSTOM_EXE:-$REPO_DIR/bin/AutoHotkey64.exe}"
 STOCK_AHK="/mnt/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe"
 
 if [[ -f "$CUSTOM_AHK" ]]; then
@@ -16,7 +18,7 @@ else
     HAS_CHECK=false
 fi
 
-PROJECT_DIR="/mnt/c/Users/uphol/Documents/AHK"
+PROJECT_DIR="${AHK_PROJECT_DIR:-$REPO_DIR}"
 MAIN_SCRIPT="_.ahk"
 
 # Parse JSON from stdin to get the edited file path

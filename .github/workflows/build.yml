@@ -3,11 +3,44 @@ name: Build AutoHotkey
 on:
   push:
     branches: [ alpha, main, master ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ alpha, main, master ]
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
+  debugger-clients:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: |
+          debugger-tool/mcp-server/package-lock.json
+          debugger-tool/ahk-error-agent/package-lock.json
+
+    - name: Test shared DBGp framing and error queue
+      run: node --test debugger-tool/dbgp-protocol/test.cjs
+
+    - name: Install legacy MCP client dependencies
+      working-directory: debugger-tool/mcp-server
+      run: npm ci --ignore-scripts
+
+    - name: Build and test legacy MCP client
+      working-directory: debugger-tool/mcp-server
+      run: npm test
+
+    - name: Install error-agent dependencies
+      working-directory: debugger-tool/ahk-error-agent
+      run: npm ci --ignore-scripts
+
+    - name: Build and test error agent
+      working-directory: debugger-tool/ahk-error-agent
+      run: npm test
+
   build:
     runs-on: windows-2022
 
@@ -36,21 +69,47 @@ jobs:
 
     - name: Configure CMake
       run: |
-        cmake -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
+        cmake -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/msvc/${{ matrix.arch }}
 
     - name: Build
       run: |
-        cmake --build build --config Release --parallel
+        cmake --build build --config Release --target ${{ matrix.output_name }} ${{ matrix.output_name }}Console --parallel
+
+    - name: Copy x64 grammar runtime beside the tested engine
+      if: matrix.arch == 'x64'
+      run: Copy-Item bin/tree-sitter-ahk.dll out/msvc/${{ matrix.arch }}/
+
+    - name: Syntax-check every .ahk with the fresh engine
+      run: python tools/check_all.py out/msvc/${{ matrix.arch }}/${{ matrix.output_name }}Console.exe
 
     - name: Native regression gate
-      run: python tests/run_console_gate.py bin/${{ matrix.output_name }}.exe
+      run: python tests/run_console_gate.py out/msvc/${{ matrix.arch }}/${{ matrix.output_name }}Console.exe
+
+    - name: Native and script MCP conformance
+      if: matrix.arch == 'x64'
+      run: python debugger-tool/mcp-ahk/tests/conformance_native.py out/msvc/${{ matrix.arch }}/${{ matrix.output_name }}Console.exe
+
+    - name: Record artifact identity
+      shell: pwsh
+      run: |
+        $artifactDir = 'out/msvc/${{ matrix.arch }}'
+        & "$artifactDir/${{ matrix.output_name }}Console.exe" --version
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        @(Get-ChildItem -LiteralPath $artifactDir -Filter *.exe) | ForEach-Object {
+          $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($_.Name)" | Set-Content -LiteralPath "$($_.FullName).sha256" -Encoding ascii
+        }
+        python tools/describe_console.py "$artifactDir/${{ matrix.output_name }}Console.exe" "$artifactDir/${{ matrix.output_name }}Console.capabilities.json"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.output_name }}
         path: |
-          bin/${{ matrix.output_name }}.exe
+          out/msvc/${{ matrix.arch }}/*.exe
+          out/msvc/${{ matrix.arch }}/*.sha256
+          out/msvc/${{ matrix.arch }}/*.capabilities.json
         if-no-files-found: error
 
     - name: Upload x64 grammar runtime
@@ -61,8 +120,7 @@ jobs:
         path: bin/tree-sitter-ahk.dll
         if-no-files-found: error
 
-  # GCC / mingw-w64 is the primary local build; MSVC remains the release compiler.
-  # Both supported compiler routes must pass the native gate before release.
+  # Both supported compiler routes gate the exact Console binary they publish.
   build-mingw:
     runs-on: windows-2022
 
@@ -88,26 +146,174 @@ jobs:
 
     - name: Configure CMake (mingw)
       shell: msys2 {0}
-      run: cmake -S . -B build_mingw -G Ninja -DCMAKE_BUILD_TYPE=Release
+      run: cmake -S . -B build_mingw -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/mingw/x64
 
     - name: Build (mingw)
       shell: msys2 {0}
-      run: cmake --build build_mingw --parallel
+      run: cmake --build build_mingw --target AutoHotkey64 AutoHotkey64Console --parallel
+
+    - name: Copy grammar runtime beside the tested engine
+      run: Copy-Item bin/tree-sitter-ahk.dll out/mingw/x64/
+
+    - name: Syntax-check every .ahk (mingw)
+      run: python tools/check_all.py out/mingw/x64/AutoHotkey64Console.exe
 
     - name: Native regression gate (mingw)
-      run: python tests/run_console_gate.py bin/AutoHotkey64.exe
+      run: python tests/run_console_gate.py out/mingw/x64/AutoHotkey64Console.exe
+
+    - name: Native and script MCP conformance (mingw)
+      run: python debugger-tool/mcp-ahk/tests/conformance_native.py out/mingw/x64/AutoHotkey64Console.exe
+
+    - name: Record artifact identity and compiler-specific filenames
+      shell: pwsh
+      run: |
+        $artifactDir = 'out/mingw/x64'
+        & "$artifactDir/AutoHotkey64Console.exe" --version
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        @(Get-ChildItem -LiteralPath $artifactDir -Filter *.exe) | ForEach-Object {
+          $releaseName = "$($_.BaseName)-mingw.exe"
+          Copy-Item -LiteralPath $_.FullName -Destination "$artifactDir/$releaseName"
+          $hash = (Get-FileHash -LiteralPath "$artifactDir/$releaseName" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $releaseName" | Set-Content -LiteralPath "$artifactDir/$releaseName.sha256" -Encoding ascii
+        }
+        python tools/describe_console.py "$artifactDir/AutoHotkey64Console-mingw.exe" "$artifactDir/AutoHotkey64Console-mingw.capabilities.json"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Upload Artifact (mingw)
       uses: actions/upload-artifact@v4
       with:
         name: AutoHotkey64-mingw
-        path: bin/AutoHotkey64.exe
+        path: |
+          out/mingw/x64/*-mingw.exe
+          out/mingw/x64/*-mingw.exe.sha256
+          out/mingw/x64/*-mingw.capabilities.json
         if-no-files-found: error
 
-  release:
-    needs: [build, build-mingw]
-    runs-on: ubuntu-latest
+  # Script-level tests with line coverage, run against the engine this workflow
+  # just built. The same shape works in any AHK library repo: fetch the release
+  # binary instead of an artifact (see README, "CI for AutoHotkey libraries").
+  test:
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: read    # the badge push lives in its own job below
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Fetch the engine built by this run
+      uses: actions/download-artifact@v4
+      with:
+        name: AutoHotkey64
+        path: engine
+
+    - name: Fetch the grammar runtime artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: tree-sitter-ahk-x64
+        path: engine
+
+    - name: Verify the downloaded Console artifact
+      shell: pwsh
+      run: |
+        $expected = (Get-Content engine/AutoHotkey64Console.exe.sha256).Split(' ')[0]
+        $actual = (Get-FileHash engine/AutoHotkey64Console.exe -Algorithm SHA256).Hash
+        if ($actual -ne $expected) { throw 'Console artifact checksum mismatch' }
+        & engine/AutoHotkey64Console.exe --version
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Run tests/run.ahk with coverage
+      shell: pwsh
+      env:
+        AHK_TEST_JUNIT: junit.xml
+      run: |
+        New-Item -ItemType Directory -Force coverage | Out-Null
+        engine\AutoHotkey64Console.exe /Headless /Diag=json /Coverage=coverage\tests.lcov test tests\run.ahk 2>diag.jsonl
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Annotate uncaught diagnostics
+      if: failure()
+      shell: pwsh
+      run: |
+        if (Test-Path diag.jsonl) {
+          Get-Content diag.jsonl | ForEach-Object {
+            try { $d = $_ | ConvertFrom-Json } catch { return }
+            if ($d.kind -ne 'diagnostic') { return }
+            $file = $d.file -replace [regex]::Escape($env:GITHUB_WORKSPACE + '\'), '' -replace '\\', '/'
+            "::error file=$file,line=$($d.line),col=$($d.column),title=$($d.type)::$($d.message)"
+          }
+        }
+
+    - name: Run the qa suite with per-child coverage
+      shell: pwsh
+      env:
+        AHK_QA_COVERAGE_DIR: ${{ github.workspace }}\coverage\qa
+      run: |
+        engine\AutoHotkey64Console.exe /Headless /ErrorStdOut qa\run.ahk
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Merge coverage and write the badge
+      if: always()
+      run: >
+        python tools/lcov_summary.py "coverage/**/*.lcov"
+        --include "^(qa/(Assert|Harness)\.ahk|tests/Test\.ahk)$"
+        --out coverage/merged.lcov --badge coverage/badge.json
+
+    - name: Upload coverage and JUnit reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-reports
+        path: |
+          coverage/merged.lcov
+          coverage/badge.json
+          junit.xml
+          diag.jsonl
+        if-no-files-found: ignore
+
+  # The README badge reads coverage.json from the `badges` branch through
+  # img.shields.io/endpoint. No third-party service, no extra secrets: the
+  # branch is a single-commit orphan that is force-pushed on every alpha push.
+  # Separate job on purpose: the write token never reaches the job that runs
+  # checkout-controlled test and QA scripts.
+  badge:
+    needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/alpha'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: test-reports
+        path: reports
+
+    - name: Publish coverage badge
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -e
+        test -f reports/coverage/badge.json
+        rm -rf badge-branch && mkdir badge-branch
+        cp reports/coverage/badge.json badge-branch/coverage.json
+        cd badge-branch
+        git init -q -b badges
+        git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+          add coverage.json
+        git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+          commit -qm "coverage badge for ${GITHUB_SHA}"
+        git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
+
+  # Tag `vX.Y.Z` -> published (non-draft) release with the engines attached, so
+  # consumers can `gh release download -R TrueCrimeDev/AutoHotkey -p AutoHotkey64.exe`.
+  release:
+    needs: [build, build-mingw, test, debugger-clients]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write # Create Release needs this; the default token is read-only (403 otherwise).
 
@@ -118,14 +324,25 @@ jobs:
         path: artifacts
 
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
-        tag_name: build-${{ github.sha }}
-        name: Build ${{ github.sha }}
-        draft: true
+        tag_name: ${{ github.ref_name }}
+        name: ${{ github.ref_name }}
+        draft: false
+        generate_release_notes: true
+        fail_on_unmatched_files: true
         files: |
           artifacts/AutoHotkey64/AutoHotkey64.exe
+          artifacts/AutoHotkey64/AutoHotkey64Console.exe
+          artifacts/AutoHotkey64/*.sha256
+          artifacts/AutoHotkey64/*.capabilities.json
           artifacts/AutoHotkey32/AutoHotkey32.exe
+          artifacts/AutoHotkey32/AutoHotkey32Console.exe
+          artifacts/AutoHotkey32/*.sha256
+          artifacts/AutoHotkey32/*.capabilities.json
+          artifacts/AutoHotkey64-mingw/*-mingw.exe
+          artifacts/AutoHotkey64-mingw/*.sha256
+          artifacts/AutoHotkey64-mingw/*.capabilities.json
           artifacts/tree-sitter-ahk-x64/tree-sitter-ahk.dll
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

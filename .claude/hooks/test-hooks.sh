@@ -93,7 +93,7 @@ if ! command -v jq &>/dev/null; then
 fi
 echo "  jq: found"
 
-CUSTOM_AHK="/mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe"
+CUSTOM_AHK="${AHK_CUSTOM_EXE:-$HOOKS_DIR/../../bin/AutoHotkey64.exe}"
 STOCK_AHK="/mnt/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe"
 AHK_AVAILABLE=false
 
@@ -108,7 +108,8 @@ else
 fi
 
 # Temp .ahk files on Windows filesystem so AHK engine can access them
-WIN_TEMP="/mnt/c/Users/uphol/AppData/Local/Temp"
+WIN_TEMP="${AHK_WIN_TEMP:-$(wslpath -u "$(cmd.exe /c 'echo %TEMP%' 2>/dev/null | tr -d '\r')" 2>/dev/null)}"
+[[ -d "$WIN_TEMP" ]] || WIN_TEMP="$HOOKS_DIR"
 VALID_AHK=$(mktemp "${WIN_TEMP}/test-valid-XXXX.ahk")
 INVALID_AHK=$(mktemp "${WIN_TEMP}/test-invalid-XXXX.ahk")
 trap 'rm -f "$VALID_AHK" "$INVALID_AHK"' EXIT

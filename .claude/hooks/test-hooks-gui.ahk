@@ -4,7 +4,8 @@
 ; Hook Test Suite GUI
 ; Runs test-hooks.sh via WSL and displays results in a ListView.
 
-global SCRIPT_PATH := "/mnt/c/Users/uphol/Documents/AHK/.claude/hooks/test-hooks.sh"
+; WSL path of the sibling test-hooks.sh, derived from this script's own location.
+global SCRIPT_PATH := "/mnt/" StrLower(SubStr(A_ScriptDir, 1, 1)) StrReplace(SubStr(A_ScriptDir, 3), "\", "/") "/test-hooks.sh"
 global LV, SB, RunBtn
 
 g := Gui("+Resize +MinSize430x280", "Hook Test Suite")

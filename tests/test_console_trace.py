@@ -39,6 +39,33 @@ class ConsoleTraceTests(unittest.TestCase):
         self.assertFalse(any(command in ("{", "}", ";end") for command in commands))
         return commands
 
+    def test_json_format_emits_one_event_per_statement(self):
+        source = "x := 1\nFoo()\nFoo() {\n    y := 'q\"\\'\n}\n"
+        stdout, stderr = self.run_script(source, "/Trace=json", trace=False)
+        rows = [json.loads(line) for line in stderr.splitlines()]
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertEqual(row["event"], "statement")
+            self.assertTrue(row["file"].lower().endswith("trace.ahk"))
+            self.assertIsInstance(row["line"], int)
+            self.assertIsInstance(row["thread"], int)
+        by_line = {row["line"]: row for row in rows}
+        self.assertEqual(by_line[1]["function"], "")
+        self.assertEqual(by_line[4]["function"], "Foo")
+        self.assertIn('q"', by_line[4]["text"])
+        self.assertIn("\\", by_line[4]["text"])
+        self.assertEqual(stdout, "")
+
+    def test_trace_format_is_validated(self):
+        with tempfile.TemporaryDirectory(prefix="ahk-trace-") as td:
+            script = Path(td) / "t.ahk"
+            script.write_text("x := 1\n", encoding="utf-8")
+            result = subprocess.run([str(ENGINE), "/Headless", "/Trace=xml", str(script)],
+                                    capture_output=True, timeout=8, encoding="utf-8",
+                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            self.assertEqual(result.returncode, 64)
+            self.assertIn("Invalid /Trace format", result.stderr)
+
     def test_only_executed_statements_have_readable_text(self):
         out, err = self.run_script('''; comment and blank lines are not commands
 

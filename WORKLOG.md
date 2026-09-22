@@ -273,3 +273,96 @@ unlogged loop session between 3 and now.)
   against the copied `bin/AutoHotkey64.exe`. Previous alpha.30 exe kept at
   `tests/tmp/AutoHotkey64.exe.bak` (gitignored scratch).
 
+
+### Session 8 (2026-09-15) — `/Coverage=` LCOV, single-process test runner, CI shape
+
+- **Engine:** `source/coverage.{h,cpp}` + `/Coverage=<path>` (`--coverage=`).
+  Lines found = every `Line` in every module chain minus structural types
+  (`BLOCK_BEGIN/END`, `ELSE`, `CATCH`, `FINALLY`, `CASE`, `END_MODULE`) and
+  line 0; lines hit = counted next to `Debugger::PreExecLine` (ExecUntil top,
+  `PerformLoopWhile` per iteration, `EvaluateLoopUntil`). Report rewritten
+  open-write-flush-close from `Script::ExitApp`, the SEH filter and the console
+  ctrl handler. `Script::LastModule()` accessor added (mLastModule is private).
+  Verified on mingw harness and MSVC (`bin_review`): gate 11/11 green.
+- **Runner:** `tests/Test.ahk` (`Test.Case`, `Assert.*`, `::error` annotations,
+  JUnit via `AHK_TEST_JUNIT`) + `tests/run.ahk` (explicit `#Include` list with a
+  completeness check) + `check/framework/json.test.ahk`. Registered in the gate.
+- **qa:** `AHK_QA_COVERAGE_DIR` makes every child write its own `.lcov`;
+  `tools/lcov_summary.py` merges → table, merged tracefile, shields badge JSON.
+  Baseline for `qa/Assert.ahk` + `qa/Harness.ahk` + `tests/Test.ahk`: 64.2%.
+- **CI:** `build.yml` gains `check` (vendored engine, `tools/check_all.py`,
+  80/80 files parse after fixing one continuation-section bug in
+  `debugger-tool/ahk-error-agent/include/error-to-stderr.ahk`), `test`
+  (artifact engine, coverage, badge force-pushed to `badges` branch on alpha
+  pushes) and tag-only published releases (`v*`) instead of per-push drafts.
+- Not done: `bin/AutoHotkey64.exe` still lacks `/Coverage` (locked; rebuild via
+  the `bin_review` route when convenient). No `#Coverage` directive by design.
+
+### Session 9 (2026-09-16) — Inspect(), ProcessPipe, /Trace=json, native mcp check/run/test
+
+- **Inspect(Value, Depth, MaxItems)** in `json.cpp` (shares JsonBuf/WriteQuoted):
+  own values serialized, getters/setters/methods/typed fields listed by name
+  (own + base chain, stopping at Object/Class/Any prototypes), Array items,
+  Map and JSON.Object entries, Func signature, `truncated`/`circular` flags.
+  Needed a new `Object::OwnFieldAt` (mFields is private). The BIF entry in
+  `lib/functions.h` MUST be in sorted position: the table is binary-searched,
+  and an out-of-order entry makes the function silently "undefined".
+  REPL prints object results through it (depth 1, 50 items).
+- **ProcessPipe** (`child_process.{h,cpp}` Win32 layer + `process_pipe.{h,cpp}`
+  script class). Durability findings fixed during the adversarial pass:
+  `EOF` is a CRT macro (property renamed `AtEOF`); 4 KB pipes + 5 ms polling
+  made a 5 MB producer take 18 s (now 1 MB buffers, drain without sleeping);
+  a plain WriteFile to stdin deadlocks against a child busy writing (now an
+  overlapped named-pipe write that pumps stdout/stderr while pending, with
+  `Send(text, timeout)` → TimeoutError). Verified: 2 MB each way concurrently,
+  200 KB single line across chunk boundaries, 1 MB stderr flood during a
+  stdout ReadLine, reentrant reads from a timer, 40 spawns without handle
+  growth, kill-on-release. Child-side `File.AtEOF` is unreliable on pipes.
+- **/Trace=json** — statement events with file/line/function/thread/text;
+  JSON escaping done in-place with a bounded buffer.
+- **mcp verb**: `check`, `run`, `test` tools spawn the engine via
+  `RunChildCapture` (job-killed at `timeout_ms`), return exit code, both
+  streams, and parsed schema-2 diagnostics. Probed with unicode/space paths,
+  missing file (13 + diagnostic), bad cwd (-32603), 5 MB stdout, bad args.
+- New qa suites: `test_inspect.ahk` (58), `test_processpipe.ahk`; Python:
+  trace JSON cases, MCP tool cases.
+
+
+### Session 10 (2026-09-22) — PR #31: console cleanup landed as five commits
+
+- Committed the 2026-09-19 cleanup tree (engine, tests, debugger-tool, ci,
+  docs) on `feat/console-cleanup-20260919` → PR #31 against `alpha`. Gate
+  14/14 against the MSVC x64 (Ninja) build of the exact tree before pushing.
+- **CI MSVC arm failed (RC2135)**: the manifest path reached rc.exe through
+  `$<$<COMPILE_LANGUAGE:RC>:AHK_MANIFEST_PATH=…>`, which the Visual Studio
+  generator (`-A x64`/`-A Win32`) evaluates to nothing, so rc.exe fell back to
+  the MSBuild-only `temp\AutoHotkey.exe.manifest`. Local Ninja+MSVC builds
+  never showed it, and a stale `temp/` manifest masked it on this machine.
+  Fix: define `AHK_MANIFEST_PATH` target-wide (forward slashes, C++ ignores
+  it) and add `OBJECT_DEPENDS` on the generated manifest. Reproduced with
+  `-G "Visual Studio 18 2026" -A x64` (BuildTools-bundled CMake; the system
+  CMake 4.0.3 predates that generator) with `temp/` renamed away: build
+  green, `generated/AutoHotkey.exe.manifest` embedded.
+- Local VS-generator gotcha: the WSL-inherited `%PATH%` breaks tool lookup
+  inside MSBuild (`cscript.exe` "not recognized", ml64 exit 1). Use a minimal
+  `set PATH=C:\WINDOWS\system32;C:\WINDOWS;C:\Program Files\Git\cmd` before
+  `vcvarsall`.
+- Copilot review on #31, all four applied: badge push moved to its own
+  `badge` job so the `test` job token is read-only; `Coverage::AppendUtf8`
+  converts by explicit length (no terminator written past `size()`);
+  `JsonObject::~JsonObject` detaches storage before releasing values, like
+  `ClearItems`; README no longer claims `/Headless` keeps script `MsgBox`
+  dialogs from blocking.
+- Home.vue was a 0-byte file in the working tree; restored from HEAD.
+- #16 closed as superseded by the workflow in #31. #17 rebased onto the #31
+  branch (its base until #31 merges): `DBGpClient` keeps the stdio transport
+  model plus #31's lifecycle guarantees; the shared `DBGpFramer` gained an
+  opt-in `divertRaw` mode so raw `Print()` bytes on a stdio pipe are captured
+  instead of duplicating framing; `fake-ahk.sh` committed executable (the
+  launcher tests failed with EACCES on Linux without it). Client suites 4/4,
+  23/23 (+2 skipped), 3/3; CI green on both branches.
+- Privacy sweep: 15 tracked files still carried the home-directory path or
+  the old repo id (hooks, `.mcp.json`, test_repl.sh, examples, plan docs).
+  Scripts now derive locations from their own path with `AHK_*` overrides;
+  `.mcp.json` uses `./bin/AutoHotkey64.exe` (verified to answer `initialize`
+  from the repo root); `.claude/settings.local.json` untracked and ignored.

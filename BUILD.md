@@ -1,120 +1,156 @@
-# Building AutoHotkey with _ScriptGetLines
+# Building AHK Console
 
-**GCC (mingw-w64) is the primary local compiler for this fork.** MSVC produces the
-Windows x64 and Win32 release binaries. Both compiler routes must pass the native
-regression gate before CI creates a draft release.
+This fork targets AutoHotkey `2.1-alpha.31+Console`. CMake supports MSVC x64,
+MSVC Win32, and mingw-w64 GCC x64. CI builds and tests the actual Console
+executable for all three, and tag builds publish non-draft releases with
+checksums. Nothing is published by a local build.
 
-## Prerequisites
+## Executable roles
 
-- [MSYS2](https://www.msys2.org) with the mingw-w64 toolchain
-- After installing MSYS2, in the MSYS2 shell:
-  ```bash
-  pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
-  ```
+| Target | Role | Default CMake build |
+| --- | --- | --- |
+| `AutoHotkey64Console` / `AutoHotkey32Console` | Shell, pipelines, REPL, native MCP; attached console and terminal errors | Yes |
+| `AutoHotkey64` / `AutoHotkey32` | Windows GUI launch behavior | Yes |
+| `AutoHotkey64Harness` / `AutoHotkey32Harness` | Compatibility test launcher with console subsystem and GUI entrypoint behavior | No; build explicitly |
 
-## Quick Build (Windows)
+The targets share compiled engine objects. Only their entrypoints and resource
+objects are compiled separately. Manifest output stays in each CMake build
+directory, allowing independent architectures/toolchains to configure safely.
+The Visual Studio project retains its original manifest-generation route.
 
-1. From the repo root (WSL or a Windows shell), run the helper script:
+## MSVC
 
-   ```cmd
-   build.bat
-   ```
-
-   Append `clean` to force a fresh configure; set `MSYS2_ROOT` if MSYS2 isn't at `C:\msys64`.
-
-2. Output will be in `bin\AutoHotkey64.exe`. The build tree lives in `build_gcc/`.
-
-CI verifies this route via the `build-mingw` job in `.github/workflows/build.yml`. The GCC
-binary is statically linked (~3.2 MB). There is no Clang path — the sources only fork on
-`_MSC_VER` vs mingw GCC.
-
-## Alternative: MSVC (Visual Studio)
-
-Smaller binary (~1.3 MB) with full SEH crash-log fidelity; this is what the CI `release` job
-ships. Requires Visual Studio 2022 or Build Tools 18 with the *C++ Desktop Development* workload.
-
-1. Use the repo helper script, which auto-detects the toolchain:
-
-   ```cmd
-   build_local.bat
-   ```
-
-   If only Visual Studio Build Tools 18 is installed, you can also run `build_vs18.cmd`.
-
-2. Manual build — open **Developer Command Prompt for VS 2022** and run:
-   ```cmd
-   msbuild AutoHotkeyx.sln /p:Configuration=Release /p:Platform=x64
-   ```
-
-3. Or via the **Visual Studio GUI**: open `AutoHotkeyx.sln`, select **Release** / **x64**,
-   then Build > Build Solution (Ctrl+Shift+B).
-
-4. Output in `bin\AutoHotkey64.exe`.
-
-For an isolated build while the current executable is running, use CMake and Ninja
-from a Visual Studio developer prompt for the desired architecture:
+Install Visual Studio 2022 or Build Tools 18 with the C++ Desktop Development
+workload and a Windows SDK. From an x64 developer command prompt:
 
 ```cmd
-cmake -S . -B build_review -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=bin_review
-cmake --build build_review --target AutoHotkey64 --parallel 6
-python tests/run_console_gate.py bin_review/AutoHotkey64.exe
+cmake -S . -B build_msvc_x64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/msvc/x64
+cmake --build build_msvc_x64 --target AutoHotkey64Console AutoHotkey64 --parallel 6
+python tests/run_console_gate.py out/msvc/x64/AutoHotkey64Console.exe
+python tools/check_all.py out/msvc/x64/AutoHotkey64Console.exe
 ```
 
-Use a separate build directory and the `AutoHotkey32` target from an x86 developer
-prompt for Win32. CMake embeds the Git revision (with `-dirty` for source changes).
-Builds without Git may supply `-DAHK_BUILD_REVISION=<revision>`; other build routes
-report `unknown` unless they define `AHK_BUILD_REVISION` themselves.
+Use a separate build directory, output directory, and x86 developer prompt for
+Win32; the targets are `AutoHotkey32Console` and `AutoHotkey32`. A Visual Studio
+CMake generator also works: configure with `-A x64` or `-A Win32` instead of
+`-G Ninja`, and pass `--config Release` when building.
 
-For an attached terminal process, explicitly build the additional console target
-from the same configured CMake tree:
+The existing `build_local.bat`, `build_vs18.cmd`, and `AutoHotkeyx.sln` routes
+remain available for the GUI executable. Use CMake for the distinct Console
+target and for isolated builds that do not replace an installed executable.
 
-```cmd
-cmake --build build_review --target AutoHotkey64Console --parallel 6
-python tests/run_console_gate.py bin_review/AutoHotkey64Console.exe
+## GCC / mingw-w64
+
+Install [MSYS2](https://www.msys2.org), then in its MINGW64 shell:
+
+```bash
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+cmake -S . -B build_mingw_x64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/mingw/x64
+cmake --build build_mingw_x64 --target AutoHotkey64Console AutoHotkey64 --parallel 6
 ```
 
-Use `AutoHotkey32Console` in the separate x86 tree. These targets are excluded
-from the default build and use the console subsystem; the existing GUI targets
-keep their launch behavior. For the `ahk` PowerShell alias, place the x64 console
-executable in `bin/` beside its dependencies and dot-source `tools/ahk.ps1`.
-Validate that registration in PowerShell 7 and Windows PowerShell 5.1 with
-`python tests/test_powershell_cli.py --wrapper tools/ahk.ps1`. Omit `--wrapper`
-to validate the installed user profiles instead. Unicode pipeline tests explicitly
-select UTF-8; Windows PowerShell 5.1 uses its native quoting and encoding rules.
+From PowerShell, run the gate and syntax checker with
+`out/mingw/x64/AutoHotkey64Console.exe`. `build.bat` remains a convenience route
+using `build_gcc/` and the default `bin/` output; set `MSYS2_ROOT` if MSYS2 is not
+at `C:\msys64`. CMake's default build now includes both GUI and Console targets.
 
-## Build Configurations
+GCC executables link their runtime statically. MSVC's structured exception
+handling provides additional native crash diagnostics; do not assume identical
+native exception behavior across compilers. No Clang route is supported here.
 
-| Config | Platform | Output |
-|--------|----------|--------|
-| Release | x64 | `bin\AutoHotkey64.exe` |
-| Release | Win32 | `bin\AutoHotkey32.exe` |
-| Debug | x64 | `bin_debug\AutoHotkey64.exe` |
+## Verify and use the exact build
 
-## Verify the built engine
-
-Run the same aggregate gate used before CI uploads artifacts (Python 3.11+):
+`AHK_OUTPUT_DIR` accepts an absolute directory or a path relative to the source
+tree. Debug builds use that directory with `_debug` appended. It defaults to
+`bin`, but separate outputs avoid stale executable and running-file conflicts.
+Always pass the intended executable path to the test gate:
 
 ```powershell
-python tests/run_console_gate.py bin/AutoHotkey64.exe
+$engine = (Resolve-Path out/msvc/x64/AutoHotkey64Console.exe).Path
+& $engine --version
+& $engine --capabilities
+python tests/run_console_gate.py $engine
+python tools/check_all.py $engine
+Get-FileHash -LiteralPath $engine -Algorithm SHA256
 ```
 
-The gate runs all `qa/tests/test_*.ahk` files, the existing Eval/gating scripts,
-and the Python QA-runner, CLI, REPL, and native MCP protocol suites against that
-exact executable. Every suite must pass.
-It waits for the GUI-subsystem executable's process exit and applies an outer
-180-second timeout to each suite. QA children have their own 30-second timeout and
-run with `/Headless`; override it with `AHK_QA_TIMEOUT_MS` (1–300000 milliseconds).
+`--version` reports source revision, compiler, and architecture. CMake appends
+`-dirty` when tracked source differs from HEAD; a dirty revision is not a complete
+source manifest. A source archive without Git can supply
+`-DAHK_BUILD_REVISION=<revision>`; other build routes report `unknown` unless they
+define it. Treat the executable's checksum and gate results as part of a handoff.
 
-CI runs the gate on MSVC x64, MSVC Win32, and MinGW x64. Release artifacts continue
-to use MSVC. The bundled `tree-sitter-ahk.dll` is **x64 only**; download it beside
-the x64 executable for grammar/AST tools. Win32 supports the engine and native MCP
-protocol, but cannot load that grammar DLL. Native MCP protocol tests do not rely
-on grammar tools, so they run on every supported build.
+The gate runs the QA and framework suites, CLI/REPL/MCP/DBGp checks, coverage and
+trace checks, and the PowerShell wrapper against that exact engine. It applies
+an outer timeout to each suite. QA children use `/Headless` and a default
+30-second timeout; override with `AHK_QA_TIMEOUT_MS` (1–300000 milliseconds).
+The gate's output is the current suite inventory, rather than a fixed count in
+this document.
 
-## Troubleshooting
+The bundled `bin/tree-sitter-ahk.dll` is x64 only. Copy it beside an isolated x64
+engine for grammar/AST operations. Win32 cannot load this grammar DLL; its engine
+and native MCP protocol are still tested. Check syntax with the real engine's
+`check` command, because tree-sitter's grammar does not cover every language
+construct.
 
-**MSBuild not found**: Use `build_local.bat` or `build_vs18.cmd`, or make sure you're using a Visual Studio developer prompt instead of regular `cmd`.
+Register a tested engine in the current PowerShell session without editing the
+profile or replacing the installed binary:
 
-**Build errors**: Ensure you have the C++ workload installed in VS Installer.
+```powershell
+. ./tools/ahk.ps1 -EnginePath $engine
+ahk --version
+python tests/test_powershell_cli.py --wrapper tools/ahk.ps1 --engine $engine
+```
 
-**Missing SDK**: Install Windows 10/11 SDK via VS Installer.
+The wrapper also accepts `AHK_CONSOLE_EXE`. Without an explicit path or that
+environment variable it uses `bin/AutoHotkey64Console.exe`. Test that default
+separately before making it permanent in a profile. The shell tests cover both
+PowerShell 7 and Windows PowerShell 5.1 when available, with explicit UTF-8 for
+Unicode pipelines. Their native argument-quoting rules still differ.
+
+## CI artifacts and releases
+
+Each compiler job builds GUI and Console, syntax-checks scripts with its fresh
+Console, runs the aggregate gate, and uploads those binaries and SHA-256 files.
+The x64 jobs also compare native and script MCP conformance with the grammar
+DLL present. `tools/describe_console.py ENGINE OUTPUT` records each published
+Console's actual filename, checksum, version, CLI capabilities, and MCP tool
+schemas in a `.capabilities.json` artifact; use this instead of a stale tool list.
+The coverage job downloads the MSVC x64 Console artifact, checks its hash, and
+downloads the corresponding grammar artifact before executing tests. A `v*`
+tag publishes a non-draft release only after compiler gates and coverage tests
+succeed, along with Node 22 builds/tests for the shared DBGp protocol and both
+TypeScript clients. Release assets include MSVC x64/Win32 GUI and Console, GCC x64 assets
+with `-mingw` filenames, their checksums, and the x64 grammar DLL.
+
+Build failures usually indicate a missing C++ workload/Windows SDK or invoking
+Ninja outside the matching developer environment. Keep each compiler and
+architecture in its own build directory; changing compilers in an existing
+CMake cache is not supported.
+
+## Runtime limits relevant to automation
+
+`Eval` and REPL expressions accept at most 16,384 UTF-16 code units. Larger
+expressions raise a catchable `ValueError` before parsing; REPL remains usable
+for the next input. Syntax failures remain `SyntaxError`. Compiled Eval storage
+still has process lifetime so returned closures remain valid.
+
+`Check(Source)` uses the shared child runner with a 30-second timeout and an
+8 MiB combined stdout/stderr capture budget. It retains `{Ok, Diagnostics, Raw}`;
+spawn, timeout, and capture-limit failures produce `Ok: 0` plus a synthetic error
+diagnostic. `Raw` contains stderr followed by stdout, preserving order within
+each stream. Check skips the script body, but load-time directives can still
+have side effects. Its temporary source and process tree are cleaned up
+automatically.
+
+Native MCP `check`, `run`, and `test` also cap combined raw output at 8 MiB.
+Their `timeout_ms` defaults to 30,000 and accepts integers from 1 to 600,000.
+Exceeding the capture budget terminates the child job and reports `ok: false`,
+`outputLimitExceeded: true`, and `captureLimitBytes: 8388608`; captured streams
+contain only the retained prefix. Timeout is reported separately as `timedOut`.
+
+ProcessPipe timeout arguments use seconds. Invalid nonfinite or unrepresentable
+timeouts raise an error instead of wrapping; zero retains the existing unlimited
+wait meaning. `Read()` without a timeout remains a nonblocking read. Pipe pumping
+uses bounded slices so output on one stream does not indefinitely postpone the
+other stream or timeout checks.

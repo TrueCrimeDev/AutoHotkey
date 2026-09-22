@@ -70,7 +70,7 @@ class ReplTests(unittest.TestCase):
             self.assertIn(s, err)
 
     def test_host_startup_output_is_separate(self):
-        with tempfile.TemporaryDirectory(prefix="ahk-repl-", dir=REPO / "temp") as d:
+        with tempfile.TemporaryDirectory(prefix="ahk-repl-") as d:
             script = Path(d) / "host.ahk"
             script.write_text('Print("startup")\nglobal counter := 40\n', encoding="utf-8")
             p = self.run_repl("counter+2\n", script=script)

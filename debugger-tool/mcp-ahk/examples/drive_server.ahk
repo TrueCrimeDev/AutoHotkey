@@ -23,7 +23,7 @@ for t in client.ListTools()
     Print("  - " t["name"])
 
 ; call a tool over the wire and unwrap the result
-target := "C:\Users\uphol\Documents\Design\Coding\AutoHotkey\Lib\DarkMode.ahk"
+target := A_ScriptDir "\..\..\..\Lib\DarkMode.ahk"
 Print("`ncalling ast_outline over the protocol...")
 res := client.CallTool("ast_outline", Map("file", target))
 data := Json.Parse(res["content"][1]["text"])

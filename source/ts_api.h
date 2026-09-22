@@ -1,7 +1,7 @@
 #pragma once
 
 // Shared slice of the tree-sitter C API loaded from tree-sitter-ahk.dll.
-// Definitions live in error.cpp (beside TSParse); this header exists so other
+// Definitions live in ts_api.cpp (beside TSParse); this header exists so other
 // translation units (the `mcp` verb's ast_outline) can walk raw TSNodes without
 // going through TSParse's AHK-object snapshot.
 //

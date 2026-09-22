@@ -15,6 +15,11 @@ This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.
 | Crash logging | `/CrashLog=path` flag | Yes — gated |
 | Crash logging (script form) | `#CrashLog path` directive | Yes — gated |
 | Stderr file tee | `/StdErrFile=path` flag | Yes — gated |
+| Line coverage (LCOV) | `/Coverage=path` flag (see §17) | Yes — gated |
+| Live-object inspector | `Inspect(Value, Depth?, MaxItems?)` BIF; REPL object results (see §18) | Always on |
+| Native child-process pipes | `ProcessPipe(Command, Args?, WorkingDir?)` class (see §19) | Always on |
+| Agent-oriented trace | `/Trace=json` (see §20) | Yes — gated |
+| Engine tools in the native MCP server | `check`, `run`, `test` tools of the `mcp` verb (see §21) | n/a |
 | External-signal exit code | `code=130` for Ctrl+C / close | Always on (gate is whether crash log is on) |
 | Interactive / pipe-driven REPL | `repl` subcommand (see §16) | n/a — explicit mode |
 
@@ -412,6 +417,8 @@ All flags in this list are fork-only additions. Existing AHK flags (`/ErrorStdOu
 | `/Eval` (or `--eval`) | Enable the `Eval(...)` BIF for the process. Off by default. |
 | `/CrashLog=<path>` (or `--crashlog=<path>`) | Enable structured crash logging to `<path>`. Off by default. |
 | `/StdErrFile=<path>` (or `--stderrfile=<path>`) | Duplicate all stderr writes to `<path>`. Off by default. |
+| `/Coverage=<path>` (or `--coverage=<path>`) | Write an LCOV line-coverage report for every loaded script file to `<path>` at exit (§17). Off by default. |
+| `/Trace=json` (or `--trace=json`) | Like `/Trace`, but one JSON event per executed statement (§20). `/Trace=text` is the default text form. |
 
 ---
 
@@ -433,6 +440,8 @@ Both directives must appear at top-of-script scope, alongside `#Requires`, `#Sin
 | `Eval` | `Eval(Expression)` | Evaluate an AHK expression string in the caller's scope. Gated. |
 | `Print` | `Print()` / `Print(Text)` / `Print(Fmt, Values*)` | Write text plus a newline to stdout, UTF-8. 2+ args dispatch through `Format(Fmt, Values*)`; 1 arg is written as-is so literal `{` / `}` survive. Always on. |
 | `_ScriptGetLines` | `_ScriptGetLines(File, Line, Range?)` | (Pre-existing fork addition.) Read source-text lines around a given position. |
+| `Inspect` | `Inspect(Value, Depth := 2, MaxItems := 100)` | JSON description of a live value: own values, getter/setter/method names, items, entries. Never invokes script. §18. |
+| `ProcessPipe` | `ProcessPipe(Command, Args?, WorkingDir?)` | Child process with UTF-8 stdio pipes in a job object. §19. |
 
 ---
 
@@ -458,6 +467,10 @@ bin\AutoHotkey64.exe test tests\<script>.ahk
 | `tests/test_crashlog_directive.ahk` | `#CrashLog` directive works without CLI flag. |
 | `tests/test_crashlog_exitapp_n.ahk` | `ExitApp 7` → `[EXIT] code=7 reason=ExitApp(7)`. |
 | `tests/crashlog_check.ahk` | Verifier harness: asserts a log file contains given substrings. |
+| `tests/run.ahk` | Single-process suite: `#Include`s every `tests/*.test.ahk` (framework in `tests/Test.ahk`), prints results, exits 14 on failure. Run with `test`; add `/Coverage=` for LCOV. |
+| `qa/tests/test_inspect.ahk` | `Inspect`: primitives, depth/MaxItems clamps, arrays/maps/JSON.Object, class getters and methods, native Gui controls, cycles, 60-deep chains, 500-property objects. |
+| `qa/tests/test_processpipe.ahk` | `ProcessPipe`: UTF-8 round trip, timeouts, Kill, stderr separation, 2 MB producer without deadlock, 200 KB line across chunk boundaries, argument quoting, kill-on-release, error paths. |
+| `tests/test_console_coverage.py` | `/Coverage=`: DA/LF/LH consistency, structural lines excluded, per-iteration `while` counts, relative path resolution, report survives uncaught errors and `ExitApp(14)`. |
 | `tests/test_repl.sh` | `repl` subcommand end-to-end (bash; pipes stdin): values, cross-line state, error resilience, JSON mode, `ExitApp` passthrough, script-hosted session. |
 | `tests/manual_*.ahk` | Manual verification scripts (SEH, recursion, long-running for Ctrl+C). Not run automatically. |
 
@@ -663,3 +676,188 @@ Implementation: `source/error.cpp` (reader thread, mailbox, `ReplDrainInput`,
 `MainWindowProc`. Design: `docs/superpowers/specs/2026-06-12-repl-mode-design.md`.
 Tests: `tests/test_repl.sh`, `tests/test_console_repl.py`. Run the aggregate checks
 with `python tests/run_console_gate.py bin/AutoHotkey64.exe`.
+
+---
+
+## 17. `/Coverage=` — LCOV line coverage from the interpreter
+
+Zero script instrumentation: the parser already knows every executable line
+(that is "lines found") and the interpreter already passes every line through
+one dispatch point before executing it (that is "lines hit"). `/Coverage=`
+connects the two and writes a standard LCOV tracefile at exit.
+
+### Enabling it
+
+```bat
+bin\AutoHotkey64.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
+```
+
+`--coverage=<path>` is accepted too. A relative path is resolved against the
+working directory at launch, before the script can `SetWorkingDir`. When the
+flag is absent the per-line cost is one predictable branch on a global bool.
+
+### File format
+
+One record per source file that contributed at least one executable line
+(the main script, every `#Include`, every `#Module` file):
+
+```text
+SF:C:\lib\Async.ahk
+DA:12,1
+DA:13,0
+LF:2
+LH:1
+end_of_record
+```
+
+- `DA:<line>,<hits>` — one entry per executable source line. A line holding
+  several statements (`if x {`) is one entry.
+- Lines that never reach the dispatch point are not reported at all, so they
+  cannot drag the number down: `else`, `catch`, `finally`, `case`, bare braces,
+  function and class headers, and the loader's synthetic end-of-module line.
+- `while` and `until` count once per condition evaluation; loop bodies count
+  once per iteration.
+- `LF`/`LH` are the found/hit totals for that file.
+
+### When it is written
+
+The whole file is rewritten (open-write-flush-close, like the crash log) at
+every exit path: normal end of script, `ExitApp(n)`, uncaught error (exit 10),
+test failure (exit 14), the SEH fatal filter (exit 11) and Ctrl+C / console
+close (exit 130). A test that crashes still leaves the data gathered up to
+that point. A parse failure writes nothing, because nothing ran.
+
+### Merging and reporting
+
+`tools/lcov_summary.py` sums `DA` records across any number of tracefiles,
+prints a per-file table, writes a merged tracefile, and emits a shields.io
+endpoint JSON badge:
+
+```bat
+python tools\lcov_summary.py "coverage/**/*.lcov" --include "^Lib/" --out coverage\merged.lcov --badge coverage\badge.json
+```
+
+`qa/run.ahk` launches one process per test; set `AHK_QA_COVERAGE_DIR=<dir>`
+and every child writes its own `<test>_<pid>_<n>.lcov` there for the merge.
+Any LCOV consumer (Codecov, `genhtml`, VS Code Coverage Gutters) reads the
+files directly.
+
+### Not covered (by design)
+
+- Branch (`BRDA`) and function (`FN`/`FNDA`) records.
+- Lines executed by `Eval()` — they have no source line.
+- A `#Coverage` directive; the flag is a launcher concern like `/Debug`.
+
+---
+
+## 18. `Inspect(Value, Depth := 2, MaxItems := 100)` — live-object inspector
+
+Returns a JSON string describing a value the way a debugger's variable pane
+would, without running any script code. The same serializer describes object
+results in the REPL (`repl` prints `{"type":"Gui.Button",...}` instead of
+`<Gui.Button object>`).
+
+```autohotkey
+g := Gui()
+btn := g.AddButton("w200", "Save")
+Print(Inspect(btn, 1))
+```
+
+```json
+{"type":"Gui.Button","properties":{},"getters":["Text","Type","Enabled","Visible",...],
+ "setters":["Text","Enabled","Visible",...],"methods":["Focus","Move","OnEvent",...]}
+```
+
+### Shape
+
+| Key | Present for | Meaning |
+|---|---|---|
+| `type` | everything | `Type(Value)` |
+| `value`, `length` | primitives at top level | the value; `length` for strings |
+| `properties` | any object | own **value** properties, serialized |
+| `getters` / `setters` / `methods` | any object | names of dynamic members, own and inherited up to (excluding) `Object.Prototype` |
+| `typed` | struct-like objects | names of typed fields (values need a read, so they are listed only) |
+| `class` | class objects | the class name (`Widget`), static values appear under `properties` |
+| `length`, `items` | `Array` | `null` for holes |
+| `count`, `entries` | `Map`, `JSON.Object` | `[key, value]` pairs in stored order (keys of any type) |
+| `name`, `minParams`, `maxParams`, `variadic` | `Func` | signature |
+| `truncated` | any node | `Depth` exhausted at this node, or a list was cut at `MaxItems` |
+| `circular` | any node | this object is already open further up |
+
+Nested primitives are inlined as JSON values; nested objects are descriptors.
+`Depth` is clamped to 0…32 and `MaxItems` to ≥ 1. Getters are never evaluated:
+evaluating one could run arbitrary script, so a value that only exists behind a
+getter appears by name only. Read it explicitly if you need it.
+
+---
+
+## 19. `ProcessPipe(Command, Args?, WorkingDir?)` — native child-process pipes
+
+A child process with UTF-8 `stdin`/`stdout`/`stderr` pipes, no console window,
+and a job object with kill-on-close: releasing the object or calling `Kill()`
+terminates the child and everything it spawned.
+
+```autohotkey
+p := ProcessPipe("codex", ["app-server"])
+p.SendLine(JSON.Stringify({method: "initialize", id: 1, params: {}}))
+reply := JSON.Parse(p.ReadLine(30))      ; seconds; throws TimeoutError
+p.Close()                                ; EOF to the child
+Print("exit {}", p.Wait(5))
+```
+
+| Member | Effect |
+|---|---|
+| `ProcessPipe(Command, Args?, WorkingDir?)` | `Args` is an Array (each item quoted for `CommandLineToArgvW`), a raw string appended verbatim, or omitted (`Command` is the full command line). Throws `OSError` if the process cannot start. |
+| `Send(Text, Timeout?)` / `SendLine(Text, Timeout?)` | Write UTF-8 to stdin; `SendLine` appends `\n`. The write is overlapped and the child's output keeps being drained while it is pending, so a child busy writing cannot deadlock the script. `TimeoutError` after `Timeout` seconds (omitted = wait); the child may have received a prefix. |
+| `ReadLine(Timeout?)` | Next stdout line without its line ending. Waits up to `Timeout` seconds (omitted = until data or exit); `TimeoutError` on expiry; `""` at EOF (check `AtEOF`). |
+| `Read(Timeout?)` | Everything buffered on stdout. Without `Timeout` it returns immediately (possibly `""`); with one it waits for at least one character. |
+| `ReadStdErr()` | Everything buffered on stderr, then clears it. |
+| `Wait(Timeout?)` | Blocks until exit; returns the exit code; `TimeoutError` on expiry. |
+| `Close()` | Closes stdin so a child reading to EOF finishes. |
+| `Kill()` | Terminates the job (process tree). |
+| `PID`, `Running`, `ExitCode` (`-1` while running), `AtEOF` | State. |
+
+While waiting, the script's timers, hotkeys and GUI events keep running
+(`MsgSleep`, like `WinWait`). Both pipes are drained during every wait and
+during every pending write, so a child that floods stderr cannot deadlock a
+`ReadLine` on stdout and a child that floods stdout cannot deadlock a `Send`.
+Pipe buffers are 1 MB; a busy child is drained continuously. Incomplete UTF-8
+sequences at a chunk boundary are held until the next read.
+
+`File.AtEOF` is unreliable on a pipe inside the *child* (it reports true while
+the pipe is momentarily empty). A child reading its stdin to the end should
+loop on `ReadLine()` until it returns `""`.
+
+---
+
+## 20. `/Trace=json` — statement events for agents
+
+`/Trace` keeps its text form. `/Trace=json` emits one object per executed
+statement on stderr, ready for a harness to consume alongside `/Diag=json`:
+
+```json
+{"event":"statement","file":"C:\\app\\App.ahk","line":27,"function":"SaveRecord","thread":1,"text":"recordCount += 1"}
+```
+
+`function` is empty at top level; `thread` is the count of pseudo-threads
+alive when the statement ran (1 = auto-execute, more inside hotkeys/timers).
+Unknown formats exit 64.
+
+---
+
+## 21. Native MCP tools: `check`, `run`, `test`
+
+`AutoHotkey64.exe mcp` now covers the whole check / run / test loop without a
+Node or Python bridge. Each tool spawns this same executable in a child
+process (`/Headless /Diag=json`), captures both streams, and returns every
+stderr line that parses as a diagnostic:
+
+| Tool | Arguments | Result |
+|---|---|---|
+| `check` | `file`, `cwd?`, `timeout_ms?` | `ok`, `exitCode` (0/13), `diagnostics[]`, `stdout`, `stderr` |
+| `run` | `file`, `args?[]`, `cwd?`, `timeout_ms?` | same plus `timedOut`; the process tree is killed at `timeout_ms` (default 30000, max 600000) |
+| `test` | as `run` | `exitCode` 0 pass / 14 fail |
+
+`diagnostics[]` items are the engine's schema-2 diagnostic objects (`type`,
+`message`, `file`, `line`, `column`, `stack`, …). A persistent script under
+`run` is reported with `timedOut: true` rather than hanging the server.

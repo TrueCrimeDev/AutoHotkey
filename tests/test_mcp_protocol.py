@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 
 EXE = Path(sys.argv.pop(1) if len(sys.argv) > 1 and not sys.argv[1].startswith("-")
@@ -39,6 +40,68 @@ class McpProtocolTests(unittest.TestCase):
         self.assertEqual(rows[0]["jsonrpc"], "2.0")
         self.assertEqual(rows[0]["id"], id)
         self.assertEqual(rows[0].get("error", {}).get("code"), code, rows)
+
+    def call_tool(self, name, **arguments):
+        rows = self.exchange(request("tools/call", id="t", params={"name": name, "arguments": arguments}))
+        self.assertEqual(len(rows), 1, rows)
+        self.assertNotIn("error", rows[0], rows)
+        return json.loads(rows[0]["result"]["content"][0]["text"])
+
+    def test_engine_tools_are_listed(self):
+        rows = self.exchange(request("tools/list"))
+        names = [tool["name"] for tool in rows[0]["result"]["tools"]]
+        for name in ("check", "run", "test"):
+            self.assertIn(name, names)
+        self.assertEqual(names, sorted(names))
+
+    def test_server_status_tool_count_matches_discovery(self):
+        rows = self.exchange(
+            request("tools/list", id="list"),
+            request("tools/call", id="status", params={"name": "server_status", "arguments": {}}),
+        )
+        self.assertEqual(len(rows), 2, rows)
+        tools = rows[0]["result"]["tools"]
+        status = json.loads(rows[1]["result"]["content"][0]["text"])
+        self.assertEqual(status["toolsRegistered"], len(tools))
+
+    def test_check_tool_reports_parse_outcome(self):
+        with tempfile.TemporaryDirectory(prefix="ahk-mcp-") as td:
+            good = Path(td) / "good.ahk"
+            good.write_text("x := 1\n", encoding="utf-8")
+            bad = Path(td) / "bad.ahk"
+            bad.write_text("x := 1\ny := (\n", encoding="utf-8")
+            result = self.call_tool("check", file=str(good))
+            self.assertEqual((result["ok"], result["exitCode"], result["diagnostics"]), (True, 0, []))
+            result = self.call_tool("check", file=str(bad))
+            self.assertEqual((result["ok"], result["exitCode"]), (False, 13))
+            self.assertEqual(result["diagnostics"][0]["kind"], "diagnostic")
+            self.assertGreaterEqual(result["diagnostics"][0]["line"], 1)
+            self.assertIn("bad.ahk", result["diagnostics"][0]["file"].lower())
+
+    def test_run_and_test_tools_capture_streams_and_kill_at_timeout(self):
+        with tempfile.TemporaryDirectory(prefix="ahk-mcp-") as td:
+            script = Path(td) / "run.ahk"
+            script.write_text('Print("hi {}", A_Args[1])\nFileAppend("warn`n", "**")\nthrow Error("boom")\n',
+                              encoding="utf-8")
+            result = self.call_tool("run", file=str(script), args=["a b"])
+            self.assertEqual((result["ok"], result["exitCode"], result["timedOut"]), (False, 10, False))
+            self.assertEqual(result["stdout"], "hi a b\n")
+            self.assertIn("warn", result["stderr"])
+            self.assertEqual(result["diagnostics"][0]["type"], "Error")
+            self.assertEqual(result["diagnostics"][0]["message"], "boom")
+            failing = Path(td) / "fail.ahk"
+            failing.write_text("ExitApp(14)\n", encoding="utf-8")
+            result = self.call_tool("test", file=str(failing))
+            self.assertEqual((result["ok"], result["exitCode"], result["mode"]), (False, 14, "test"))
+            hang = Path(td) / "hang.ahk"
+            hang.write_text("Persistent()\nSetTimer(() => 0, 1000)\n", encoding="utf-8")
+            result = self.call_tool("run", file=str(hang), timeout_ms=500)
+            self.assertTrue(result["timedOut"])
+            self.assertFalse(result["ok"])
+            rows = self.exchange(request("tools/call", id="bad", params={"name": "run", "arguments": {"file": str(script), "timeout_ms": 0}}))
+            self.assertEqual(rows[0]["error"]["code"], -32603)
+            rows = self.exchange(request("tools/call", id="missing", params={"name": "check", "arguments": {}}))
+            self.assertEqual(rows[0]["error"]["code"], -32603)
 
     def test_jsonrpc_version_is_required_and_exact(self):
         for version in (None, "1.0", 2, True):

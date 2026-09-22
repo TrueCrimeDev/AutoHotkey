@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "ahk-mcp": {
-      "command": "/mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe",
+      "command": "./bin/AutoHotkey64.exe",
       "args": [
         "mcp"
       ],

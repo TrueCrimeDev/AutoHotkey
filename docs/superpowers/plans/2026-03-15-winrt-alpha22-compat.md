@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Patch winrt.ahk in `C:\Users\uphol\Documents\Autohotkey\WinRT\` to work with AutoHotkey v2.1-alpha.22
+**Goal:** Patch winrt.ahk in `<path-to>\WinRT\` to work with AutoHotkey v2.1-alpha.22
 
 **Architecture:** Alpha.22 removed `StructFromPtr` and changed `DefineProp({type: classObj})` to require native Struct subclasses. We replace 3 `StructFromPtr` calls with a polyfill that creates a struct-pointer wrapper using `ObjGetDataPtr`, and convert 1 `DefineProp({type: classObj})` call to use the reserve-space-then-manual-accessor pattern. `ObjGetDataPtr` and `ObjGetDataSize` still exist and need no changes.
 
 **Tech Stack:** AutoHotkey v2.1-alpha.22, winrt.ahk library
 
-**Test binary:** `C:\Users\uphol\Documents\Design\Coding\AutoHotkey\bin\AutoHotkey64.exe`
+**Test binary:** `<repo>\bin\AutoHotkey64.exe`
 
 ---
 

@@ -475,6 +475,23 @@ public:
 		return true;
 	}
 
+	// Any own slot, including dynamic and typed properties, for native
+	// inspection (Inspect()). Never invokes script: aValue is filled only for
+	// value slots and aProp only for SYM_DYNAMIC, so callers can list getters
+	// and methods by name.
+	bool OwnFieldAt(index_t aIndex, LPCTSTR &aName, SymbolType &aSymbol, ExprTokenType &aValue, Property *&aProp)
+	{
+		if (aIndex >= mFields.Length())
+			return false;
+		FieldType &field = mFields[aIndex];
+		aName = field.name;
+		aSymbol = field.symbol;
+		aProp = field.symbol == SYM_DYNAMIC ? field.prop : nullptr;
+		if (field.symbol != SYM_DYNAMIC && field.symbol != SYM_TYPED_FIELD)
+			field.ToToken(aValue);
+		return true;
+	}
+
 	bool HasOwnProps() { return mFields.Length(); }
 	bool HasOwnProp(name_t aName)
 	{

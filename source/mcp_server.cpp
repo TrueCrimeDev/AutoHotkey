@@ -5,17 +5,22 @@
 #include "ahkversion.h"
 #include "ts_api.h"
 #include "mcp_server.h"
+#include "child_process.h"
 #include <string>
 #include <vector>
 #include <utility>
 #include <wchar.h>  // wcstoll/wcstoull/wcstod
 #include <wctype.h> // towlower
+#include <cerrno>
+#include <cmath>
+#include <climits>
+#include <memory>
 
 // ============================================================================
 // `AutoHotkey64.exe mcp` — native stdio MCP server (newline-delimited JSON-RPC
 // 2.0). The behavioral contract is debugger-tool/mcp-ahk/mcp.ahk, the AHK
-// reference implementation: same five tools, same payload fields, same error
-// codes and stats semantics, so the same conformance tests drive both.
+// reference implementation for shared file tools and stats. Native-only
+// check/run/test tools additionally provide bounded child-process execution.
 //
 // Runs from _tWinMain before any script is loaded: single-threaded, no windows,
 // no hooks, no message pump — it blocks on stdin (REPL pipe-reader pattern) and
@@ -27,9 +32,10 @@ namespace {
 using std::wstring;
 
 // ---------------------------------------------------------------------------
-// JSON value + parser (the engine has JSON emission only; this is its first
-// parser). Semantics mirror mcp.ahk's script-side Json class: strict single
-// top-level value, no trailing commas, \uXXXX as one UTF-16 code unit.
+// Standalone JSON codec: unlike runtime JSON, it needs no script objects and
+// retains number lexemes so arbitrarily large request IDs round-trip exactly.
+// Shared edge cases should be tested against both codecs, without tying the
+// transport to script initialization. \uXXXX represents one UTF-16 code unit.
 // ---------------------------------------------------------------------------
 
 struct JVal
@@ -324,7 +330,9 @@ void JsonQuote(wstring &out, LPCWSTR text, size_t len)
 		case (wchar_t)8:  out += L"\\b"; break;
 		case (wchar_t)12: out += L"\\f"; break;
 		default:
-			if ((unsigned)c < 0x20)
+			// Escaping surrogate code units also preserves accepted lone
+			// surrogates instead of replacing request IDs at UTF-8 emission.
+			if ((unsigned)c < 0x20 || (c >= 0xD800 && c <= 0xDFFF))
 			{
 				wchar_t buf[8];
 				sntprintf(buf, _countof(buf), L"\\u%04x", (unsigned)c);
@@ -477,6 +485,11 @@ std::string WToU8(const wstring &w)
 // this size would produce a response no MCP client accepts anyway.
 const __int64 MCP_MAX_FILE_BYTES = 100 * 1024 * 1024;
 
+// check/run/test retain at most 8 MiB of combined raw stdout/stderr bytes.
+// Exceeding the cap kills the job and reports outputLimitExceeded, with the
+// captured prefix retained. This also bounds UTF-16 and JSON expansion.
+const size_t MCP_MAX_CAPTURE_BYTES = 8 * 1024 * 1024;
+
 // Read a whole file as UTF-8 bytes (BOM stripped). An empty file yields an
 // empty string — the `?? ""` semantics of the reference implementation (v2.1
 // FileRead returns unset on a zero-byte file; here it is simply no bytes).
@@ -493,10 +506,10 @@ bool ReadFileUtf8(const wstring &path, std::string &out, wstring &err_msg)
 		err_msg = L"(" + std::to_wstring((long long)e) + L") " + SysErrorText(e);
 		return false;
 	}
+	std::unique_ptr<void, decltype(&CloseHandle)> file_owner(h, CloseHandle);
 	LARGE_INTEGER size;
 	if (!GetFileSizeEx(h, &size) || size.QuadPart < 0 || size.QuadPart > MCP_MAX_FILE_BYTES)
 	{
-		CloseHandle(h);
 		err_msg = L"file is too large to read (limit 100 MB)";
 		return false;
 	}
@@ -508,13 +521,12 @@ bool ReadFileUtf8(const wstring &path, std::string &out, wstring &err_msg)
 		DWORD got = 0;
 		if (!ReadFile(h, &out[off], want, &got, nullptr) || got == 0)
 		{
-			CloseHandle(h);
 			err_msg = L"read failed mid-file";
 			return false;
 		}
 		off += got;
 	}
-	CloseHandle(h);
+	file_owner.reset();
 	if (out.size() >= 2 && (unsigned char)out[0] == 0xFF && (unsigned char)out[1] == 0xFE)
 	{
 		// UTF-16 LE BOM (std::string data is suitably aligned; +2 keeps 2-byte alignment).
@@ -583,29 +595,34 @@ bool JArgToInt(const JVal *v, __int64 &out)
 		return false;
 	// AHK numeric strings tolerate only space/tab padding, not CR/LF.
 	lex = TrimSpTab(lex);
-	if (lex.empty())
+	if (lex.empty() || lex.find(L'\0') != wstring::npos)
 		return false;
 	wchar_t *endp = nullptr;
 	bool neg = lex[0] == L'-';
 	size_t digs = (lex[0] == L'-' || lex[0] == L'+') ? 1 : 0;
 	if (lex.size() > digs + 1 && lex[digs] == L'0' && (lex[digs + 1] == L'x' || lex[digs + 1] == L'X'))
 	{
+		errno = 0;
 		unsigned __int64 uv = wcstoull(lex.c_str() + digs + 2, &endp, 16);
-		if (!endp || *endp || endp == lex.c_str() + digs + 2)
+		if (errno == ERANGE || endp != lex.c_str() + lex.size() || endp == lex.c_str() + digs + 2
+			|| uv > (neg ? 0x8000000000000000ULL : 0x7FFFFFFFFFFFFFFFULL))
 			return false;
-		out = neg ? -(__int64)uv : (__int64)uv;
+		out = neg ? (uv == 0x8000000000000000ULL ? LLONG_MIN : -(__int64)uv) : (__int64)uv;
 		return true;
 	}
 	if (lex.find_first_of(L".eE") != wstring::npos)
 	{
+		errno = 0;
 		double d = wcstod(lex.c_str(), &endp);
-		if (!endp || *endp || endp == lex.c_str())
+		if (errno == ERANGE || endp != lex.c_str() + lex.size() || endp == lex.c_str()
+			|| !std::isfinite(d) || d < -9223372036854775808.0 || d >= 9223372036854775808.0)
 			return false;
 		out = (__int64)d;
 		return true;
 	}
+	errno = 0;
 	out = wcstoll(lex.c_str(), &endp, 10);
-	return endp && !*endp && endp != lex.c_str();
+	return errno != ERANGE && endp == lex.c_str() + lex.size() && endp != lex.c_str();
 }
 
 // ---------------------------------------------------------------------------
@@ -789,34 +806,33 @@ bool Tool_AstOutline(const JVal &args, wstring &out, wstring &err_msg)
 		err_msg = L"tree-sitter-ahk.dll could not be loaded or is missing required exports.";
 		return false;
 	}
-	void *parser = ts.parser_new();
+	std::unique_ptr<void, decltype(ts.parser_delete)> parser(ts.parser_new(), ts.parser_delete);
 	if (!parser)
 	{
 		err_msg = L"out of memory";
 		return false;
 	}
-	if (!ts.set_language(parser, ts.lang()))
+	if (!ts.set_language(parser.get(), ts.lang()))
 	{
-		ts.parser_delete(parser);
 		err_msg = L"tree-sitter language/runtime ABI mismatch.";
 		return false;
 	}
-	void *tree = ts.parse_string(parser, nullptr, u8.data(), (UINT32)u8.size());
+	std::unique_ptr<void, decltype(ts.tree_delete)> tree(
+		ts.parse_string(parser.get(), nullptr, u8.data(), (UINT32)u8.size()), ts.tree_delete);
 	if (!tree)
 	{
-		ts.parser_delete(parser);
 		err_msg = L"tree-sitter parse failed";
 		return false;
 	}
-	TSNode root = ts.root_node(tree);
+	TSNode root = ts.root_node(tree.get());
 	bool has_error = ts.has_error(root);
 
 	wstring symbols;
 	__int64 count = 0;
 	AstCollect(ts, root, u8.data(), (UINT32)u8.size(), 0, symbols, count);
 
-	ts.tree_delete(tree);
-	ts.parser_delete(parser);
+	tree.reset();
+	parser.reset();
 
 	out = L"{\"file\":";
 	EchoArg(out, file_arg, file);
@@ -847,6 +863,11 @@ bool Tool_GetSourceContext(const JVal &args, wstring &out, wstring &err_msg)
 			err_msg = L"argument \"radius\" is not an integer";
 			return false;
 		}
+	if (line < 1 || radius < 0)
+	{
+		err_msg = L"argument \"line\" must be positive and \"radius\" must be nonnegative";
+		return false;
+	}
 	std::string u8;
 	if (!ReadFileUtf8(file, u8, err_msg))
 		return false;
@@ -854,8 +875,8 @@ bool Tool_GetSourceContext(const JVal &args, wstring &out, wstring &err_msg)
 	SplitLines(u8, lines);
 
 	__int64 total = (__int64)lines.size();
-	__int64 start_l = line - radius < 1 ? 1 : line - radius;
-	__int64 end_l = line + radius > total ? total : line + radius;
+	__int64 start_l = radius >= line ? 1 : line - radius;
+	__int64 end_l = line >= total || radius >= total - line ? total : line + radius;
 
 	out = L"{\"file\":";
 	EchoArg(out, file_arg, file);
@@ -1085,6 +1106,7 @@ void WsScanDir(WsScan &scan, const wstring &dir, int depth)
 	HANDLE h = FindFirstFileW(JoinPath(dir, L"*.ahk").c_str(), &fd);
 	if (h != INVALID_HANDLE_VALUE)
 	{
+		std::unique_ptr<void, decltype(&FindClose)> find_owner(h, FindClose);
 		do
 		{
 			if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
@@ -1096,13 +1118,13 @@ void WsScanDir(WsScan &scan, const wstring &dir, int depth)
 			}
 			WsScanFile(scan, JoinPath(dir, fd.cFileName));
 		} while (!scan.truncated && FindNextFileW(h, &fd));
-		FindClose(h);
 	}
 	if (scan.truncated)
 		return;
 	h = FindFirstFileW(JoinPath(dir, L"*").c_str(), &fd);
 	if (h != INVALID_HANDLE_VALUE)
 	{
+		std::unique_ptr<void, decltype(&FindClose)> find_owner(h, FindClose);
 		do
 		{
 			if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
@@ -1115,7 +1137,6 @@ void WsScanDir(WsScan &scan, const wstring &dir, int depth)
 				continue;
 			WsScanDir(scan, JoinPath(dir, fd.cFileName), depth + 1);
 		} while (!scan.truncated && FindNextFileW(h, &fd));
-		FindClose(h);
 	}
 }
 
@@ -1146,9 +1167,9 @@ bool Tool_WorkspaceSymbols(const JVal &args, wstring &out, wstring &err_msg)
 			return false;
 		}
 	if (const JVal *v = args.Get(L"max_results"))
-		if (!JArgToInt(v, scan.max_n))
+		if (!JArgToInt(v, scan.max_n) || scan.max_n < 0)
 		{
-			err_msg = L"argument \"max_results\" is not an integer";
+			err_msg = L"argument \"max_results\" must be a nonnegative integer";
 			return false;
 		}
 
@@ -1157,8 +1178,9 @@ bool Tool_WorkspaceSymbols(const JVal &args, wstring &out, wstring &err_msg)
 	// separator-normalized for roots like "." or C:/fwd/slashes. The raw root
 	// string is still echoed back in the payload's "root" field.
 	wstring dir = root;
-	while (dir.size() > 1 && (dir.back() == L'\\' || dir.back() == L'/'))
-		dir.pop_back();
+	// Keep drive/UNC root separators: trimming C:\\ into C: would change an
+	// absolute root into the current directory on that drive. JoinPath already
+	// handles an existing trailing separator after canonicalization.
 	wchar_t full[MAX_PATH * 4];
 	DWORD fl = GetFullPathNameW(dir.c_str(), _countof(full), full, nullptr);
 	if (fl && fl < _countof(full))
@@ -1176,6 +1198,8 @@ bool Tool_WorkspaceSymbols(const JVal &args, wstring &out, wstring &err_msg)
 }
 
 // --- server_status ----------------------------------------------------------
+
+size_t McpToolCount();
 
 bool Tool_ServerStatus(const JVal &, wstring &out, wstring &)
 {
@@ -1196,9 +1220,123 @@ bool Tool_ServerStatus(const JVal &, wstring &out, wstring &)
 	AppendCounts(out, g_McpStats.by_method);
 	out += L",\"toolCalls\":";
 	AppendCounts(out, g_McpStats.tool_calls);
-	out += L",\"toolsRegistered\":5}";
+	out += L",\"toolsRegistered\":" + std::to_wstring(McpToolCount()) + L"}";
 	return true;
 }
+
+// --- check / run / test (a child engine process per call) ------------------
+//
+// The mcp verb loads no script, so these spawn this same executable with
+// /Headless /Diag=json and return exit code, both streams, and every stderr
+// line that parses as a diagnostic. A persistent script is killed with its
+// process tree at timeout_ms (default 30 s).
+
+bool ToolEngine(const JVal &args, wstring &out, wstring &err_msg, LPCWSTR mode)
+{
+	wstring file;
+	const JVal *file_arg = GetFileArg(args, file, err_msg);
+	if (!file_arg)
+		return false;
+	__int64 timeout_ms = 30000;
+	if (const JVal *v = args.Get(L"timeout_ms"))
+		if (!JArgToInt(v, timeout_ms) || timeout_ms < 1 || timeout_ms > 600000)
+		{
+			err_msg = L"argument \"timeout_ms\" must be an integer from 1 to 600000";
+			return false;
+		}
+	wstring cwd;
+	if (const JVal *v = args.Get(L"cwd"))
+		if (!JArgToString(v, cwd))
+		{
+			err_msg = L"argument \"cwd\" is not a string";
+			return false;
+		}
+	wchar_t exe[MAX_PATH];
+	DWORD exe_len = GetModuleFileNameW(nullptr, exe, MAX_PATH);
+	if (!exe_len || exe_len >= MAX_PATH)
+	{
+		err_msg = L"could not determine the engine path";
+		return false;
+	}
+	wstring cmd;
+	AppendQuotedArg(cmd, exe);
+	cmd += L" /Headless /Diag=json ";
+	cmd += mode;
+	cmd += L" --"; // The file is data even when its name resembles an engine option.
+	AppendQuotedArg(cmd, file.c_str());
+	if (const JVal *v = args.Get(L"args"))
+	{
+		if (v->kind != JVal::J_ARR)
+		{
+			err_msg = L"argument \"args\" must be an array of strings";
+			return false;
+		}
+		for (auto &item : v->arr)
+		{
+			if (item.kind == JVal::J_STR)
+				AppendQuotedArg(cmd, item.str.c_str());
+			else if (item.kind == JVal::J_NUM)
+				AppendQuotedArg(cmd, item.num.c_str());
+			else
+			{
+				err_msg = L"argument \"args\" must be an array of strings";
+				return false;
+			}
+		}
+	}
+	ChildResult result;
+	RunChildCapture(cmd.c_str(), cwd.empty() ? nullptr : cwd.c_str(), (DWORD)timeout_ms, result,
+		MCP_MAX_CAPTURE_BYTES);
+	if (!result.started)
+	{
+		err_msg = L"could not start the engine (Win32 error " + std::to_wstring(result.last_error) + L")";
+		return false;
+	}
+	out = L"{\"file\":";
+	EchoArg(out, file_arg, file);
+	out += L",\"mode\":\"";
+	out += mode;
+	out += L"\",\"exitCode\":" + std::to_wstring(result.exit_code);
+	out += result.timed_out ? L",\"timedOut\":true" : L",\"timedOut\":false";
+	out += result.output_limit_exceeded ? L",\"outputLimitExceeded\":true" : L",\"outputLimitExceeded\":false";
+	out += L",\"captureLimitBytes\":" + std::to_wstring(MCP_MAX_CAPTURE_BYTES);
+	out += (result.exit_code == 0 && !result.timed_out && !result.output_limit_exceeded)
+		? L",\"ok\":true" : L",\"ok\":false";
+	out += L",\"stdout\":";
+	JsonQuote(out, result.out);
+	out += L",\"stderr\":";
+	JsonQuote(out, result.err);
+	out += L",\"diagnostics\":[";
+	bool first = true;
+	size_t pos = 0;
+	while (pos <= result.err.size())
+	{
+		size_t nl = result.err.find(L'\n', pos);
+		wstring line = result.err.substr(pos, nl == wstring::npos ? wstring::npos : nl - pos);
+		pos = nl == wstring::npos ? result.err.size() + 1 : nl + 1;
+		while (!line.empty() && (line.back() == L'\r' || line.back() == L' '))
+			line.pop_back();
+		if (line.empty() || line[0] != L'{')
+			continue;
+		JParser parser;
+		JVal value;
+		if (!parser.Parse(line, value) || value.kind != JVal::J_OBJ)
+			continue;
+		const JVal *kind = value.Get(L"kind");
+		if (!kind || kind->kind != JVal::J_STR || kind->str != L"diagnostic")
+			continue;
+		if (!first)
+			out += L',';
+		first = false;
+		JsonAppend(out, value);
+	}
+	out += L"]}";
+	return true;
+}
+
+bool Tool_Check(const JVal &args, wstring &out, wstring &err_msg) { return ToolEngine(args, out, err_msg, L"check"); }
+bool Tool_Run(const JVal &args, wstring &out, wstring &err_msg) { return ToolEngine(args, out, err_msg, L"run"); }
+bool Tool_Test(const JVal &args, wstring &out, wstring &err_msg) { return ToolEngine(args, out, err_msg, L"test"); }
 
 // ---------------------------------------------------------------------------
 // Tool registry (alphabetical, matching the reference's Map enumeration order;
@@ -1219,10 +1357,18 @@ const ToolDef g_McpTools[] =
 	  L"Tree-sitter symbol outline (classes/functions/methods/properties with line ranges and byte spans) for one AHK file. Real parse, not regex.",
 	  L"{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"string\",\"description\":\"Absolute path to the .ahk file\"}},\"required\":[\"file\"]}",
 	  Tool_AstOutline },
+	{ L"check",
+	  L"Parse one AHK file with the real engine in a throwaway process (no execution). Returns ok, exitCode and JSON diagnostics. Combined stdout/stderr capture is capped at 8 MiB of raw bytes; outputLimitExceeded reports a terminated, truncated capture.",
+	  L"{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"string\",\"description\":\"Path to the .ahk file\"},\"cwd\":{\"type\":\"string\",\"description\":\"Working directory for the child (default: server's)\"},\"timeout_ms\":{\"type\":\"integer\",\"description\":\"Kill the child after this many ms (default 30000)\"}},\"required\":[\"file\"]}",
+	  Tool_Check },
 	{ L"get_source_context",
 	  L"Return source lines around file:line, with the target line flagged.",
 	  L"{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"string\",\"description\":\"Absolute path to the file\"},\"line\":{\"type\":\"integer\",\"description\":\"1-based line number to center on\"},\"radius\":{\"type\":\"integer\",\"description\":\"Lines of context before/after (default 5)\"}},\"required\":[\"file\",\"line\"]}",
 	  Tool_GetSourceContext },
+	{ L"run",
+	  L"Run one AHK script headless with /Diag=json and capture stdout, stderr, exit code and diagnostics. The process tree is killed at timeout_ms or after 8 MiB of combined raw output; outputLimitExceeded reports a truncated capture.",
+	  L"{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"string\",\"description\":\"Path to the .ahk file\"},\"args\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Script arguments (A_Args)\"},\"cwd\":{\"type\":\"string\",\"description\":\"Working directory for the child (default: server's)\"},\"timeout_ms\":{\"type\":\"integer\",\"description\":\"Kill the child after this many ms (default 30000)\"}},\"required\":[\"file\"]}",
+	  Tool_Run },
 	{ L"server_status",
 	  L"Live status/health of this MCP server: uptime, total requests, request counts by method, per-tool call counts, error count, PID and engine version.",
 	  L"{\"type\":\"object\",\"properties\":{},\"required\":[]}",
@@ -1231,11 +1377,20 @@ const ToolDef g_McpTools[] =
 	  L"List functions, classes, hotkeys and labels in one AHK file (fast regex scan).",
 	  L"{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"string\",\"description\":\"Absolute path to the .ahk file\"}},\"required\":[\"file\"]}",
 	  Tool_SourceOutline },
+	{ L"test",
+	  L"Run one AHK test script with the test subcommand in a child process and capture stdout, stderr and diagnostics. Combined raw output is capped at 8 MiB; outputLimitExceeded reports a terminated, truncated capture.",
+	  L"{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"string\",\"description\":\"Path to the test script\"},\"args\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Script arguments (A_Args)\"},\"cwd\":{\"type\":\"string\",\"description\":\"Working directory for the child (default: server's)\"},\"timeout_ms\":{\"type\":\"integer\",\"description\":\"Kill the child after this many ms (default 30000)\"}},\"required\":[\"file\"]}",
+	  Tool_Test },
 	{ L"workspace_symbols",
 	  L"Scan all *.ahk files under a root for function and class definitions.",
 	  L"{\"type\":\"object\",\"properties\":{\"root\":{\"type\":\"string\",\"description\":\"Root directory to scan (default: working dir)\"},\"query\":{\"type\":\"string\",\"description\":\"Only return symbols whose name contains this substring\"},\"max_results\":{\"type\":\"integer\",\"description\":\"Cap on returned symbols (default 200)\"}},\"required\":[]}",
 	  Tool_WorkspaceSymbols },
 };
+
+size_t McpToolCount()
+{
+	return sizeof(g_McpTools) / sizeof(g_McpTools[0]);
+}
 
 const ToolDef *FindTool(const wstring &name)
 {
