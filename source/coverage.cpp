@@ -73,12 +73,14 @@ namespace
 	{
 		if (!aText || !*aText)
 			return;
-		int n = WideCharToMultiByte(CP_UTF8, 0, aText, -1, nullptr, 0, nullptr, nullptr);
-		if (n <= 1)
+		// Convert without the terminator so the written length equals the resize.
+		int len = (int)_tcslen(aText);
+		int n = WideCharToMultiByte(CP_UTF8, 0, aText, len, nullptr, 0, nullptr, nullptr);
+		if (n <= 0)
 			return;
 		size_t start = aOut.size();
-		aOut.resize(start + n - 1);
-		WideCharToMultiByte(CP_UTF8, 0, aText, -1, &aOut[start], n, nullptr, nullptr);
+		aOut.resize(start + n);
+		WideCharToMultiByte(CP_UTF8, 0, aText, len, &aOut[start], n, nullptr, nullptr);
 	}
 
 	// Open-write-flush-close, like the crash log, so the bytes reach the disk

@@ -196,7 +196,7 @@ jobs:
     needs: build
     runs-on: windows-latest
     permissions:
-      contents: write   # badge branch push (push to alpha only)
+      contents: read    # the badge push lives in its own job below
     steps:
     - uses: actions/checkout@v4
 
@@ -274,18 +274,32 @@ jobs:
           diag.jsonl
         if-no-files-found: ignore
 
-    # The README badge reads coverage.json from the `badges` branch through
-    # img.shields.io/endpoint. No third-party service, no extra secrets: the
-    # branch is a single-commit orphan that is force-pushed on every alpha push.
+  # The README badge reads coverage.json from the `badges` branch through
+  # img.shields.io/endpoint. No third-party service, no extra secrets: the
+  # branch is a single-commit orphan that is force-pushed on every alpha push.
+  # Separate job on purpose: the write token never reaches the job that runs
+  # checkout-controlled test and QA scripts.
+  badge:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/alpha'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: test-reports
+        path: reports
+
     - name: Publish coverage badge
-      if: github.event_name == 'push' && github.ref == 'refs/heads/alpha'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         set -e
+        test -f reports/coverage/badge.json
         rm -rf badge-branch && mkdir badge-branch
-        cp coverage/badge.json badge-branch/coverage.json
+        cp reports/coverage/badge.json badge-branch/coverage.json
         cd badge-branch
         git init -q -b badges
         git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \

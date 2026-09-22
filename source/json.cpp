@@ -324,13 +324,19 @@ Array *JsonArray::Clone()
 
 JsonObject::~JsonObject()
 {
-	for (index_t k = 0; k < mCount; ++k)
+	// Detach before releasing, as ClearItems() does: a __Delete callback reached
+	// through a value must not find live slots on the container being destroyed.
+	Slot *slots = mSlot;
+	index_t count = mCount;
+	mSlot = nullptr;
+	mCount = mCapacity = 0;
+	DropIndex();
+	for (index_t k = 0; k < count; ++k)
 	{
-		free(mSlot[k].key);
-		mSlot[k].value.Free();
+		free(slots[k].key);
+		slots[k].value.Free();
 	}
-	free(mSlot);
-	free(mIndex);
+	free(slots);
 }
 
 JsonObject *JsonObject::Create()

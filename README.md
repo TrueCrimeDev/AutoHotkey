@@ -51,7 +51,7 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 | **Runtime error** | Modal MsgBox; nothing on `stderr` | Formatted text on `stderr`, with source context and stack |
 | **Machine-readable errors** | — | `/Diag=json` emits a one-line JSON diagnostic per error |
 | **Exit code on failure** | `0` | Distinct non-zero codes per failure class (10–14, 64, 130) |
-| **Unattended runs** | Dialogs block forever | `/Headless` suppresses every interactive prompt |
+| **Unattended runs** | Dialogs block forever | `/Headless` suppresses the engine's own prompts (script `MsgBox` calls still show) |
 | **Syntax checking** | Run it and see | `check` subcommand: parse-only, exit `0`/`13` |
 | **Single-script tests** | Roll your own | `test` subcommand: exit `0`/`14` |
 | **Crash forensics** | Lost when the window closes | `/CrashLog=` append-only event log that survives hard crashes |
@@ -440,9 +440,11 @@ Details: [`updates.md` §19](updates.md). `/Trace=json` (§20) and the native MC
 
 ## CI for AutoHotkey libraries
 
-GitHub's Windows runners run in an interactive session, so GUI and hotkey code works;
-`/Headless` keeps dialogs from blocking. A library repo needs three things: the engine, a
-single-process test entry point, and the `test` subcommand.
+GitHub's Windows runners run in an interactive session, so GUI and hotkey code works.
+`/Headless` suppresses the engine's own prompts (error dialogs, startup warnings), but a
+script's own `MsgBox` still opens a real dialog and blocks the job, so keep those out of test
+paths. A library repo needs three things: the engine, a single-process test entry point, and
+the `test` subcommand.
 
 **1. Fetch the engine** from the latest tagged release (seconds, no build):
 

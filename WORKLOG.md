@@ -327,3 +327,32 @@ unlogged loop session between 3 and now.)
 - New qa suites: `test_inspect.ahk` (58), `test_processpipe.ahk`; Python:
   trace JSON cases, MCP tool cases.
 
+
+### Session 10 (2026-09-22) — PR #31: console cleanup landed as five commits
+
+- Committed the 2026-09-19 cleanup tree (engine, tests, debugger-tool, ci,
+  docs) on `feat/console-cleanup-20260919` → PR #31 against `alpha`. Gate
+  14/14 against the MSVC x64 (Ninja) build of the exact tree before pushing.
+- **CI MSVC arm failed (RC2135)**: the manifest path reached rc.exe through
+  `$<$<COMPILE_LANGUAGE:RC>:AHK_MANIFEST_PATH=…>`, which the Visual Studio
+  generator (`-A x64`/`-A Win32`) evaluates to nothing, so rc.exe fell back to
+  the MSBuild-only `temp\AutoHotkey.exe.manifest`. Local Ninja+MSVC builds
+  never showed it, and a stale `temp/` manifest masked it on this machine.
+  Fix: define `AHK_MANIFEST_PATH` target-wide (forward slashes, C++ ignores
+  it) and add `OBJECT_DEPENDS` on the generated manifest. Reproduced with
+  `-G "Visual Studio 18 2026" -A x64` (BuildTools-bundled CMake; the system
+  CMake 4.0.3 predates that generator) with `temp/` renamed away: build
+  green, `generated/AutoHotkey.exe.manifest` embedded.
+- Local VS-generator gotcha: the WSL-inherited `%PATH%` breaks tool lookup
+  inside MSBuild (`cscript.exe` "not recognized", ml64 exit 1). Use a minimal
+  `set PATH=C:\WINDOWS\system32;C:\WINDOWS;C:\Program Files\Git\cmd` before
+  `vcvarsall`.
+- Copilot review on #31, all four applied: badge push moved to its own
+  `badge` job so the `test` job token is read-only; `Coverage::AppendUtf8`
+  converts by explicit length (no terminator written past `size()`);
+  `JsonObject::~JsonObject` detaches storage before releasing values, like
+  `ClearItems`; README no longer claims `/Headless` keeps script `MsgBox`
+  dialogs from blocking.
+- Home.vue was a 0-byte file in the working tree; restored from HEAD.
+- #16 is superseded by the workflow in #31; #17 conflicts with the shared
+  dbgp-protocol refactor and needs a rebase.
