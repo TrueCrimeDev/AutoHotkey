@@ -4,99 +4,88 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-An MCP-based debugging ecosystem for AutoHotkey v2 with LLM integration. Captures errors, analyzes them with AI, and auto-applies fixes.
+A native AutoHotkey `2.1-alpha.31+Console` fork. The engine supplies shell
+commands, structured diagnostics, Eval, JSON, Inspect, ProcessPipe, source
+introspection, coverage, and an MCP server. The TypeScript debugger integrations
+under `debugger-tool/` are separate consumers of the engine's DBGp protocol.
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     MCP Server                               │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ DBGp Client │  │ Error Queue │  │ Claude API (optional)│  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-│                                                              │
-│  Tools: capture_error, analyze_error, apply_fix              │
-│         debug_*, breakpoint_*, variables_*, get_source_context│
-└─────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-        Claude Desktop    Cursor/IDE    Headless Script
-```
+- `source/AutoHotkey.cpp` owns CLI dispatch and GUI/Console entrypoint behavior.
+- `source/mcp_server.cpp` serves native MCP over stdio without loading an AHK
+  helper script. Start it with `AutoHotkey64Console.exe mcp`.
+- Runtime features are registered in `source/lib/functions.h`; consult their
+  implementations and `updates.md` before inventing helper dependencies.
+- `debugger-tool/mcp-ahk/mcp.ahk` is an alternate script implementation with a
+  smaller tool surface. `debugger-tool/mcp-server/` and `ahk-error-agent/` are
+  TypeScript DBGp clients/adapters; they are not the native server.
+- CMake shares engine objects across GUI, Console, and optional Harness targets.
+  Read `BUILD.md` for supported compiler routes and exact-artifact verification.
 
-**Core Loop:** `capture_error → analyze_error → apply_fix`
+Do not infer the installed engine version or user-wide MCP registration from
+this document. The checked-in `.mcp.json` currently starts the native `mcp` verb
+using a WSL path; Windows hosts need a Windows executable path in their own
+configuration. Inspect the active host's configuration before changing it.
 
-## Running Scripts
+## Running and testing
 
-```bash
-# Run any AHK script (from PowerShell) with the custom console build
-& "C:\Users\uphol\Documents\Design\Coding\AutoHotkey\bin\AutoHotkey64.exe" ScriptName.ahk
+Use the exact fresh engine path. An isolated build need not replace `bin/` or
+modify an installed alias:
 
-# Run any AHK script (from WSL) with the custom console build
-/mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe ScriptName.ahk
-
-# Run with debugger enabled (from PowerShell)
-& "C:\Users\uphol\Documents\Design\Coding\AutoHotkey\bin\AutoHotkey64.exe" /Debug ScriptName.ahk
-
-# Run with debugger enabled (from WSL, connects to MCP server on port 9000)
-/mnt/c/Users/uphol/Documents/Design/Coding/AutoHotkey/bin/AutoHotkey64.exe /Debug ScriptName.ahk
-
-# Syntax-check / test with the engine (exit 13 = check fail, 14 = test fail)
-bin/AutoHotkey64.exe check /ErrorStdOut ScriptName.ahk
-bin/AutoHotkey64.exe test /ErrorStdOut ScriptName.ahk
-
-# Regression suite (exit code = failing assertions + crashes)
-bin/AutoHotkey64.exe /ErrorStdOut 'qa\run.ahk'
-
-# In-process MCP server (mcp.ahk runs INSIDE the engine; registered as ahk-mcp)
-bin/AutoHotkey64.exe debugger-tool/mcp-ahk/mcp.ahk
-
-# Native MCP server verb (compiled into the engine — source/mcp_server.cpp;
-# same tools/protocol as mcp.ahk, verified by tests/conformance_native.py)
-bin/AutoHotkey64.exe mcp
-
-# Same tools from the shell, no MCP client needed
-debugger-tool/mcp-ahk/ahkmcp list
-debugger-tool/mcp-ahk/ahkmcp ast_outline 'C:\path\x.ahk'
-
-# Start error agent (alternative to MCP)
-cd debugger-tool/ahk-error-agent && npm run build && node dist/index.js -v -w
+```powershell
+$engine = (Resolve-Path out/msvc/x64/AutoHotkey64Console.exe).Path
+& $engine --version
+& $engine --capabilities
+& $engine run ScriptName.ahk
+& $engine check /Diag=json ScriptName.ahk
+& $engine test /Headless tests/run.ahk
+& $engine /Headless '/Coverage=coverage/tests.lcov' test tests/run.ahk
+& $engine mcp
+python tests/run_console_gate.py $engine
+python tools/check_all.py $engine
+. ./tools/ahk.ps1 -EnginePath $engine
 ```
 
-## Key Directories
+`check` returns 13 for syntax failure; ordinary parse errors return 12, uncaught
+runtime errors 10, and explicit test failures 14. Read `--capabilities` for the
+complete exit-code contract. `/Headless` and `check` are not sandboxes: loading
+can perform operations such as `#DllLoad`. Do not execute arbitrary untrusted
+scripts merely to validate them.
+
+## Key directories
 
 | Directory | Purpose |
-|-----------|---------|
-| `debugger-tool/mcp-server/` | MCP server for Claude/Cursor integration |
-| `debugger-tool/ahk-error-agent/` | Headless error capture agent |
-| `debugger-tool/examples/` | Python & C++ debugger examples |
-| `source/` | AutoHotkey C++ source (fork with _ScriptGetLines) |
-| `Dim_Echo_Box/` | Real-time variable monitoring |
-| `training/` | AHK v2 learning examples |
+| --- | --- |
+| `source/` | Fork engine and upstream runtime |
+| `qa/`, `tests/` | Native regression scripts and protocol/shell integration checks |
+| `examples/native-mcp/` | Native MCP use cases and a script client example |
+| `debugger-tool/mcp-server/` | Legacy TypeScript MCP/DBGp adapter |
+| `debugger-tool/ahk-error-agent/` | Separate error capture agent |
+| `debugger-tool/mcp-ahk/` | Alternate script MCP implementation and CLI adapter |
+| `out/`, `build_*/` | Isolated generated binaries and build trees |
 
-## MCP Tools
+## Native MCP tools
 
-Two servers matter day to day (both use WSL-style command paths in config —
-Windows-style `node C:\...` commands silently fail to spawn under the WSL CLI):
+Query MCP `tools/list` for current names and input schemas; do not hardcode the
+native registry count or assume parity with the script adapter. Engine-level
+commands/features come from `--capabilities`, while `server_status` reports the
+live server's registry and counters.
 
-**`ahk` (global, `~/.claude.json`)** — the main toolbox: `AHK_Run`, `AHK_Lint`,
-`AHK_Diagnostics`, the `uia_*` UI-automation funnel, and `AHK_Debug_DBGp`,
-which packs the whole DBGp loop into one tool (actions: start/stop/status, run,
-step_into/over/out, capture_error, analyze_error, apply_fix,
-breakpoint_set/remove/list, variables_get, evaluate, stack_trace).
+| Tools | Purpose |
+| --- | --- |
+| `ast_outline` | Tree-sitter structure and spans; requires the x64 grammar DLL |
+| `source_outline`, `workspace_symbols` | Lightweight source/symbol scans |
+| `get_source_context` | Source lines around a location |
+| `check`, `run`, `test` | Child-engine execution with diagnostics and captured streams |
+| `server_status` | Engine identity, health, and counters |
 
-**`ahk-mcp` (project, `.mcp.json`)** — `mcp.ahk` running inside the fork engine:
+Native execution tools default to a 30-second timeout (`timeout_ms`: 1–600000)
+and an 8 MiB combined raw-output capture limit. Hitting the capture limit
+terminates the job and returns `ok:false`, `outputLimitExceeded:true`, and
+`captureLimitBytes:8388608`. Inspect `timedOut` separately.
 
-| Tool | Description |
-|------|-------------|
-| `ast_outline` | Tree-sitter AST outline (classes/functions/methods/properties + line ranges & byte spans); real parse, not regex. Uses the TSParse engine. |
-| `get_source_context` | Get source lines around file:line |
-| `workspace_symbols` | Scan .ahk files for definitions by name |
-| `server_status` | Server/engine info |
-
-Same tools from the shell: `debugger-tool\mcp-ahk\ahkmcp <tool> [args]`.
-The legacy Node server (`debugger-tool/mcp-server`) still exists but is no
-longer registered; `AHK_Debug_DBGp` replaced it.
+No `#Include McpClient.ahk` is required to run the native server. That file is a
+client helper only for an AHK script which wants to call another MCP process.
 
 ## _ScriptGetLines
 
@@ -128,7 +117,7 @@ AutoHotkey_custom.exe /include include/cloudahk-error-handler-enhanced.ahk scrip
 - Use `ComObject()` not `ComObjCreate()`
 - ByRef uses `&var` syntax
 - GUI uses object syntax: `Gui()` not commands
-- Escape backslashes in paths: `\\` or use `/`
+- Backslashes are literal in AHK strings; use ordinary Windows paths. The escape character is the backtick.
 - **Always use parentheses on every function call**: `Print("text")` not `Print "text"`, `MsgBox("hi")` not `MsgBox "hi"`, `Eval(expr)` not `Eval expr`. Applies to ALL functions — built-ins, BIFs, user-defined, fork additions. No command-style calls.
 - **Backticks are escape characters inside double-quoted strings.** `"`a"` is alert/bell, not a literal backtick. To quote code/identifiers inside Print strings, use single quotes: `Print("'i32' is removed")`. Backticks in `;` comments and `/* */` blocks are fine.
 
@@ -141,10 +130,10 @@ These do not exist in upstream AutoHotkey. Use them directly — no `#include`, 
   - `Print("plain text")` → write as-is (single-arg form never goes through Format, so literal `{ }` survive)
   - `Print("x={}, y={}", x, y)` → calls `Format(Fmt, Values*)` then writes
   - **Don't write `Print(Format("...", x))`** — pass the args directly to `Print` instead.
-  - Silent no-op when no console is attached.
-- **`Eval(Expression)`** — runtime expression eval. Gated by `#EnableEval` directive or `/Eval` CLI flag. Throws `SyntaxError` on parse failure. See `updates.md` section 1.
+  - Writes to an attached console or redirected stdout when available.
+- **`Eval(Expression)`** — runtime expression eval. Gated by `#EnableEval` directive or `/Eval` CLI flag. Throws `SyntaxError` on parse failure and a catchable `ValueError` above 16,384 UTF-16 code units. The REPL uses the same limit and continues after an oversized expression. Compiled Eval storage still has process lifetime to preserve closures. See `updates.md` section 1.
 - **`SyntaxError`** — exception class for parse errors. Has `Message`, `What`, `Extra`, `Line`, `Column`.
-- **`Check(Source)`** — validate AHK source with automatic oracle parity: spawns this exe in check mode (`/Diag=json /Check`) against a temp file in a child process, so host state is untouched and the verdict matches the CLI. Returns `{ Ok, Diagnostics, Raw }`: `Ok` is 1/0 (child exit 0 = valid, 13 = syntax error); `Diagnostics` is an Array (empty when Ok=1) of `{ Severity, Type, Code, Message, Extra, File, Line, Column }`; `Raw` is the captured child output. On spawn failure it returns Ok=0 with a synthetic diagnostic (does not throw). The check-mode child only parses (never executes) the temp source, so it is safe by construction. This — not `TSParse(...).HasError` — is the correct 'does it parse?' check.
+- **`Check(Source)`** — validate AHK source with automatic oracle parity: spawns this exe in check mode (`/Diag=json /Check`) against a temp file in a child process, so host state is untouched and the verdict matches the CLI. Returns `{ Ok, Diagnostics, Raw }`: `Ok` is 1/0 (child exit 0 = valid, 13 = syntax error); `Diagnostics` is an Array (empty when Ok=1) of `{ Severity, Type, Code, Message, Extra, File, Line, Column }`; `Raw` is the captured child output. Its shared child runner has a 30-second timeout and 8 MiB combined output budget; spawn, timeout, or output-limit failure returns Ok=0 with a synthetic diagnostic. `Raw` combines stderr then stdout, preserving each stream's order without promising cross-stream chronology. Temporary-file and process-tree cleanup are automatic. The check-mode child skips ordinary script execution, but load-time directives such as `#DllLoad` can still have side effects; it is not a sandbox. This — not `TSParse(...).HasError` — is the correct 'does it parse?' check.
 - **`JSON`** — native JSON class, no include. `JSON.Parse(Text, Reviver?, Options?)`
   and `JSON.Stringify(Value, Replacer?, Space?, Options?)`, aliased `Load`/`Dump`;
   `JSON.ParseAt(Text, &Pos, Options?)` parses one value from `Pos` and advances it
@@ -152,7 +141,7 @@ These do not exist in upstream AutoHotkey. Use them directly — no `#include`, 
   streams — the wire shape of newline-delimited JSON-RPC and streamed feeds.
   `Space` takes an indent width or a literal string. Objects parse into an ordered,
   case-sensitive `JSON.Object` (Map-like API plus `.Keys`/`.Values` in document
-  order), so a config file survives parse → edit → stringify byte-exact.
+  order), preserving property order and key case; serialization can change whitespace and number formatting.
   `true`/`false`/`null` reach script as `1`/`0`/`""` — the container remembers what
   they were, so they re-emit as keywords. Arrays parse to `JSON.Array` (derives
   from `Array`, so `is Array` and every Array method still work) and carry the
@@ -166,13 +155,15 @@ These do not exist in upstream AutoHotkey. Use them directly — no `#include`, 
   (a `ValueError` subclass) carrying line/col/pos and a `[Code]`; depth and
   circular references are catchable. Conformance: nst/JSONTestSuite 95/95 y_
   and 188/188 n_ (`qa/tests/test_jsonsuite.ahk`).
+- **`Inspect(Value, Depth := 2, MaxItems := 100)`** — JSON description of a live value: `type`, own `properties`, names of `getters`/`setters`/`methods` (never invoked), `items`/`entries`, `truncated`/`circular` flags. The REPL prints object results with it. `updates.md` §18.
+- **`ProcessPipe(Command, Args?, WorkingDir?)`** — child process with UTF-8 stdio pipes in a job object: `Send(text, timeout?)`/`SendLine`, `ReadLine(timeout)`/`Read`/`ReadStdErr`, `Wait`, `Close`, `Kill`, `PID`/`Running`/`ExitCode`/`AtEOF`. Releasing the object kills the tree. `updates.md` §19.
 - **`TSParse(Source)`** — parse AHK source with the bundled tree-sitter grammar; returns a snapshot tree of plain AHK objects. Lazily loads `bin/tree-sitter-ahk.dll` on first call. Returns `{ Root, Source, HasError }`; each node has `Type`, `StartByte`/`EndByte`, `StartRow`/`StartCol`/`EndRow`/`EndCol`, `Text`, `IsNamed`/`IsMissing`/`IsError`/`IsExtra`/`HasError`, `FieldName`, `Children`, `NamedChildren`, `Truncated`. For **structure only** — the grammar is incomplete (false `HasError` on valid code, e.g. typed Structs, fat-arrow methods, `^j::` hotkeys); do not use `TSParse(...).HasError` as a validity check. For 'does it parse?' use the `Check` BIF above (real-engine oracle), or the `check` CLI subcommand. Full docs: `docs/TREE_SITTER.md`.
 
 Full reference: `updates.md` in the repo root.
 
 ## Design Documents
 
-- `docs/plans/2026-01-11-interactive-llm-debugger-design.md` - Current architecture
+- `docs/plans/2026-01-11-interactive-llm-debugger-design.md` - Historical debugger integration design
 
 ## DBGp Protocol
 
@@ -189,21 +180,18 @@ Key commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`,
 
 ---
 
-# Current State & Open Items (updated 2026-09-11)
+# Current State & Open Items (updated 2026-09-19)
 
-- Local engine builds use `2.1-alpha.31+Console` (upstream `v2.1-alpha.31`
-  merged in `c73ae823`; `bin/AutoHotkey64.exe` was rebuilt on 2026-09-11 from
-  `ef2047d4` via the CMake/MSVC route and passes the native gate 9/9, and
-  `bin_harness/AutoHotkey64Harness.exe` carries the mingw alpha.31 build);
-  `--version` identifies the actual source revision, compiler, and architecture. Windows
-  MSVC and mingw-w64 builds are supported. CMake with Ninja from a Visual
-  Studio developer prompt works with Build Tools 18; see BUILD.md for an
-  isolated output directory. Build and test locally when requested; remote
-  publishing is a separate action.
-- `qa/` is the fork regression suite (subprocess-per-test; see `qa/README.md`).
-  Keep it green: `python tests/run_console_gate.py bin/AutoHotkey64.exe` → exit 0.
-- `WORKLOG.md` tracks the verification-layer backlog (struct/language/docs
-  tests) and per-session findings.
+- Target language version: `2.1-alpha.31+Console`, based on upstream
+  `v2.1-alpha.31`. Always verify the actual executable's `--version` and hash;
+  historical files in `bin/` or `bin_harness/` may be stale.
+- CMake builds GUI and Console by default, sharing the common runtime objects.
+  Harness is an explicit optional target. CI gates Console for MSVC x64,
+  MSVC Win32, and mingw x64, then publishes tag releases and checksums.
+- `qa/` is the subprocess regression suite; `tests/run_console_gate.py ENGINE`
+  is the aggregate boundary. Use an explicit engine path from `BUILD.md`.
+- `WORKLOG.md` tracks verification results and outstanding language/docs work.
+  Build and test locally when requested; remote publishing is a separate action.
 
 Open items:
 - [x] Stale Struct type-string examples (`i32`/`u32`/`u8`/`uptr` → `Int32`/

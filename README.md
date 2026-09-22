@@ -8,8 +8,12 @@ stock AutoHotkey.
 ![engine](https://img.shields.io/badge/engine-2.1--alpha.31%2BConsole-5B9FEF)
 ![based on](https://img.shields.io/badge/based%20on-AutoHotkey%20v2.1--alpha-22D3EE)
 [![Build AutoHotkey](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml/badge.svg)](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml)
+![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/TrueCrimeDev/AutoHotkey/badges/coverage.json)
 ![license](https://img.shields.io/badge/license-GPL--2.0-7BC96F)
 ![platform](https://img.shields.io/badge/platform-Windows%20x64-808080)
+[![docs](https://img.shields.io/badge/docs-Console%20%2B%20ClautoHotkey-A855F7)](https://truecrimedev.github.io/AutoHotkey/)
+
+**Docs site:** [truecrimedev.github.io/AutoHotkey](https://truecrimedev.github.io/AutoHotkey/) — Console engine guides plus the [ClautoHotkey harness](https://truecrimedev.github.io/AutoHotkey/clautohotkey/harness.html) (static and dry-run gates for Claude Code).
 
 ---
 
@@ -24,6 +28,10 @@ stock AutoHotkey.
 - [Native JSON and local tools](#native-json-and-local-tools)
 - [REPL](#repl)
 - [Crash logging](#crash-logging)
+- [Line coverage](#line-coverage)
+- [Inspecting live objects](#inspecting-live-objects)
+- [Driving child processes](#driving-child-processes)
+- [CI for AutoHotkey libraries](#ci-for-autohotkey-libraries)
 - [AI-assisted debugging](#ai-assisted-debugging)
 - [Repository map](#repository-map)
 - [Documentation](#documentation)
@@ -368,6 +376,117 @@ Event types, reason names, `OnError` interaction, and limitations: [`updates.md`
 
 ---
 
+## Line coverage
+
+`/Coverage=<path>` writes an LCOV tracefile at exit with no script instrumentation. The
+parser supplies the executable lines, the interpreter's per-line dispatch counts the hits,
+and alpha-only syntax is counted correctly because the engine itself is the source of truth.
+
+```bat
+bin\AutoHotkey64.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
+python tools\lcov_summary.py "coverage/**/*.lcov" --include "^Lib/" --badge coverage\badge.json
+```
+
+```text
+SF:C:\lib\Async.ahk
+DA:12,1
+DA:13,0
+LF:2
+LH:1
+end_of_record
+```
+
+Structural lines (`else`, `catch`, `case`, braces, function headers) are not reported, so
+they never count against you. The file is rewritten open-write-flush-close on every exit
+path, including uncaught errors and fatal faults, so a crashing test still leaves partial
+data. Details: [`updates.md` §17](updates.md).
+
+---
+
+## Inspecting live objects
+
+`Inspect(value, depth := 2, maxItems := 100)` returns JSON describing a value without
+running any of its code: own values, the names of getters, setters and methods (own and
+inherited), array items, map entries, function signatures. Cycles and depth limits are
+reported, not followed. The REPL prints object results this way too.
+
+```autohotkey
+btn := Gui().AddButton("w200", "Save")
+Print(Inspect(btn, 1))
+; {"type":"Gui.Button","properties":{},"getters":["Text","Type","Enabled",...],"methods":["Focus","Move","OnEvent",...]}
+```
+
+Details: [`updates.md` §18](updates.md).
+
+---
+
+## Driving child processes
+
+`ProcessPipe` runs a program with UTF-8 stdin/stdout/stderr pipes inside a job object, so
+releasing the object or calling `Kill()` takes the whole process tree with it. Waits keep
+timers and hotkeys running. It is the transport for hosting a JSONL agent server such as
+Codex's app-server from a script.
+
+```autohotkey
+p := ProcessPipe("codex", ["app-server"])
+p.SendLine(JSON.Stringify({method: "initialize", id: 1, params: {}}))
+reply := JSON.Parse(p.ReadLine(30))   ; TimeoutError after 30 s
+```
+
+Details: [`updates.md` §19](updates.md). `/Trace=json` (§20) and the native MCP server's
+`check`/`run`/`test` tools (§21) close the loop from the other side.
+
+---
+
+## CI for AutoHotkey libraries
+
+GitHub's Windows runners run in an interactive session, so GUI and hotkey code works;
+`/Headless` keeps dialogs from blocking. A library repo needs three things: the engine, a
+single-process test entry point, and the `test` subcommand.
+
+**1. Fetch the engine** from the latest tagged release (seconds, no build):
+
+```yaml
+runs-on: windows-latest
+steps:
+  - uses: actions/checkout@v4
+  - run: gh release download -R TrueCrimeDev/AutoHotkey -p AutoHotkey64.exe -D bin
+    env: { GH_TOKEN: ${{ github.token }} }
+```
+
+**2. Write `tests/run.ahk`** that `#Include`s the framework and every `tests/*.test.ahk`
+(copy [`tests/Test.ahk`](tests/Test.ahk) and [`tests/run.ahk`](tests/run.ahk) from this
+repo). Test files register cases:
+
+```autohotkey
+Test.Case("parses a config", () => Assert.Eq(JSON.Parse('{"a":1}')["a"], 1))
+Test.Case("rejects garbage", () => Assert.Throws(() => JSON.Parse("{"), JSONError))
+```
+
+`Test.Run()` prints one line per case, exits 14 on any failure, emits `::error` annotations
+under GitHub Actions, and writes JUnit XML when `AHK_TEST_JUNIT` is set.
+
+**3. Run it** with coverage and machine-readable diagnostics:
+
+```yaml
+  - run: bin\AutoHotkey64.exe /Headless /Diag=json /Coverage=coverage.lcov test tests\run.ahk 2>diag.jsonl
+  - if: failure()
+    shell: pwsh
+    run: |
+      Get-Content diag.jsonl | ConvertFrom-Json | % {
+        "::error file=$($_.file),line=$($_.line)::$($_.type): $($_.message)" }
+```
+
+Uncaught errors become PR annotations for free. For a README number, feed `coverage.lcov`
+to `codecov/codecov-action`, or copy this repo's no-third-party route from
+[`build.yml`](.github/workflows/build.yml): `tools/lcov_summary.py` computes `LH/LF`,
+writes a shields.io endpoint JSON, and the workflow force-pushes it to a `badges` branch
+that `img.shields.io/endpoint` reads. A separate `check` job
+(`python tools/check_all.py bin/AutoHotkey64.exe`) parses every `.ahk` in two seconds
+before the test job starts.
+
+---
+
 ## AI-assisted debugging
 
 The fork preserves AutoHotkey's DBGp debugger and pairs it with an MCP server
@@ -403,6 +522,8 @@ bin\AutoHotkey64.exe /Debug your_script.ahk    # connects to localhost:9000
 
 Tool-by-tool usage lives in [`debugger-tool/mcp-server/README.md`](debugger-tool/mcp-server/README.md).
 
+For Claude Code, the [ClautoHotkey](https://github.com/TrueCrimeDev/ClautoHotkey) plugin wraps this engine in post-edit validation hooks and a grading harness. The harness docs are on the site: [Static & dry-run gates](https://truecrimedev.github.io/AutoHotkey/clautohotkey/harness.html) and [MCP integration](https://truecrimedev.github.io/AutoHotkey/clautohotkey/mcp.html).
+
 ---
 
 ## Repository map
@@ -414,7 +535,9 @@ Tool-by-tool usage lives in [`debugger-tool/mcp-server/README.md`](debugger-tool
 | [`debugger-tool/ahk-error-agent/`](debugger-tool/ahk-error-agent/) | Headless error-capture and fix-automation agent |
 | [`examples/`](examples/) | Runnable feature demos — `alpha21/`, `alpha22/`, plus structs, GUIs, and ANSI showcases |
 | `examples/Alpha22_Example.ahk` … `examples/Alpha30_Example.ahk` | Per-version language showcases |
-| `tests/` | Test suite for `Eval`, crash logging, and exit codes |
+| `tests/` | `run.ahk` + `*.test.ahk` single-process suite, `Test.ahk` framework, Python console-gate suites |
+| [`qa/`](qa/) | Subprocess-per-test interpreter regression suite |
+| `tools/` | `check_all.py` (parse every `.ahk`), `lcov_summary.py` (merge coverage, badge JSON) |
 | [`BUILD.md`](BUILD.md) | Build instructions |
 | [`updates.md`](updates.md) | Complete fork reference |
 
@@ -424,6 +547,8 @@ Tool-by-tool usage lives in [`debugger-tool/mcp-server/README.md`](debugger-tool
 
 | Document | Covers |
 |---|---|
+| [Docs site](https://truecrimedev.github.io/AutoHotkey/) | Console + ClautoHotkey guides, recipes, showcase (built from `website/`) |
+| [ClautoHotkey harness](https://truecrimedev.github.io/AutoHotkey/clautohotkey/harness.html) | Static & dry-run gates, `ahk-harness/result@1` schema, `CheckResults.py` |
 | [`updates.md`](updates.md) | Authoritative reference for every fork addition |
 | [`BUILD.md`](BUILD.md) | Toolchains, build configs, troubleshooting |
 | [`CLAUDE.md`](CLAUDE.md) | Project orientation for AI agents |

@@ -273,3 +273,57 @@ unlogged loop session between 3 and now.)
   against the copied `bin/AutoHotkey64.exe`. Previous alpha.30 exe kept at
   `tests/tmp/AutoHotkey64.exe.bak` (gitignored scratch).
 
+
+### Session 8 (2026-09-15) — `/Coverage=` LCOV, single-process test runner, CI shape
+
+- **Engine:** `source/coverage.{h,cpp}` + `/Coverage=<path>` (`--coverage=`).
+  Lines found = every `Line` in every module chain minus structural types
+  (`BLOCK_BEGIN/END`, `ELSE`, `CATCH`, `FINALLY`, `CASE`, `END_MODULE`) and
+  line 0; lines hit = counted next to `Debugger::PreExecLine` (ExecUntil top,
+  `PerformLoopWhile` per iteration, `EvaluateLoopUntil`). Report rewritten
+  open-write-flush-close from `Script::ExitApp`, the SEH filter and the console
+  ctrl handler. `Script::LastModule()` accessor added (mLastModule is private).
+  Verified on mingw harness and MSVC (`bin_review`): gate 11/11 green.
+- **Runner:** `tests/Test.ahk` (`Test.Case`, `Assert.*`, `::error` annotations,
+  JUnit via `AHK_TEST_JUNIT`) + `tests/run.ahk` (explicit `#Include` list with a
+  completeness check) + `check/framework/json.test.ahk`. Registered in the gate.
+- **qa:** `AHK_QA_COVERAGE_DIR` makes every child write its own `.lcov`;
+  `tools/lcov_summary.py` merges → table, merged tracefile, shields badge JSON.
+  Baseline for `qa/Assert.ahk` + `qa/Harness.ahk` + `tests/Test.ahk`: 64.2%.
+- **CI:** `build.yml` gains `check` (vendored engine, `tools/check_all.py`,
+  80/80 files parse after fixing one continuation-section bug in
+  `debugger-tool/ahk-error-agent/include/error-to-stderr.ahk`), `test`
+  (artifact engine, coverage, badge force-pushed to `badges` branch on alpha
+  pushes) and tag-only published releases (`v*`) instead of per-push drafts.
+- Not done: `bin/AutoHotkey64.exe` still lacks `/Coverage` (locked; rebuild via
+  the `bin_review` route when convenient). No `#Coverage` directive by design.
+
+### Session 9 (2026-09-16) — Inspect(), ProcessPipe, /Trace=json, native mcp check/run/test
+
+- **Inspect(Value, Depth, MaxItems)** in `json.cpp` (shares JsonBuf/WriteQuoted):
+  own values serialized, getters/setters/methods/typed fields listed by name
+  (own + base chain, stopping at Object/Class/Any prototypes), Array items,
+  Map and JSON.Object entries, Func signature, `truncated`/`circular` flags.
+  Needed a new `Object::OwnFieldAt` (mFields is private). The BIF entry in
+  `lib/functions.h` MUST be in sorted position: the table is binary-searched,
+  and an out-of-order entry makes the function silently "undefined".
+  REPL prints object results through it (depth 1, 50 items).
+- **ProcessPipe** (`child_process.{h,cpp}` Win32 layer + `process_pipe.{h,cpp}`
+  script class). Durability findings fixed during the adversarial pass:
+  `EOF` is a CRT macro (property renamed `AtEOF`); 4 KB pipes + 5 ms polling
+  made a 5 MB producer take 18 s (now 1 MB buffers, drain without sleeping);
+  a plain WriteFile to stdin deadlocks against a child busy writing (now an
+  overlapped named-pipe write that pumps stdout/stderr while pending, with
+  `Send(text, timeout)` → TimeoutError). Verified: 2 MB each way concurrently,
+  200 KB single line across chunk boundaries, 1 MB stderr flood during a
+  stdout ReadLine, reentrant reads from a timer, 40 spawns without handle
+  growth, kill-on-release. Child-side `File.AtEOF` is unreliable on pipes.
+- **/Trace=json** — statement events with file/line/function/thread/text;
+  JSON escaping done in-place with a bounded buffer.
+- **mcp verb**: `check`, `run`, `test` tools spawn the engine via
+  `RunChildCapture` (job-killed at `timeout_ms`), return exit code, both
+  streams, and parsed schema-2 diagnostics. Probed with unicode/space paths,
+  missing file (13 + diagnostic), bad cwd (-32603), 5 MB stdout, bad args.
+- New qa suites: `test_inspect.ahk` (58), `test_processpipe.ahk`; Python:
+  trace JSON cases, MCP tool cases.
+
