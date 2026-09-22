@@ -23,6 +23,7 @@ GNU General Public License for more details.
 #include "application.h" // for MsgSleep()
 #include "TextIO.h"
 #include "crashlog.h"
+#include "coverage.h"
 #include <utility>
 #include <algorithm>
 
@@ -322,7 +323,7 @@ Script::Script()
 	, mFileSpec(_T("")), mFileDir(_T("")), mFileName(_T("")), mOurEXE(_T("")), mOurEXEDir(_T("")), mMainWindowTitle(_T(""))
 	, mScriptName(NULL)
 	, mIsReadyToExecute(false), mAutoExecSectionIsRunning(false)
-	, mIsRestart(false), mHeadless(false), mCheckMode(false), mTestMode(false), mReplMode(false), mMcpMode(false), mDiagJson(false), mTrace(false)
+	, mIsRestart(false), mHeadless(false), mCheckMode(false), mTestMode(false), mReplMode(false), mMcpMode(false), mDiagJson(false), mTrace(false), mTraceJson(false)
 	, mErrorStdOut(true), mErrorStdOutColor(false), mErrorStdOutCP(0)
 #ifndef AUTOHOTKEYSC
 	, mValidateThenExit(false)
@@ -1428,6 +1429,7 @@ void Script::TerminateApp(ExitReasons aExitReason, int aExitCode)
 	// at the time the user exits (in which case our main event loop would be "buried" underneath
 	// the event loops of the dialogs themselves), this is the only reliable way I've found to exit
 	// so far.
+	Coverage::Flush(); // Before the crash log's [EXIT] record so a reader sees the report is complete.
 	if (CrashLog::IsCrashLogEnabled())
 		CrashLog::LogExitWithCode(aExitCode);
 	exit(aExitCode); // exit() is insignificant in code size.  It does more than ExitProcess(), but perhaps nothing more that this application actually requires.
@@ -5496,6 +5498,8 @@ ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Lin
 		VarList &vars;
 		Var **snapshot;
 		int count;
+		LineNumberType &source_line;
+		LineNumberType saved_source_line;
 		bool committed = false;
 		~RestoreEvalContext()
 		{
@@ -5510,17 +5514,19 @@ ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Lin
 			free(snapshot);
 			g->CurrentFunc = func;
 			g_script.mCurrLine = line;
+			source_line = saved_source_line;
 		}
-	} restore_context { saved_current_func, mCurrLine, eval_vars, saved_vars, eval_vars.mCount };
+	} restore_context { saved_current_func, mCurrLine, eval_vars, saved_vars, eval_vars.mCount,
+		mCombinedLineNumber, mCombinedLineNumber };
 	g->CurrentFunc = aResolveScope;
+	// Any fat-arrow bodies created here are synthetic code, not the loader's
+	// last physical source line. Coverage/debugger already omit line zero.
+	mCombinedLineNumber = 0;
 
-	// 3) Duplicate the expression text into a modifiable buffer on the C++ stack.
-	//    ParseOperands writes into the buffer (e.g. replaces \n with space) so we
-	//    cannot pass a read-only literal, and we want a local copy rather than a
-	//    SimpleHeap allocation that we cannot free.
+	// 3) The caller owns a modifiable temporary buffer. The ArgStruct below
+	//    takes a persistent copy after ParseOperands has normalized it.
 	size_t expr_len = _tcslen(aExpr);
-	LPTSTR expr_buf = (LPTSTR)_alloca((expr_len + 1) * sizeof(TCHAR));
-	_tcscpy(expr_buf, aExpr);
+	LPTSTR expr_buf = aExpr;
 
 	// 4) Build the deref list (pre-parse operands: variable/function markers).
 	DerefList deref;
@@ -5550,7 +5556,7 @@ ResultType Script::ParseExprToPostfix(LPTSTR aExpr, UserFunc *aResolveScope, Lin
 		memcpy(arg->deref, deref.items, deref.count * sizeof(DerefType));
 		arg->deref[deref.count].marker = nullptr; // NULL-terminate
 
-		// Rebase each deref marker from the _alloca scratch buffer (expr_buf) to the
+		// Rebase each deref marker from the caller's scratch buffer (expr_buf) to the
 		// SimpleHeap copy (arg->text). Both buffers hold identical content, so any
 		// marker at byte offset N in expr_buf corresponds to offset N in arg->text.
 		// Without this rebase, ExpressionToPostfix would compare pointers from two
@@ -10429,6 +10435,34 @@ void Line::FreeDerefBufIfLarge()
 }
 
 
+// Writes aText as a quoted JSON string into aBuf (capacity aCap), truncating
+// the content rather than overrunning. Returns the number of chars written.
+static int TraceJsonString(LPTSTR aBuf, size_t aCap, LPCTSTR aText)
+{
+	if (aCap < 8)
+		return 0;
+	size_t n = 0;
+	aBuf[n++] = '"';
+	for (LPCTSTR p = aText; *p && n < aCap - 8; ++p)
+	{
+		TCHAR c = *p;
+		if (c == '"' || c == '\\')
+		{
+			aBuf[n++] = '\\';
+			aBuf[n++] = c;
+		}
+		else if (c < ' ')
+		{
+			n += _stprintf(aBuf + n, _T("\\u%04x"), (unsigned)c);
+		}
+		else
+			aBuf[n++] = c;
+	}
+	aBuf[n++] = '"';
+	aBuf[n] = '\0';
+	return (int)n;
+}
+
 void Line::TraceExecution()
 {
 	// Omit structural and compiler-generated entries from the execution stream.
@@ -10455,17 +10489,32 @@ void Line::TraceExecution()
 		if (*p == '\\' || *p == '/')
 			name = p + 1;
 	// Separate helper keeps these buffers out of recursive ExecUntil stack frames.
-	TCHAR text[2 * _countof(command) + 320];
-	int length = sntprintf(text, _countof(text), _T("[trace] %.255s:%u  "), name, mLineNumber);
-	for (LPCTSTR p = start; *p; ++p)
+	// JSON mode escapes the statement and the full path, so allow for growth.
+	TCHAR text[4 * _countof(command) + 1024];
+	int length;
+	if (g_script.mTraceJson)
 	{
-		if (*p == '\r' || *p == '\n' || *p == '\t')
+		length = sntprintf(text, _countof(text), _T("{\"event\":\"statement\",\"file\":"));
+		length += TraceJsonString(text + length, _countof(text) - length, file ? file : _T("<script>"));
+		length += sntprintf(text + length, _countof(text) - length, _T(",\"line\":%u,\"function\":"), mLineNumber);
+		length += TraceJsonString(text + length, _countof(text) - length, g->CurrentFunc ? g->CurrentFunc->mName : _T(""));
+		length += sntprintf(text + length, _countof(text) - length, _T(",\"thread\":%d,\"text\":"), g_nThreads);
+		length += TraceJsonString(text + length, _countof(text) - length, start);
+		text[length++] = '}';
+	}
+	else
+	{
+		length = sntprintf(text, _countof(text), _T("[trace] %.255s:%u  "), name, mLineNumber);
+		for (LPCTSTR p = start; *p; ++p)
 		{
-			text[length++] = '`';
-			text[length++] = *p == '\r' ? 'r' : *p == '\n' ? 'n' : 't';
+			if (*p == '\r' || *p == '\n' || *p == '\t')
+			{
+				text[length++] = '`';
+				text[length++] = *p == '\r' ? 'r' : *p == '\n' ? 'n' : 't';
+			}
+			else
+				text[length++] = *p < ' ' || *p == 0x7f ? ' ' : *p;
 		}
-		else
-			text[length++] = *p < ' ' || *p == 0x7f ? ' ' : *p;
 	}
 	text[length++] = '\n';
 	text[length] = '\0';
@@ -10584,6 +10633,9 @@ ResultType Line::ExecUntil(ExecUntilMode aMode, ResultToken *aResultToken, Line 
 
 		if (g.ListLinesIsEnabled)
 			LOG_LINE(line)
+
+		if (g_CoverageEnabled)
+			Coverage::HitLine(line);
 
 #ifdef CONFIG_DEBUGGER
 		if (g_Debugger.IsConnected() && line->mActionType != ACT_WHILE) // L31: PreExecLine of ACT_WHILE is now handled in PerformLoopWhile() where inspecting A_Index will yield the correct result.
@@ -11703,6 +11755,8 @@ ResultType Line::PerformLoopWhile(ResultToken *aResultToken, Line *&aJumpToLine)
 	for (;; ++g.mLoopIteration)
 	{
 		g_script.mCurrLine = this; // For error-reporting purposes.
+		if (g_CoverageEnabled)
+			Coverage::Hit(mFileIndex, mLineNumber);
 #ifdef CONFIG_DEBUGGER
 		// L31: Let the debugger break at the 'While' line each iteration. Before this change,
 		// a While loop with empty body such as While FuncWithSideEffect() {} would be "hit"
@@ -11741,6 +11795,8 @@ bool Line::EvaluateLoopUntil(ResultType &aResult)
 	g_script.mCurrLine = this; // For error-reporting purposes.
 	if (g->ListLinesIsEnabled)
 		LOG_LINE(this);
+	if (g_CoverageEnabled)
+		Coverage::Hit(mFileIndex, mLineNumber);
 #ifdef CONFIG_DEBUGGER
 	// Let the debugger break at or step onto UNTIL.
 	if (g_Debugger.IsConnected())

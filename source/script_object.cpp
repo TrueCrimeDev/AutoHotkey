@@ -8,6 +8,7 @@
 #include "script_func_impl.h"
 #include "script_gui.h"
 #include "input_object.h"
+#include "process_pipe.h"
 
 #include <errno.h> // For ERANGE.
 #include <initializer_list>
@@ -4369,6 +4370,7 @@ void Object::CreateRootPrototypes()
 		{_T("Menu"), &UserMenu::sPrototype, NewObject<UserMenu>, {UserMenu::sMembers, UserMenu::sMemberCount}, {
 			{_T("MenuBar"), &UserMenu::sBarPrototype, UserMenu::NewMenuBar}
 		}},
+		{_T("ProcessPipe"), &ProcessPipe::sPrototype, NewObject<ProcessPipe>, {ProcessPipe::sMembers, ProcessPipe::sMemberCount}},
 		{_T("RegExMatchInfo"), &RegExMatchObject::sPrototype, no_ctor, RegExMatchObject::sMembers}
 	});
 

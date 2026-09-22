@@ -178,6 +178,39 @@
     <ClCompile Include="source\error.cpp">
       <Filter>Core</Filter>
     </ClCompile>
+    <ClCompile Include="source\child_process.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\console_check.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\console_eval.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\console_output.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\console_repl.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\coverage.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\process_pipe.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\crashlog.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\inspect.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\json.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\ts_api.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
     <ClCompile Include="source\mcp_server.cpp">
       <Filter>Core</Filter>
     </ClCompile>
@@ -259,6 +292,36 @@
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="source\script.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\child_process.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\console_eval.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\console_output.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\coverage.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\process_pipe.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\crashlog.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\json.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\json_internal.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\inspect.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\native_object_util.h">
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="source\mcp_server.h">

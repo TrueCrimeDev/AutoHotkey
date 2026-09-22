@@ -6,7 +6,7 @@
 #include "script_func_impl.h"
 #include "abi.h"
 #include "json.h"
-#include <math.h>
+#include "json_internal.h"
 
 // ============================================================================
 // Native JSON: scanner, parser, writer, the ordered JsonObject container, and
@@ -19,54 +19,9 @@
 // host script down with it; a cap turns that into an ordinary throw.
 // ============================================================================
 
-#define JSON_DEFAULT_DEPTH 256
-#define JSON_MAX_DEPTH 1000   // 1000 frames * ~120 bytes stays far inside the 4 MB stack
+using namespace ahk_json_internal;
 
 namespace {
-
-// ---------------------------------------------------------------------------
-// Output buffer: a plain growable UTF-16 buffer. Reserving in one block beats
-// repeated string concatenation, which is where script-level writers lose.
-// ---------------------------------------------------------------------------
-
-struct JsonBuf
-{
-	LPTSTR data = nullptr;
-	size_t len = 0, cap = 0;
-	bool failed = false;
-
-	~JsonBuf() { free(data); }
-
-	bool Reserve(size_t need)
-	{
-		if (len + need <= cap)
-			return true;
-		size_t want = cap ? cap * 2 : 256;
-		while (want < len + need)
-			want *= 2;
-		LPTSTR bigger = (LPTSTR)realloc(data, (want + 1) * sizeof(TCHAR));
-		if (!bigger)
-			return !(failed = true);
-		data = bigger;
-		cap = want;
-		return true;
-	}
-	void Put(TCHAR c)
-	{
-		if (Reserve(1))
-			data[len++] = c;
-	}
-	void Put(LPCTSTR s, size_t n)
-	{
-		if (n && Reserve(n))
-		{
-			tmemcpy(data + len, s, n);
-			len += n;
-		}
-	}
-	void Put(LPCTSTR s) { Put(s, _tcslen(s)); }
-	void Terminate() { if (Reserve(1)) data[len] = '\0'; }
-};
 
 // ---------------------------------------------------------------------------
 // Options
@@ -87,14 +42,7 @@ struct JsonParseOpts
 	bool allowTopLevelScalar = true;
 };
 
-struct JsonWriteOpts
-{
-	LPTSTR space = nullptr;   // indent unit; nullptr = compact
-	int maxDepth = JSON_DEFAULT_DEPTH;
-	bool ensureAscii = false;
-	bool escapeSlash = false;
-	bool sortKeys = false;
-};
+
 
 // ---------------------------------------------------------------------------
 // Singletons: JSON.True / JSON.False / JSON.Null.
@@ -287,77 +235,6 @@ struct JsonScanner
 		}
 	}
 };
-
-// ---------------------------------------------------------------------------
-// Number formatting: shortest representation that reads back identically.
-// thqby and StringifyAll both "clean up" float noise with a regex + Round,
-// which is lossy by construction; the precision ladder is exact.
-// ---------------------------------------------------------------------------
-
-void FormatDouble(JsonBuf &aBuf, double d)
-{
-	if (!(d == d) || d == HUGE_VAL || d == -HUGE_VAL)
-	{
-		// NaN and Infinity have no JSON representation; null keeps output valid.
-		aBuf.Put(_T("null"));
-		return;
-	}
-	TCHAR tmp[64];
-	for (int prec = 15; prec <= 17; ++prec)
-	{
-		sntprintf(tmp, _countof(tmp), _T("%.*g"), prec, d);
-		if (_tcstod(tmp, nullptr) == d)
-			break;
-	}
-	aBuf.Put(tmp);
-	// A whole-valued float must keep a marker or it reads back as an integer.
-	for (LPCTSTR p = tmp; *p; ++p)
-		if (*p == '.' || *p == 'e' || *p == 'E' || *p == 'n' || *p == 'i')
-			return;
-	aBuf.Put(_T(".0"));
-}
-
-void WriteQuoted(JsonBuf &aBuf, LPCTSTR s, size_t len, const JsonWriteOpts &opt)
-{
-	aBuf.Put('"');
-	size_t runStart = 0;
-	for (size_t k = 0; k < len; ++k)
-	{
-		TCHAR c = s[k];
-		LPCTSTR rep = nullptr;
-		TCHAR esc[8];
-		switch (c)
-		{
-		case '"':  rep = _T("\\\""); break;
-		case '\\': rep = _T("\\\\"); break;
-		case '\n': rep = _T("\\n"); break;
-		case '\r': rep = _T("\\r"); break;
-		case '\t': rep = _T("\\t"); break;
-		case (TCHAR)8:  rep = _T("\\b"); break;
-		case (TCHAR)12: rep = _T("\\f"); break;
-		case '/':
-			if (opt.escapeSlash) rep = _T("\\/");
-			break;
-		default:
-			// Every C0 control is escaped unconditionally: output that cannot be
-			// re-parsed is never acceptable, so this is not an option.
-			if ((unsigned)c < 0x20 || (opt.ensureAscii && (unsigned)c > 0x7E))
-			{
-				sntprintf(esc, _countof(esc), _T("\\u%04x"), (unsigned)c);
-				rep = esc;
-			}
-			break;
-		}
-		if (rep)
-		{
-			aBuf.Put(s + runStart, k - runStart);
-			aBuf.Put(rep);
-			runStart = k + 1;
-		}
-	}
-	aBuf.Put(s + runStart, len - runStart);
-	aBuf.Put('"');
-}
 
 } // anonymous namespace
 
@@ -599,27 +476,34 @@ bool JsonObject::DeleteItem(LPCTSTR aKey, ResultToken *aRetVal)
 	Slot *slot = Find(aKey);
 	if (!slot)
 		return false;
-	if (aRetVal)
-		slot->value.ReturnMove(*aRetVal);
-	else
-		slot->value.Free();
-	free(slot->key);
+	// Detach before releasing a script object, whose __Delete may re-enter us.
+	auto removed = (Slot *)_alloca(sizeof(Slot));
+	memcpy(removed, slot, sizeof(Slot));
 	index_t at = (index_t)(slot - mSlot);
 	memmove(mSlot + at, mSlot + at + 1, (mCount - at - 1) * sizeof(Slot));
 	--mCount;
 	RebuildIndex();   // every slot after `at` moved
+	if (aRetVal)
+		removed->value.ReturnMove(*aRetVal);
+	removed->value.Free(); // ReturnMove copies strings; their storage still needs release.
+	free(removed->key);
 	return true;
 }
 
 void JsonObject::ClearItems()
 {
-	for (index_t k = 0; k < mCount; ++k)
-	{
-		free(mSlot[k].key);
-		mSlot[k].value.Free();
-	}
-	mCount = 0;
+	Slot *slots = mSlot;
+	index_t count = mCount;
+	mSlot = nullptr;
+	mCount = mCapacity = 0;
 	DropIndex();
+	// Callbacks observe the cleared container and may populate its new storage.
+	for (index_t k = 0; k < count; ++k)
+	{
+		free(slots[k].key);
+		slots[k].value.Free();
+	}
+	free(slots);
 }
 
 FResult JsonObject::get_Count(UINT &aRetVal)
@@ -817,6 +701,10 @@ struct JsonValue
 	JsonValue(const JsonValue &) = delete;
 	JsonValue &operator=(const JsonValue &) = delete;
 	~JsonValue() { Release(); }
+
+	// Native boolean/null singletons are objects to the engine, but remain
+	// JSON scalars. Containers have no keyword provenance tag.
+	bool IsScalar() const { return tok.symbol != SYM_OBJECT || tag != JTAG_NONE; }
 
 	void Release()
 	{
@@ -1563,7 +1451,7 @@ void ParseCore(LPTSTR text, size_t len, const JsonParseOpts &po, ResultToken &aR
 		aResultToken.SetExitResult(ThrowJsonError(sc.errCode, sc.errMsg, sc.errLine, sc.errCol, sc.errPos) == OK ? OK : FAIL);
 		return;
 	}
-	if (!po.allowTopLevelScalar && val.tok.symbol != SYM_OBJECT)
+	if (!po.allowTopLevelScalar && val.IsScalar())
 	{
 		val.Release();
 		aResultToken.SetExitResult(ThrowJsonError(_T("UnexpectedChar")
@@ -1974,7 +1862,7 @@ BIF_DECL(JsonClass_ParseAt)
 		aResultToken.SetExitResult(ThrowJsonError(sc.errCode, sc.errMsg, sc.errLine, sc.errCol, sc.errPos) == OK ? OK : FAIL);
 		return;
 	}
-	if (!po.allowTopLevelScalar && val.tok.symbol != SYM_OBJECT)
+	if (!po.allowTopLevelScalar && val.IsScalar())
 	{
 		val.Release();
 		aResultToken.SetExitResult(ThrowJsonError(_T("UnexpectedChar")

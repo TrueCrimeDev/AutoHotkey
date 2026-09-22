@@ -20,6 +20,7 @@ GNU General Public License for more details.
 #include "window.h" // For MsgBox()
 #include "TextIO.h"
 #include "crashlog.h"
+#include "coverage.h"
 #include "mcp_server.h" // McpServerMain() for the `mcp` subcommand.
 #include "ahkversion.h"
 #include <string>
@@ -87,7 +88,7 @@ static void PrintCliInfo()
 			L"Commands:\n"
 			L"  run script.ahk    Run a script (the run keyword is optional).\n"
 			L"  check script.ahk  Validate syntax without executing (exit 0 or 13).\n"
-			L"  test script.ahk   Run a non-persistent test script (exit 0 or 14).\n"
+			L"  test script.ahk   Run tests (0 pass, 14 test failure; engine errors retain their codes).\n"
 			L"  repl [script.ahk] Evaluate expressions from stdin; .help describes the session.\n"
 			L"  mcp              Serve MCP over stdin/stdout; no script is loaded.\n\n"
 			L"Options (before the script; may precede or follow the command):\n"
@@ -95,12 +96,13 @@ static void PrintCliInfo()
 			L"  /Diag=text|json   Diagnostic output format (stderr).\n"
 			L"  /ErrorStdOut[=encoding]  Diagnostic text encoding; :color or :nocolor.\n"
 			L"  /Eval             Enable Eval() in a script.\n"
-			L"  /Trace            Show executing statements on stderr (no raw key events).\n"
+			L"  /Trace[=text|json]  Show executing statements on stderr (json: one event per line).\n"
 			L"  /force            Replace an existing script instance.\n"
 			L"  /include file     Include one file before the script.\n"
 			L"  /CPnnn            Script source code page.\n"
 			L"  /CrashLog=path    Append crash and process lifecycle events.\n"
 			L"  /StdErrFile=path  Mirror diagnostics to a file.\n"
+			L"  /Coverage=path    Write LCOV line coverage for every loaded script file at exit.\n"
 			L"  --                Treat the next argument as the script filename.\n\n"
 			L"All arguments after the script filename are passed unchanged in A_Args.\n"
 			L"--version reports engine and build identity; --capabilities emits JSON.\n"
@@ -130,7 +132,7 @@ static void PrintCliInfo()
 			+ L"},\"commands\":[\"run\",\"check\",\"test\",\"repl\",\"mcp\"],"
 			L"\"diagnostics\":{\"formats\":[\"text\",\"json\"],\"jsonSchema\":2},"
 			L"\"mcp\":{\"transport\":\"stdio\",\"protocolVersions\":[\"2025-06-18\",\"2024-11-05\"]},"
-			L"\"features\":{\"eval\":\"opt-in\",\"json\":true,\"check\":true,\"repl\":true},"
+			L"\"features\":{\"eval\":\"opt-in\",\"json\":true,\"check\":true,\"repl\":true,\"coverage\":true,\"inspect\":true,\"processPipe\":true,\"traceFormats\":[\"text\",\"json\"]},"
 			L"\"exitCodes\":{\"success\":0,\"runtime\":10,\"critical\":11,\"parse\":12,\"check\":13,\"test\":14,\"usage\":64,\"interrupted\":130}}";
 	}
 	PrintWideLine(out.c_str(), (int)out.size());
@@ -350,9 +352,14 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 		}
 		else if (!_tcsicmp(param, _T("/Headless")) || !_tcsicmp(param, _T("--headless")))
 			g_script.SetHeadless();
-		else if (!_tcsicmp(param, _T("/Trace")) || !_tcsicmp(param, _T("--trace")))
+		else if ((!_tcsnicmp(param, _T("/Trace"), 6) && (param[6] == '\0' || param[6] == '='))
+			|| (!_tcsnicmp(param, _T("--trace"), 7) && (param[7] == '\0' || param[7] == '=')))
 		{
+			LPTSTR format = param[0] == '/' ? (param[6] == '=' ? param + 7 : nullptr) : (param[7] == '=' ? param + 8 : nullptr);
+			if (format && *format && _tcsicmp(format, _T("text")) && _tcsicmp(format, _T("json")))
+				return CliUsageError(_T("Invalid /Trace format; expected text or json."));
 			g_script.mTrace = true;
+			g_script.mTraceJson = format && !_tcsicmp(format, _T("json"));
 			g_script.SetHeadless();
 			// An inherited pipe/file is already a usable destination. Attaching a
 			// console here would replace it and hide trace output from test runners.
@@ -418,6 +425,13 @@ ResultType ParseCmdLineArgs(LPTSTR &script_filespec)
 				g_StdErrFilePath = _tcsdup(path);
 				CrashLog::SetStdErrFilePath(path);
 			}
+		}
+		else if ((!_tcsnicmp(param, _T("/Coverage="), 10)) || (!_tcsnicmp(param, _T("--coverage="), 11)))
+		{
+			LPTSTR path = param + (!_tcsnicmp(param, _T("/Coverage="), 10) ? 10 : 11);
+			if (!*path)
+				return CliUsageError(_T("/Coverage requires a non-empty path."));
+			Coverage::SetPath(path);
 		}
 		else if (!_tcsicmp(param, _T("/include")))
 		{

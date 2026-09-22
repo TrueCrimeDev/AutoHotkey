@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "crashlog.h"
+#include "coverage.h"
 #include "globaldata.h"
 #include "ahkversion.h"
 
@@ -56,9 +57,26 @@ namespace
     // Returns number of bytes written (incl. trailing NUL) or 0 on failure / null input.
     int TToUtf8(LPCTSTR aSrc, char *dst_buf, int dst_cap)
     {
-        if (!aSrc) { if (dst_cap > 0) dst_buf[0] = 0; return 0; }
-        int n = WideCharToMultiByte(CP_UTF8, 0, aSrc, -1, dst_buf, dst_cap, nullptr, nullptr);
-        return n > 0 ? n : 0;
+        if (dst_cap <= 0) return 0;
+        dst_buf[0] = 0;
+        if (!aSrc) return 0;
+        // Fixed crash-handler buffers must truncate without relying on the
+        // contents left by a failed conversion, which need not be terminated.
+        int used = 0;
+        while (*aSrc)
+        {
+            int chars = IS_HIGH_SURROGATE(aSrc[0]) && IS_LOW_SURROGATE(aSrc[1]) ? 2 : 1;
+            char encoded[4];
+            int bytes = WideCharToMultiByte(CP_UTF8, 0, aSrc, chars,
+                encoded, sizeof(encoded), nullptr, nullptr);
+            if (!bytes || bytes >= dst_cap - used)
+                break;
+            memcpy(dst_buf + used, encoded, bytes);
+            used += bytes;
+            aSrc += chars;
+        }
+        dst_buf[used] = 0;
+        return used + 1;
     }
 }
 
@@ -290,6 +308,7 @@ namespace
 
             CrashLog::LogFatal(code, addr, last_file, last_line, last_hk);
             CrashLog::LogExit(11, _T("Fatal"));
+            Coverage::Flush(true); // Do not wait on a collector interrupted by this fault.
 #ifdef _MSC_VER
         }
         __except (EXCEPTION_EXECUTE_HANDLER)
@@ -320,6 +339,7 @@ namespace
         case CTRL_LOGOFF_EVENT:
         case CTRL_SHUTDOWN_EVENT:
             CrashLog::LogExit(130, _T("ExternalSignal"));
+            Coverage::Flush(true);
             return FALSE; // let other handlers / default run
         default:
             return FALSE;

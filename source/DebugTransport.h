@@ -76,14 +76,22 @@ class StdioTransport : public DebugTransport
 {
 	bool mConnected = false;
 	HANDLE mInput = INVALID_HANDLE_VALUE;
+	HANDLE mStopWatcher = nullptr;
+	HANDLE mWatcher = nullptr;
+	PVOID volatile mAsyncWindow = nullptr;
+	LONG volatile mWakePosted = 0;
+	static DWORD WINAPI WatchInput(LPVOID aTransport);
 
 public:
+	~StdioTransport() override { Disconnect(); }
 	int Connect(const char *aAddress, const char *aPort) override;
 	void Disconnect() override;
 	int Send(const char *aData, size_t aSize) override;
 	int Recv(char *aBuffer, size_t aBufferSize, int &aBytesRead) override;
 	bool HasPendingData() override;
 	bool IsConnected() override { return mConnected; }
+	void EnterSyncMode(HWND aWnd) override;
+	void ExitSyncMode(HWND aWnd) override;
 };
 
 

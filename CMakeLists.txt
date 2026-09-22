@@ -83,9 +83,14 @@ target_compile_definitions(pcre16 PRIVATE
 set(AHK_SOURCES
     source/ahkversion.cpp
     source/application.cpp
-    source/AutoHotkey.cpp
     source/MdFunc.cpp
     source/clipboard.cpp
+    source/child_process.cpp
+    source/console_check.cpp
+    source/console_eval.cpp
+    source/console_output.cpp
+    source/console_repl.cpp
+    source/coverage.cpp
     source/crashlog.cpp
     source/Debugger.cpp
     source/error.cpp
@@ -93,10 +98,12 @@ set(AHK_SOURCES
     source/hook.cpp
     source/hotkey.cpp
     source/input_object.cpp
+    source/inspect.cpp
     source/json.cpp
     source/keyboard_mouse.cpp
     source/mcp_server.cpp
     source/os_version.cpp
+    source/process_pipe.cpp
     source/script.cpp
     source/script2.cpp
     source/script_autoit.cpp
@@ -111,6 +118,7 @@ set(AHK_SOURCES
     source/SimpleHeap.cpp
     source/StringConv.cpp
     source/TextIO.cpp
+    source/ts_api.cpp
     source/util.cpp
     source/var.cpp
     source/window.cpp
@@ -166,10 +174,10 @@ set(AHK_RESOURCES
     source/resources/AutoHotkey.rc
 )
 
-set(AHK_GENERATED_MANIFEST "${CMAKE_SOURCE_DIR}/temp/AutoHotkey.exe.manifest")
+set(AHK_GENERATED_MANIFEST "${CMAKE_CURRENT_BINARY_DIR}/generated/AutoHotkey.exe.manifest")
 add_custom_command(
     OUTPUT "${AHK_GENERATED_MANIFEST}"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/temp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
     COMMAND cscript.exe //E:JScript //NoLogo
         "${CMAKE_SOURCE_DIR}/source/scripts/minman.js"
         "${CMAKE_SOURCE_DIR}/source/resources/AutoHotkey.exe.manifest"
@@ -181,9 +189,7 @@ add_custom_command(
 )
 add_custom_target(ahk_manifest DEPENDS "${AHK_GENERATED_MANIFEST}")
 
-function(configure_ahk_executable target_name output_dir)
-    add_dependencies(${target_name} ahk_manifest)
-
+function(configure_ahk_compilation target_name)
     target_include_directories(${target_name} PRIVATE
         source
         source/lib_pcre/pcre
@@ -193,7 +199,33 @@ function(configure_ahk_executable target_name output_dir)
         PCRE_STATIC
     )
 
+    if(MSVC)
+        target_compile_options(${target_name} PRIVATE
+            /W3
+            /MP
+            $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
+            $<$<COMPILE_LANGUAGE:CXX>:/Zc:strictStrings->
+        )
+        target_compile_definitions(${target_name} PRIVATE _CRT_SECURE_NO_WARNINGS)
+        set_property(TARGET ${target_name} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    elseif(MINGW)
+        target_compile_options(${target_name} PRIVATE -fpermissive)
+    endif()
+endfunction()
+
+# Only AutoHotkey.cpp uses the entrypoint-specific definitions. Compile the
+# remaining engine once for GUI, Console, and the optional Harness target.
+add_library(ahk_runtime OBJECT ${AHK_SOURCES})
+configure_ahk_compilation(ahk_runtime)
+
+function(configure_ahk_executable target_name output_dir)
+    add_dependencies(${target_name} ahk_manifest)
+    configure_ahk_compilation(${target_name})
+    target_compile_definitions(${target_name} PRIVATE
+        "$<$<COMPILE_LANGUAGE:RC>:AHK_MANIFEST_PATH=\"${AHK_GENERATED_MANIFEST}\">"
+    )
     target_link_libraries(${target_name} PRIVATE
+        ahk_runtime
         pcre16
         wsock32
         ws2_32   # getaddrinfo/freeaddrinfo (Debugger DBGp listener) on mingw; harmless on MSVC.
@@ -211,41 +243,33 @@ function(configure_ahk_executable target_name output_dir)
     )
 
     if(MSVC)
-        target_compile_options(${target_name} PRIVATE
-            /W3
-            /MP
-            $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
-            $<$<COMPILE_LANGUAGE:CXX>:/Zc:strictStrings->
-        )
-        target_compile_definitions(${target_name} PRIVATE _CRT_SECURE_NO_WARNINGS)
         target_link_options(${target_name} PRIVATE /MANIFEST:NO)
         if(CMAKE_SIZEOF_VOID_P EQUAL 4)
             target_link_options(${target_name} PRIVATE /SAFESEH:NO)
         endif()
-        set_property(TARGET ${target_name} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
 
     if(MINGW)
-        target_compile_options(${target_name} PRIVATE -fpermissive)
         target_link_options(${target_name} PRIVATE -static -static-libgcc -static-libstdc++ -municode)
     endif()
 
+    get_filename_component(output_dir "${output_dir}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
     set_target_properties(${target_name} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/${output_dir}"
-        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/${output_dir}_debug"
-        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/${output_dir}"
+        RUNTIME_OUTPUT_DIRECTORY "${output_dir}"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${output_dir}_debug"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${output_dir}"
     )
 endfunction()
 
 # Standard GUI executable.
-set(AHK_OUTPUT_DIR "bin" CACHE STRING "Runtime output directory, relative to the source tree")
-add_executable(${OUTPUT_NAME} WIN32 ${AHK_SOURCES} ${AHK_RESOURCES})
+set(AHK_OUTPUT_DIR "bin" CACHE STRING "Runtime output directory (absolute or relative to source tree)")
+add_executable(${OUTPUT_NAME} WIN32 source/AutoHotkey.cpp ${AHK_RESOURCES})
 configure_ahk_executable(${OUTPUT_NAME} "${AHK_OUTPUT_DIR}")
 
 # Shell-facing engine. The console subsystem gives PowerShell real stdin/stdout
 # handles and makes interactive calls wait until the engine exits.
 set(CONSOLE_OUTPUT_NAME "${OUTPUT_NAME}Console")
-add_executable(${CONSOLE_OUTPUT_NAME} EXCLUDE_FROM_ALL ${AHK_SOURCES} ${AHK_RESOURCES})
+add_executable(${CONSOLE_OUTPUT_NAME} source/AutoHotkey.cpp ${AHK_RESOURCES})
 configure_ahk_executable(${CONSOLE_OUTPUT_NAME} "${AHK_OUTPUT_DIR}")
 target_compile_definitions(${CONSOLE_OUTPUT_NAME} PRIVATE AHK_CONSOLE_ENTRYPOINT)
 if(MSVC)
@@ -256,7 +280,7 @@ endif()
 
 # Harness test executable: console subsystem with the same WinMain entry point.
 set(HARNESS_OUTPUT_NAME "${OUTPUT_NAME}Harness")
-add_executable(${HARNESS_OUTPUT_NAME} ${AHK_SOURCES} ${AHK_RESOURCES})
+add_executable(${HARNESS_OUTPUT_NAME} EXCLUDE_FROM_ALL source/AutoHotkey.cpp ${AHK_RESOURCES})
 configure_ahk_executable(${HARNESS_OUTPUT_NAME} bin_harness)
 target_compile_definitions(${HARNESS_OUTPUT_NAME} PRIVATE AHK_HARNESS_CONSOLE)
 
@@ -275,5 +299,6 @@ if(MINGW)
 endif()
 
 message(STATUS "Building AutoHotkey with _ScriptGetLines support")
-message(STATUS "Output: ${CMAKE_SOURCE_DIR}/${AHK_OUTPUT_DIR}/${OUTPUT_NAME}.exe")
+message(STATUS "GUI/Console output directory: ${AHK_OUTPUT_DIR}")
+message(STATUS "Console target: ${CONSOLE_OUTPUT_NAME} (included in the default build)")
 message(STATUS "Harness test output: ${CMAKE_SOURCE_DIR}/bin_harness/${HARNESS_OUTPUT_NAME}.exe")

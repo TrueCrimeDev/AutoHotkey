@@ -18,6 +18,7 @@ md_func_x(CaretGetPos, CaretGetPos, Bool32, (Out_Opt, Variant, X), (Out_Opt, Var
 
 md_func(Check, (In, String, Source), (Ret, Object, RetVal))
 
+
 md_func(ClipWait, (In_Opt, Float64, Timeout), (In_Opt, Int32, AnyType), (Ret, Bool32, RetVal))
 
 md_func(ControlAddItem, (In, String, Value), MD_CONTROL_ARGS, (Ret, IntPtr, Index))
@@ -159,6 +160,7 @@ md_func(IniWrite, (In, String, Value), (In, String, Path), (In, String, Section)
 
 md_func(InputBox, (In_Opt, String, Prompt), (In_Opt, String, Title), (In_Opt, String, Options), (In_Opt, String, Default), (Ret, Object, RetVal))
 
+md_func(Inspect, (In, Variant, Value), (In_Opt, Int32, Depth), (In_Opt, Int32, MaxItems), (Ret, String, RetVal))
 md_func_v(InstallKeybdHook, (In_Opt, Bool32, Install), (In_Opt, Bool32, Force))
 md_func_v(InstallMouseHook, (In_Opt, Bool32, Install), (In_Opt, Bool32, Force))
 

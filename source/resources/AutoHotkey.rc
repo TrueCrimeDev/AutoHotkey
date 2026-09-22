@@ -32,7 +32,11 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 // XP SP2 systems to blue-screen.  Update: See AutoHotkey.exe.manifest for comments.
 //#ifdef EMBED_MANIFEST // VC++ 2005 and later don't require the next line.
 #ifndef CONFIG_DLL
-CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST  "..\\..\\temp\\AutoHotkey.exe.manifest"
+// CMake provides a build-local path; MSBuild retains its generated-file layout.
+#ifndef AHK_MANIFEST_PATH
+#define AHK_MANIFEST_PATH "..\\..\\temp\\AutoHotkey.exe.manifest"
+#endif
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST AHK_MANIFEST_PATH
 #endif
 
 #ifdef APSTUDIO_INVOKED
