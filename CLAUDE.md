@@ -52,6 +52,10 @@ complete exit-code contract. `/Headless` and `check` are not sandboxes: loading
 can perform operations such as `#DllLoad`. Do not execute arbitrary untrusted
 scripts merely to validate them.
 
+From the MCP server, prefer the `launch_script` tool: it spawns the engine over
+`/Debug=stdio`, so no port 9000 listener is involved. A generated snippet can run
+from stdin without a temp file: `echo 'Print("hi")' | $engine /ErrorStdOut *`.
+
 ## Key directories
 
 | Directory | Purpose |
