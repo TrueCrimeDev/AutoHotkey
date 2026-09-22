@@ -188,6 +188,10 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(ahk_manifest DEPENDS "${AHK_GENERATED_MANIFEST}")
+# Re-run the resource compiler when the generated manifest changes.
+set_source_files_properties(source/resources/AutoHotkey.rc PROPERTIES
+    OBJECT_DEPENDS "${AHK_GENERATED_MANIFEST}"
+)
 
 function(configure_ahk_compilation target_name)
     target_include_directories(${target_name} PRIVATE
@@ -221,8 +225,12 @@ configure_ahk_compilation(ahk_runtime)
 function(configure_ahk_executable target_name output_dir)
     add_dependencies(${target_name} ahk_manifest)
     configure_ahk_compilation(${target_name})
+    # Target-wide on purpose: the Visual Studio generator drops
+    # $<COMPILE_LANGUAGE:RC> definitions, leaving rc.exe on the MSBuild-only
+    # temp\ path. The C++ entrypoint ignores the macro. Forward slashes keep
+    # the value free of escape sequences for rc.exe, windres, and MSBuild XML.
     target_compile_definitions(${target_name} PRIVATE
-        "$<$<COMPILE_LANGUAGE:RC>:AHK_MANIFEST_PATH=\"${AHK_GENERATED_MANIFEST}\">"
+        "AHK_MANIFEST_PATH=\"${AHK_GENERATED_MANIFEST}\""
     )
     target_link_libraries(${target_name} PRIVATE
         ahk_runtime
