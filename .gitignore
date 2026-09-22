@@ -66,3 +66,6 @@ coverage/
 *.lcov
 junit.xml
 diag.jsonl
+
+# Per-machine Claude Code permissions (never commit)
+.claude/settings.local.json

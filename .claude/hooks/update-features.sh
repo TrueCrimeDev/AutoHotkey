@@ -1,7 +1,7 @@
 #!/bin/bash
 # Auto-updates FEATURES.md with plain language documentation of _.ahk
 
-PROJECT_DIR="/mnt/c/Users/uphol/Documents/AHK"
+PROJECT_DIR="${AHK_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 TARGET_FILE="$PROJECT_DIR/_.ahk"
 OUTPUT_FILE="$PROJECT_DIR/FEATURES.md"
 

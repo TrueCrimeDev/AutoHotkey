@@ -119,7 +119,7 @@ Your `.mcp.json` (project root) should contain:
     "autohotkey-debug": {
       "command": "node",
       "args": [
-        "C:\\Users\\uphol\\Documents\\Design\\Coding\\AutoHotkey\\debugger-tool\\mcp-server\\build\\index.js"
+        "C:\\path\\to\\AutoHotkey\\debugger-tool\\mcp-server\\build\\index.js"
       ],
       "env": {}
     }

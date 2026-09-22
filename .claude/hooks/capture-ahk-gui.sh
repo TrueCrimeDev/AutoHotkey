@@ -17,7 +17,9 @@ if [[ "$TOOL_NAME" == "Bash" ]] && [[ "$TOOL_INPUT" == *"AutoHotkey"* ]] && [[ "
     fi
 
     # Try to find AHK window and capture it (PS script has retry logic)
-    CAPTURE_PATH=$(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Users\uphol\Documents\AHK\capture-ahk-window.ps1" 2>/dev/null | tr -d '\r')
+    HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    CAPTURE_PS1="${AHK_CAPTURE_PS1:-$(wslpath -w "$HOOK_DIR/capture-ahk-window.ps1" 2>/dev/null)}"
+    CAPTURE_PATH=$(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$CAPTURE_PS1" 2>/dev/null | tr -d '\r')
 
     if [[ -n "$CAPTURE_PATH" ]]; then
         WSL_PATH=$(wslpath "$CAPTURE_PATH" 2>/dev/null)

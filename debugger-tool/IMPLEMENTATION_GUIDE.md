@@ -1254,7 +1254,7 @@ AutoHotkey.exe /Debug suspicious_script.ahk
 
 1. **Clone repository:**
    ```bash
-   git clone https://github.com/012090120901209/AutoHotkey.git
+   git clone https://github.com/TrueCrimeDev/AutoHotkey.git
    cd AutoHotkey
    ```
 
