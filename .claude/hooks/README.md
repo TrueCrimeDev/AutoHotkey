@@ -1,245 +1,405 @@
-# AutoHotkey Debugger — Claude Code Hooks
+# Claude Code hooks for this repository
 
-## Overview
+Four bash hooks give Claude the right context about this AutoHotkey fork and catch
+syntax errors right after an `.ahk` edit. They are registered in the committed
+`.claude/settings.json`, so every clone gets them; nothing has to be added to
+`.claude/settings.local.json`. Do not register them again there or in user settings.
+Claude Code drops an exact duplicate (same command text, `shell`, `args` and `if`), but
+a copy written differently, such as an older path or a `bash .claude/hooks/...` form,
+runs a second time. `test-hooks.sh` flags any hook reference in the local file.
 
-These hooks teach Claude Code how to use the AutoHotkey MCP debugging ecosystem. They fire at key lifecycle points to inject context, guide workflows, and ensure Claude follows the correct debugging patterns.
+Commit `de57096c` stopped tracking `.claude/settings.local.json`, so pulling it deletes a
+local copy that git was tracking. If the copy had uncommitted changes, git refuses the
+pull instead. If yours vanished, put only personal settings (permissions, MCP approvals)
+back there. The hooks come from `.claude/settings.json`.
 
-## Architecture
+Requirements:
 
-```
-Claude Code (AI)
-    ↕  MCP protocol (JSON-RPC over stdio)
-MCP Server (Node.js, spawned by Claude Code)
-    ↕  DBGp protocol (XML over TCP port 9000)
-AutoHotkey.exe /Debug (user launches manually)
-```
+- On Windows, Claude Code runs hook commands with Git for Windows bash. The hooks use
+  bash 4+, coreutils and `cygpath`. They do not need python, jq or WSL.
+- The syntax gate needs a fork engine. The engines in `bin/` (`bin/*.exe`) are not in git
+  (only `bin/tree-sitter-ahk.dll` is), so a fresh clone has no engine until you build one
+  (see `BUILD.md`). Without one the gate is off, and the SessionStart context says so.
 
-The MCP server (`autohotkey-debug`) is defined in `.mcp.json` at the project root. Claude Code spawns it as a child process. It listens on port 9000 for AutoHotkey to connect.
+## Registered hooks
 
-## The 3 Hooks
+Each command has the form `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/<script>"`.
 
-### 1. `ahk-debug-context.sh` — Session Context Injection
+Keep this shell form, a single command string that starts with `bash`. Do not convert
+the entries to exec form (`"command": "bash"` with `args`). On Windows, exec form looks
+up `bash.exe` on the Windows PATH, where the first match is the WSL launcher
+`C:\Windows\System32\bash.exe`, not Git Bash. Every hook would then run under WSL or
+fail.
 
-**Event:** `SessionStart` (fires on startup, resume, and after context compaction)
+| Event | Matcher | Script | Timeout |
+| --- | --- | --- | --- |
+| `SessionStart` | `""` (every start, resume, clear and compact) | `ahk-debug-context.sh` | 10 s |
+| `PreToolUse` | `mcp__ahk__AHK_Debug_DBGp` | `check-ahk-connection.sh` | 5 s |
+| `PostToolUse` | `mcp__ahk__AHK_Debug_DBGp` | `post-capture-guidance.sh` | 5 s |
+| `PostToolUse` | `Edit\|Write\|MultiEdit\|mcp__ahk__AHK_File_Edit\|mcp__ahk__AHK_File_Create` | `ahk-post-edit.sh` | 30 s |
+| `PostToolUseFailure` | `mcp__ahk__AHK_Debug_DBGp` | `post-capture-guidance.sh` | 5 s |
 
-**Purpose:** Ensures Claude Code always has the full debugger reference in context, even after the conversation is compacted. Outputs:
-- All 22 MCP tool names and descriptions
-- Workflow rules (connection order, blocking calls, error loop)
-- `analyze_error` dual modes (client-side vs API)
-- Watch system behavior (auto-snapshot on step)
-- Custom AHK engine features (/Headless, /Diag, check, test)
+### Contract shared by all hooks
+
+- **Input.** Claude Code writes one JSON object to stdin. It holds `session_id`, `cwd`,
+  `hook_event_name`, `tool_name`, `tool_input` and `tool_use_id`. `PostToolUse` adds
+  `tool_response`. `PostToolUseFailure` adds `error` and `is_interrupt` instead.
+  - The edited path is `tool_input.file_path` for Edit, Write and MultiEdit,
+    `notebook_path` for NotebookEdit, and `filePath` for `AHK_File_Edit` and
+    `AHK_File_Create`.
+  - On Windows paths arrive as JSON-escaped `C:\\...` strings.
+- **Parsing.** The hooks read fields with bash regexes over the raw payload. A payload
+  that is empty, malformed or unrelated produces no output and exit 0.
+- **Output.** Output is ASCII only.
+  - Context for Claude goes in `{"hookSpecificOutput":{"hookEventName":"<incoming event>","additionalContext":"..."}}`
+    on stdout with exit 0. A top-level `additionalContext` is ignored by Claude Code,
+    so no hook emits one.
+- **Exit codes.**
+  - Exit 2 from a `PostToolUse` hook shows its stderr to Claude.
+  - Exit 2 from a `PreToolUse` hook would block the tool, so these hooks never do that.
+  - Any other non-zero exit is reported as a non-blocking hook error.
+
+### `ahk-debug-context.sh` (SessionStart)
+
+Prints a context block of about 35 lines on stdout, which Claude Code adds to Claude's
+context. It runs in about 0.3 s. These facts are detected at run time:
+
+- the engine path and the first line of its `--version` (see
+  [Engine resolution](#engine-resolution-and-ahk_custom_exe)), and any `bin/` exe that was
+  skipped because it is not a fork engine
+- whether the build has `Inspect`, `ProcessPipe` and MCP `check`/`run`/`test` (from
+  `--capabilities`)
+- whether the engine is a GUI build (from its PE header). PowerShell neither waits for
+  a GUI exe nor sets `$LASTEXITCODE` unless its output is piped, so for a GUI build the
+  PowerShell form becomes `& .\bin\AutoHotkey64.exe check /Diag=json file.ahk 2>&1 | Out-String`,
+  then `$LASTEXITCODE`
+- whether `.mcp.json` points at an existing fork engine
+
+The rest is static reference material:
+
+- the engine CLI in Git Bash and PowerShell form, and the `//Flag` rule
+- the exit-code contract, including the "13 also means a missing file" and "test exits
+  14 only for ..." caveats
+- the `/Headless` limits
+- the fork BIFs
+- both MCP servers
+- the DBGp loop, as described under [Debugging](#debugging-with-ahk_debug_dbgp)
+- the hooks
 - AHK v2 syntax reminders
 
-**Why it matters:** Without this, Claude loses debugger knowledge after compaction and starts hallucinating tool names or forgetting workflow order.
+Without a usable engine the block says why (none built, `AHK_CUSTOM_EXE` missing, or not
+a fork engine), says the post-edit gate is disabled and points at `BUILD.md` or at
+`AHK_CUSTOM_EXE`.
 
-### 2. `check-ahk-connection.sh` — Pre-Tool Connection Hint
+### `ahk-post-edit.sh` (PostToolUse syntax gate)
 
-**Event:** `PreToolUse` (matcher: `mcp__autohotkey-debug__.*`)
+1. **Path.** It reads `file_path`, `filePath` or `notebook_path`. `AHK_File_Edit` without
+   `filePath` edits the ahk server's active file, and `AHK_File_Create` may receive a
+   relative path. In both cases the hook takes the absolute path from the tool's result
+   text.
+2. **Skips.** Each of these ends with exit 0 and no output:
+   - any event other than PostToolUse
+   - an `AHK_File_*` `dryRun` preview
+   - a file that is not `*.ahk` (case-insensitive)
+   - the intentional parse-error fixtures `test_crashlog_parse*.ahk` and `test_parse_error*.ahk`
+   - a file outside the project directory (paths are compared case-insensitively after
+     `cygpath -m`)
+   - a file that does not exist
+   - no usable fork engine
 
-**Purpose:** Fires before any debugger MCP tool call. Injects `additionalContext` telling Claude to guide the user to launch AHK with `/Debug` if the tool returns a connection error.
+   Only project files are checked because `check` is not a sandbox: loading a script
+   runs its `#DllLoad`.
+3. **Check.** It runs `"<engine>" check "<C:\path\file.ahk>"` with a 25 s limit and
+   captures stdout and stderr.
+4. **Verdict.**
+   - Engine exit 0 gives hook exit 0 with no output. Warnings never block.
+   - Engine exit 12 or 13, unless the output is "Script file not found", gives hook
+     exit 2. Stderr then holds `AHK syntax check failed (exit N) for <path relative to
+     the project>:`, the engine output (at most 40 lines) and a hint to fix the file and
+     re-check.
+   - Anything else (the engine reporting "Script file not found" for a file removed
+     after the hook's own existence test, a timeout or a crash) gives hook exit 1 with a
+     one-line `ahk-post-edit: no check verdict ...` note. It does not block.
 
-**Why it matters:** The most common failure mode is calling `debug_run` or `capture_error` when no AHK process is connected. This hook ensures Claude gives the right instruction instead of retrying blindly.
+### `check-ahk-connection.sh` (PreToolUse on `AHK_Debug_DBGp`)
 
-**Note:** This hook does NOT block — it only adds context. The tool call proceeds normally.
+For these actions it adds a reminder through `hookSpecificOutput`:
 
-### 3. `post-capture-guidance.sh` — Workflow Guidance
+- `capture_error`, `run`, `step_into`, `step_over`, `step_out`
+- `variables_get`, `evaluate`, `stack_trace`
+- `breakpoint_*`
 
-**Event:** `PostToolUse` (matcher: `capture_error|analyze_error|apply_fix`)
+The reminder starts with a lead line:
 
-**Purpose:** Reads the tool output and injects next-step guidance:
+- for `capture_error`: it waits up to its timeout (default 30000 ms) for an error the
+  ahk server has queued, but nothing queues errors, so expect `captured:false`. Run the
+  script with `mcp__ahk-mcp__run` or `mcp__ahk-mcp__test` instead, or use
+  `breakpoint_set`, `run` and `stack_trace`.
+- for every other listed action: the action needs a script connected to the DBGp
+  listener.
 
-| Tool | Output | Guidance |
-|------|--------|----------|
-| `capture_error` | timeout | Suggest retry or check `debug_status` |
-| `capture_error` | error captured | Nudge: analyze → fix → re-run |
-| `analyze_error` | `status: "analyzed"` | Apply fix if confidence >= 0.7 |
-| `analyze_error` | `status: "api_error"` | Analyze the prompt yourself |
-| `analyze_error` | prompt returned | Do client-side analysis |
-| `apply_fix` | `success: true` | Tell user to re-run |
-| `apply_fix` | `success: false` | Read actual line, adjust, retry |
+Then it says:
 
-**Why it matters:** Without this, Claude often skips steps (e.g., applies a fix without showing the diagnosis) or gets stuck after a failure.
+- The listener (`action: start`) must already be running before the user launches the
+  script with `/Debug`.
+- The launch commands, `& .\bin\AutoHotkey64Console.exe /Debug script.ahk` (PowerShell)
+  and `./bin/AutoHotkey64Console.exe //Debug script.ahk` (Git Bash), with the engine the
+  other hooks use. When there is no usable engine they name
+  `./bin/AutoHotkey64Console.exe` and add why: `AHK_CUSTOM_EXE` does not exist or is not
+  this fork's engine ("fix or unset AHK_CUSTOM_EXE"), or no fork engine was found
+  ("build one per BUILD.md").
+- Once connected, the script is paused at its first line until you send `run` (or
+  `step_into`/`step_over`).
+- A bare `/Debug` connects to localhost:9000. The listener moves to 9001+ when 9000 is
+  busy, so check `status` and, if it moved, launch with `/Debug=localhost:<port>`
+  (Git Bash: `//Debug=localhost:<port>`).
+- A VS Code AutoHotkey debug session runs its own separate listener on its own port.
 
-## Settings Configuration
+Every other action gets no output. The hook never blocks.
 
-Add this to your `.claude/settings.local.json`:
+### `post-capture-guidance.sh` (PostToolUse and PostToolUseFailure on `AHK_Debug_DBGp`)
 
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/ahk-debug-context.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "mcp__autohotkey-debug__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/check-ahk-connection.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "mcp__autohotkey-debug__capture_error|mcp__autohotkey-debug__analyze_error|mcp__autohotkey-debug__apply_fix",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post-capture-guidance.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+| Result | Guidance added |
+| --- | --- |
+| `capture_error` returns `{"captured":false,...}` | Expected with the current ahk server: `capture_error` returns only errors the server has queued, and nothing queues them, so retrying or a longer timeout does not help. Also check that the script is not still paused at its first line (send `run`) and that it connected to the port `status` reports. For the error's message, line and stack, run the script with `mcp__ahk-mcp__run` or `mcp__ahk-mcp__test` (or the engine CLI), or use `breakpoint_set`, `run`, `stack_trace` and `variables_get`. |
+| `capture_error` returns `{"captured":true,...}` (not reachable with the current server) | Call `analyze_error`. It returns a Markdown prompt for Claude to analyze; there is no confidence score. Show the diagnosis, then call `apply_fix` with `file`, `line`, the exact current line as `original`, and `replacement`. |
+| `apply_fix` returns `Fix applied at F:L` | Ask the user to re-run with `/Debug`. `apply_fix` rewrites the whole file with LF line endings. |
+| `apply_fix` fails | Re-read the line with `get_source` or the Read tool, then retry with the exact text. The failure arrives as PostToolUseFailure, or as an `Error: ...` result. |
 
-Merge this with your existing settings (permissions, etc.).
+Everything else gets no output. MCP results flagged `isError` (`Line mismatch`,
+`Not connected ...`) reach Claude Code as **PostToolUseFailure**, not PostToolUse. That
+is why the hook is registered for both events.
 
-## MCP Server Configuration
+## Engine resolution and `AHK_CUSTOM_EXE`
 
-Your `.mcp.json` (project root) should contain:
+`ahk-post-edit.sh`, `ahk-debug-context.sh` and `check-ahk-connection.sh` (for its launch
+commands) pick the engine the same way, and `test-hooks.sh` copies the rule:
 
-```json
-{
-  "mcpServers": {
-    "autohotkey-debug": {
-      "command": "node",
-      "args": [
-        "C:\\path\\to\\AutoHotkey\\debugger-tool\\mcp-server\\build\\index.js"
-      ],
-      "env": {}
-    }
-  }
-}
-```
+1. If `AHK_CUSTOM_EXE` is set, they use only that file. If it does not exist or is not a
+   fork engine, the engine counts as unavailable and the gate is off. They do not fall
+   back to `bin/`.
+2. Otherwise they use `bin/AutoHotkey64Console.exe`, the current console build with the
+   full tool set, if it is a fork engine.
+3. Otherwise they use `bin/AutoHotkey64.exe`, if it is a fork engine. This GUI build may
+   be older. `check` works, but it can lack `Inspect`, `ProcessPipe`, `--coverage` and
+   the MCP `check`/`run`/`test` tools.
 
-To enable Claude API integration in `analyze_error(use_api=true)`, add your key:
+A `bin/` exe that is not a fork engine is skipped, and SessionStart names it: `Skipped:
+./bin/AutoHotkey64Console.exe is not this fork's engine (...)` when the other one is
+used, or `Engine: NOT FOUND. ./bin/... is not this fork's engine (...)` when neither is.
 
-```json
-"env": { "ANTHROPIC_API_KEY": "sk-ant-..." }
-```
+**What counts as a fork engine.** The hooks never run a stock AutoHotkey: it reads
+`check` or `--version` as a script name and shows a modal "Script file not found"
+dialog. A stock copy can live anywhere, so the test (`is_fork` in each hook) looks at
+the file's content, not its path:
 
-## MCP Tool Reference
+- A Windows exe (`MZ` header) counts only if it contains the UTF-16 text `CHECK PASS`,
+  which the fork's `check` verb prints and stock builds lack. The scan takes about
+  20 ms. A stock exe is therefore refused wherever it is: under `Program Files`, under
+  `%LOCALAPPDATA%\Programs`, in a portable or scoop folder, or copied into `bin/` under
+  the fork's file name. A fork build installed under `Program Files\AutoHotkey\` is
+  accepted.
+- A `#!` wrapper script cannot be inspected. It is trusted unless its path looks like a
+  stock install folder, in any letter case: it contains `Program Files` with an
+  `AutoHotkey\` folder somewhere below it, or `AppData\Local\Programs\AutoHotkey\`.
+- Anything else is refused.
 
-### Execution Control
-| Tool | Description |
-|------|-------------|
-| `debug_run` | Continue until breakpoint or error |
-| `debug_step_into` | Step into functions (returns watch changes) |
-| `debug_step_over` | Step over functions (returns watch changes) |
-| `debug_step_out` | Step out of current function (returns watch changes) |
-| `debug_stop` | End debug session |
-| `debug_status` | Get current status |
-| `debug_command` | Raw DBGp command passthrough |
+When `AHK_CUSTOM_EXE` is refused:
 
-### Breakpoints
-| Tool | Params | Description |
-|------|--------|-------------|
-| `breakpoint_set` | `file, line, condition?` | Set breakpoint, returns ID |
-| `breakpoint_remove` | `id` | Remove by ID |
-| `breakpoint_list` | — | List all active |
+- The gate is off and silent.
+- SessionStart says `Engine: AHK_CUSTOM_EXE=<path> does not exist, so the hooks treat the
+  engine as unavailable. Fix or unset AHK_CUSTOM_EXE.`, or `Engine: AHK_CUSTOM_EXE=<path>
+  is not this fork's engine (a Windows exe without the fork's check verb, such as a
+  stock AutoHotkey), so the hooks never run it and the gate is disabled.`
+- The PreToolUse launch commands name `./bin/AutoHotkey64Console.exe` and say that
+  `AHK_CUSTOM_EXE` does not exist or is not this fork's engine: fix or unset it.
 
-### Inspection
-| Tool | Params | Description |
-|------|--------|-------------|
-| `variables_get` | `context? (0=local, 1=global)` | All vars in scope |
-| `evaluate` | `expression` | Eval in current context |
-| `stack_trace` | — | Call stack frames |
+Set `AHK_CUSTOM_EXE` in the environment Claude Code is started from, because the hooks
+inherit it.
 
-### Source Intelligence
-| Tool | Params | Description |
-|------|--------|-------------|
-| `get_source_context` | `file, line, radius?` | Lines around a location |
-| `source_outline` | `file` | Functions, classes, hotkeys, labels |
-| `workspace_symbols` | `root?, query?, max_results?` | Scan all .ahk files |
+## MCP servers the hooks refer to
 
-### Error Loop
-| Tool | Params | Description |
-|------|--------|-------------|
-| `capture_error` | `timeout?` | **BLOCKING** wait for exception (default 30s) |
-| `analyze_error` | `error, use_api?` | Diagnose error (client or API) |
-| `apply_fix` | `file, line, original, replacement` | Verified line replacement |
-| `list_errors` | — | Show queued errors |
-| `clear_errors` | — | Empty error queue |
+- **`ahk-mcp`** (project, `.mcp.json`)
+  - Runs `./bin/AutoHotkey64Console.exe mcp`, the engine's native MCP server over stdio.
+  - A current build lists `ast_outline`, `source_outline`, `workspace_symbols`,
+    `get_source_context`, `check`, `run`, `test` and `server_status`.
+  - It has no DBGp tools. It needs the engine built first.
+  - Prefer `mcp__ahk-mcp__check`, `mcp__ahk-mcp__run` and `mcp__ahk-mcp__test` for fork
+    scripts.
+- **`ahk`** (user-wide Node server, registered outside this repository)
+  - Only its core toolset is listed by default.
+  - `AHK_Debug_DBGp` is in the `debug` toolset and `uia_*` is in the `uia` toolset. Both
+    are hidden until enabled, either by `mcp__ahk__AHK_Settings
+    {"action":"enable_toolset","toolset":"debug"}` (persists machine-wide in
+    `%APPDATA%\ahk-mcp\tool-settings.json`) or by `AHK_MCP_TOOLSETS` in that server's
+    registration. A toolset list saved by `AHK_Settings` overrides `AHK_MCP_TOOLSETS`
+    until `{"action":"reset_toolsets"}` clears it. Enable a toolset only when the
+    user asks.
+  - Until the debug toolset is enabled, the DBGp hooks never fire.
+  - This server runs scripts with the engine its `AHK_PATH` names. That is a stock
+    AutoHotkey unless pointed at this fork, and stock AutoHotkey has no fork BIFs.
 
-### Variable Watches
-| Tool | Params | Description |
-|------|--------|-------------|
-| `watch_add` | `name` | Track variable/expression |
-| `watch_remove` | `name` | Stop tracking |
-| `watch_list` | — | Snapshot all with current values |
+`debugger-tool/mcp-server/` is an older TypeScript DBGp adapter. It is not registered,
+and the hooks do not target it.
 
-Step commands (`step_into`, `step_over`, `step_out`) automatically include watch snapshots:
-```json
-{
-  "status": "break",
-  "line": 15,
-  "watches": [
-    { "name": "counter", "value": "5", "previous": "4", "changed": true },
-    { "name": "name", "value": "\"Alice\"", "previous": "\"Alice\"", "changed": false }
-  ]
-}
-```
+## Debugging with `AHK_Debug_DBGp`
 
-## Workflow Patterns
+### Actions
 
-### Pattern 1: Error Fix Loop
-```
-capture_error → analyze_error → apply_fix → user re-runs
-```
-1. Call `debug_run` first (starts execution)
-2. Call `capture_error` (blocks waiting for exception)
-3. Call `analyze_error(error, use_api=true)` for API diagnosis
-4. If confidence >= 0.7, call `apply_fix` with the suggested fix
-5. Tell user to re-run: `bin\AutoHotkey64.exe /Debug script.ahk`
+| Action | Arguments | Result |
+| --- | --- | --- |
+| `start` | (`port` is accepted but ignored) | `DBGp listener started on port N`: 9000, or 9001+ when 9000 is busy |
+| `status` / `stop` | none | `{connected, port, errors_queued}` / stops the session |
+| `run`, `step_into`, `step_over`, `step_out` | none | needs a connected script |
+| `breakpoint_set` / `breakpoint_remove` / `breakpoint_list` | `file`, `line`, `condition?` / `breakpoint_id` / none | needs a connected script |
+| `variables_get` | `context` (0 local, 1 global) | needs a connected script |
+| `evaluate` | `expression` | needs a connected script |
+| `stack_trace` | none | needs a connected script |
+| `capture_error` | `timeout` (ms, default 30000) | blocks until an error is queued or the timeout expires. Nothing queues errors in the current server, so it returns `{"captured":false,"reason":"timeout"}` |
+| `analyze_error` | `error` (a captured error object) | a Markdown prompt for Claude to analyze |
+| `apply_fix` | `file`, `line`, `original`, `replacement` | `Fix applied at F:L`. On failure, an `isError` result such as `Line mismatch at L` (the comparison trims whitespace). It only edits `.ahk` files. |
+| `get_source` | `file`, `line`, `radius` (default 5) | source lines around `line` |
+| `list_errors` / `clear_errors` | none | the queued errors (always none with the current server) |
 
-### Pattern 2: Interactive Stepping
-```
-breakpoint_set → debug_run → watch_add → debug_step_over (repeat)
-```
-1. Set breakpoints at interesting locations
-2. `debug_run` to hit first breakpoint
-3. `watch_add` for variables you want to track
-4. `debug_step_over` repeatedly — watch changes appear in response
-5. Use `variables_get` or `evaluate` for deeper inspection
+`capture_error` cannot work with the current `ahk` server. In the ahk-mcp source read
+when this file was written (2026-10), `queueError` is called only from
+`captureErrorContext` in `src/core/dbgp-client.ts`, and nothing in `src/` or `dist/`
+calls that. So `capture_error` always times out with `captured:false`, and
+`analyze_error`, which needs a captured error object, is unreachable. `apply_fix` works
+on its own.
 
-### Pattern 3: Quick Syntax Check
+### Debug loop
+
+1. Call `start` and note the port it reports (`status` shows it later).
+2. The user launches the script:
+   ```powershell
+   & .\bin\AutoHotkey64Console.exe /Debug script.ahk                 # PowerShell
+   & .\bin\AutoHotkey64Console.exe /Debug=localhost:9001 script.ahk  # when start reported 9001
+   ```
+   ```bash
+   ./bin/AutoHotkey64Console.exe //Debug script.ahk                  # Git Bash: //Debug, never /Debug
+   ./bin/AutoHotkey64Console.exe //Debug=localhost:9001 script.ahk   # Git Bash, port 9001
+   ```
+3. Once connected, the engine is paused at the script's first line. Nothing runs until
+   you send `run` or a step action.
+4. While it is paused, set breakpoints with `breakpoint_set` (`file`, `line`). They need a
+   connected script; before that the call fails with `Not connected`.
+5. Call `run`. When the script stops at a breakpoint, use `stack_trace`,
+   `variables_get`, `evaluate` and `step_into`/`step_over`/`step_out`.
+6. For a runtime error's message, line and stack, do not wait on `capture_error`: run
+   the script with `mcp__ahk-mcp__run` or `mcp__ahk-mcp__test` (or the engine CLI) and
+   read its diagnostics, or break before the failing line.
+7. To edit a line, show the user your diagnosis, then call `apply_fix` with the exact
+   current line as `original`. The user re-runs with `/Debug`.
+
+There are no watch expressions.
+
+## Running the tests
+
 ```bash
-bin\AutoHotkey64.exe check script.ahk        # exit 0=ok, 13=fail
-bin\AutoHotkey64.exe /Diag=json check script.ahk  # JSON output
+bash .claude/hooks/test-hooks.sh        # from Git Bash, in the repository root
 ```
-No debugger needed — runs and exits immediately.
+
+```powershell
+& "$env:ProgramFiles\Git\bin\bash.exe" .claude/hooks/test-hooks.sh
+```
+
+`test-hooks.sh` runs each hook the way Claude Code does: `bash <hook>`, a JSON payload on
+stdin and `CLAUDE_PROJECT_DIR` exported. It asserts the exit code, stdout and stderr
+separately.
+
+What it covers:
+
+- Registration: the entries in `settings.json` match the table above, and there are no
+  stray or doubly registered scripts.
+- Hook files: LF-only ASCII, with no python, jq or WSL calls.
+- Payloads with `C:\`, `C:/` and `/c/` paths, from Edit, Write, MultiEdit, NotebookEdit,
+  `AHK_File_Edit` and `AHK_File_Create`.
+- Malformed input.
+- Every skip rule.
+- Engine selection, including a missing `AHK_CUSTOM_EXE`.
+- Stock AutoHotkey refusal, both branches of the fork-engine test:
+  - Fake `#!` engines in `Program Files\AutoHotkey\` and
+    `AppData\Local\Programs\AutoHotkey\`, which log every call.
+  - Non-executable `MZ` lookalikes of a stock exe (no UTF-16 marker), at a portable
+    path, at a stock install path, and as `bin/AutoHotkey64Console.exe`. No hook may run
+    them, fall back to `bin/` from a refused `AHK_CUSTOM_EXE`, or offer them as a command,
+    and SessionStart and PreToolUse must name the cause.
+  - Acceptance by content: a copy of the real fork engine under a
+    `Program Files\AutoHotkey\v2\` path runs.
+- The GUI-build PowerShell form (`2>&1 | Out-String`).
+- Verdict mapping.
+- Output caps.
+- JSON shape, which is validated by a small bash parser.
+
+Requirements and behavior:
+
+- It needs no jq or python, and writes only to a private `mktemp -d` directory that it
+  deletes. `TMPDIR` is honored.
+- Most cases use throwaway fake engines. A few need the real fork engine, picked the way
+  the hooks pick it, including the same fork-engine test. The harness never runs a file
+  that fails that test. Those cases are skipped, with a loud warning, only when no fork
+  engine is usable.
+- The exit status is the number of failed cases. 255 means the harness could not start.
+- Set `NO_COLOR=1` for plain output.
+
+`test-hooks-gui.ahk` runs the same harness through Git for Windows bash and lists the
+results. It is a GUI: start it yourself. An agent should run `test-hooks.sh` directly and
+only `check` the GUI file.
 
 ## Troubleshooting
 
-**"Not connected to AutoHotkey debugger"**
-→ User hasn't launched AHK with `/Debug`. Tell them: `bin\AutoHotkey64.exe /Debug script.ahk`
-
-**`capture_error` times out**
-→ Script ran without errors, or wasn't started. Check `debug_status`.
-
-**`apply_fix` line mismatch**
-→ File was modified since the error was captured. Read `get_source_context` for current content and adjust.
-
-**`analyze_error` returns `api_error`**
-→ `ANTHROPIC_API_KEY` not set in `.mcp.json` env block. Fall back to client-side analysis.
-
-**Watch shows `<error>`**
-→ Variable not in scope at current execution point. It may exist in a different stack frame.
-
-**Watch shows `<undefined>`**
-→ Expression evaluated to empty. Variable may not be initialized yet.
+- **"python3 not found" or a Microsoft Store prompt.** These hooks do not use python. An
+  error like that comes from some other hook, registered in another settings file.
+- **`Script file not found` from engine commands in Git Bash.**
+  - Git Bash rewrites a bare `/Flag` argument into a path: `/Diag=json` becomes
+    `C:/Program Files/Git/Diag=json`.
+  - Use the aliases `--diag=json`, `--headless`, `--coverage=`, `--trace`, `--eval`,
+    `--crashlog=` and `--stderrfile=`.
+  - `/Debug`, `/ErrorStdOut` and `/include` have no alias. Double the slash (`//Debug`,
+    `//ErrorStdOut`, `//include`) or run them from PowerShell.
+  - For example, from Git Bash:
+    ```bash
+    ./bin/AutoHotkey64Console.exe check --diag=json script.ahk   # 0 pass, 13 syntax error
+    ```
+    With `--diag=json`, diagnostics arrive as NDJSON (one object per line) on stderr,
+    and the pass marker `{"kind":"check","status":"pass"}` goes to stdout. Read both
+    streams.
+  - `check` also exits 13 for a missing file, so read the message.
+- **`$LASTEXITCODE` does not change after the GUI `AutoHotkey64.exe` in PowerShell.**
+  PowerShell does not wait for a GUI exe unless its output is piped. Use the console
+  exe, or pipe: `& .\bin\AutoHotkey64.exe check /Diag=json file.ahk 2>&1 | Out-String`.
+- **The syntax gate never reports anything.**
+  - The SessionStart context says whether the gate is enabled. Usual causes:
+    - no fork engine in `bin/`
+    - `AHK_CUSTOM_EXE` names a missing file, or an exe that is not a fork engine (a stock
+      AutoHotkey anywhere)
+    - the file is outside the project, not `.ahk`, or a fixture name
+  - Run `bash .claude/hooks/test-hooks.sh` to see which rule applies.
+- **`ahk-post-edit: no check verdict ...`.** The engine produced neither a pass nor a
+  syntax verdict. It may have timed out, crashed, or not found the file. The edit stands.
+- **`AHK_Debug_DBGp` is not available.** The `debug` toolset of the `ahk` server is hidden
+  by default. Enable it only if the user asks (see above).
+- **`Not connected to AutoHotkey debugger`.** Possible causes:
+  - `start` was not called.
+  - The script was not launched with `/Debug` (or, in Git Bash, `//Debug`).
+  - The listener moved to another port. `status` shows the port; launch with
+    `/Debug=localhost:<port>`.
+  - `breakpoint_set` was called before the script connected.
+- **The port moved to 9001+.** Another program was already listening on 9000, for
+  example another DBGp client or an earlier listener that is still running.
+- **`capture_error` always returns `captured:false`.** That is expected with the current
+  `ahk` server, which never queues errors (see [Debugging](#debugging-with-ahk_debug_dbgp));
+  retrying or a longer timeout does not help. Run the script with `mcp__ahk-mcp__run` /
+  `mcp__ahk-mcp__test` and read its diagnostics, or use breakpoints and stepping.
+- **`apply_fix` reports `Line mismatch`.** Re-read the line with `get_source` or Read, and
+  pass it exactly as `original`.
+- **A hook runs twice.** A differently written copy of it (another path, or a
+  `bash .claude/hooks/...` form) is registered in `.claude/settings.local.json` or in user
+  settings. Claude Code drops only exact duplicates. Remove the copy.
+- **`.claude/settings.local.json` disappeared after a pull.** Commit `de57096c` untracked it
+  (see the top of this file). Do not copy the hooks back into it.
+- **Every hook fails, or runs WSL bash.** Someone converted a registration to exec form.
+  Restore the shell form `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/<script>"`.
+- **CRLF in hook scripts.** `.gitattributes` checks `*.sh` out with LF, and the test
+  harness fails on CR bytes.

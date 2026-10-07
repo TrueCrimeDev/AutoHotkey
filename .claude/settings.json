@@ -1,0 +1,62 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/ahk-debug-context.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__ahk__AHK_Debug_DBGp",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-ahk-connection.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__ahk__AHK_Debug_DBGp",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-capture-guidance.sh\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|mcp__ahk__AHK_File_Edit|mcp__ahk__AHK_File_Create",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/ahk-post-edit.sh\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "mcp__ahk__AHK_Debug_DBGp",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-capture-guidance.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
