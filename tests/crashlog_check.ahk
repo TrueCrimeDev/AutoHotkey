@@ -7,7 +7,9 @@ Assert(cond, msg := "assertion failed") {
     }
 }
 
-; Usage: bin\AutoHotkey64.exe tests\crashlog_check.ahk <logfile> <substring> [<substring2> ...]
+; Usage: bin\AutoHotkey64Console.exe tests\crashlog_check.ahk <logfile> <substring> [<substring2> ...]
+;        exits 0 when the log has every substring, 14 when it is missing or lacks one,
+;        64 with fewer than two arguments.
 if A_Args.Length < 2 {
     FileAppend("USAGE: crashlog_check.ahk <logfile> <substring> [<substring2> ...]`n", "**")
     ExitApp 64

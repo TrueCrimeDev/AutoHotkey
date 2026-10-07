@@ -4,7 +4,7 @@
 ;   * a reply arrives with the @@AHKMON@@ sentinel blob,
 ;   * requested views appear in requested order, with the probe var/hotkey present,
 ;   * the target's main window never becomes visible and the foreground never changes.
-; Run:  bin\AutoHotkey64.exe tests\test_ahkmon.ahk   ; exits 0 all pass, 1 otherwise.
+; Run:  bin\AutoHotkey64Console.exe tests\test_ahkmon.ahk   ; exits 0 all pass, 1 otherwise.
 #SingleInstance Off
 DetectHiddenWindows(true)
 

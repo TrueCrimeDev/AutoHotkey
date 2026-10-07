@@ -3,7 +3,7 @@ setlocal enableextensions
 cd /d "%~dp0"
 
 REM ===========================================================================
-REM  Primary build: mingw-w64 (GCC) for the AutoHotkey v2 Console fork.
+REM  Convenience build: mingw-w64 (GCC) through CMake, in place into bin\.
 REM
 REM    Build:                    cmd.exe /c build.bat        (or just build.bat)
 REM    Force a clean configure:  cmd.exe /c build.bat clean
@@ -11,9 +11,14 @@ REM
 REM  Requires MSYS2 (https://www.msys2.org) with the mingw-w64 toolchain:
 REM    pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
 REM
-REM  GCC is the canonical compiler for this fork. MSVC remains available as an
-REM  alternative via build_local.bat (and still produces the CI release binary).
-REM  Output: bin\AutoHotkey64.exe
+REM  CMake is the supported build route. BUILD.md documents it for MSVC x64,
+REM  MSVC Win32 and mingw-w64 x64 with isolated output directories
+REM  (out\msvc\x64, out\mingw\x64), and CI builds all three that way. This
+REM  script is the mingw route with CMake's default AHK_OUTPUT_DIR, so it
+REM  builds in build_gcc\ and overwrites the engines in bin\. Use the BUILD.md
+REM  commands for a build that leaves bin\ alone. AutoHotkeyx.sln and
+REM  build_local.bat remain available for the GUI executable only.
+REM  Output: bin\AutoHotkey64Console.exe (console) and bin\AutoHotkey64.exe (GUI)
 REM ===========================================================================
 
 REM MSYS2 install root (override with:  set MSYS2_ROOT=D:\msys64)
@@ -26,7 +31,7 @@ if not exist "%MINGW_BIN%\g++.exe" (
     echo Install MSYS2 from https://www.msys2.org, then in the MSYS2 shell run:
     echo     pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
     echo Or point MSYS2_ROOT at your install:  set MSYS2_ROOT=D:\msys64
-    echo ^(MSVC fallback: build_local.bat^)
+    echo ^(MSVC or an isolated build: see the CMake commands in BUILD.md^)
     exit /b 1
 )
 
@@ -58,4 +63,4 @@ if errorlevel 1 (
 )
 
 echo.
-echo Build complete! Output: bin\AutoHotkey64.exe
+echo Build complete! Output: bin\AutoHotkey64Console.exe and bin\AutoHotkey64.exe

@@ -6,7 +6,8 @@ This document explains how this repository's AutoHotkey v2 build works in practi
 
 This repo is not just stock AHK v2 source. It includes:
 
-- A custom engine build tag: `2.1-alpha.29+Console` (`source/ahkversion.h`)
+- A custom engine build tag: `2.1-alpha.31+Console` (`source/ahkversion.h`)
+- A console executable, `AutoHotkey64Console.exe`, built from the same source as the GUI `AutoHotkey64.exe` (`AHK_CONSOLE_ENTRYPOINT` in `source/AutoHotkey.cpp`)
 - Runtime console/error behavior around `/ErrorStdOut` (`source/error.cpp`, `source/AutoHotkey.cpp`)
 - A built-in `_ScriptGetLines()` helper (`source/error.cpp`, `source/lib/functions.h`)
 
@@ -14,39 +15,45 @@ This repo is not just stock AHK v2 source. It includes:
 
 ### 1. Build the engine
 
-Use Visual Studio/MSBuild as documented in `BUILD.md`.
+Build with CMake as documented in `BUILD.md` (MSVC x64, MSVC Win32, or mingw-w64 GCC x64; CI builds, syntax-checks and gates all three configurations).
 
 Typical output:
 
-- `bin/AutoHotkey64.exe` (Release x64)
+- `out/msvc/x64/AutoHotkey64Console.exe` (console engine) and `out/msvc/x64/AutoHotkey64.exe` (GUI), Release x64, with BUILD.md's isolated `AHK_OUTPUT_DIR`
+- `AutoHotkey32Console.exe` and `AutoHotkey32.exe` from the MSVC Win32 route
+- `bin/` instead when `AHK_OUTPUT_DIR` keeps its default, as `build.bat` (the mingw-w64 convenience route) does
+
+The commands below use `bin\AutoHotkey64Console.exe`, the engine `.mcp.json` and the Claude Code hooks use; substitute the path of the build you are testing.
 
 ### 2. Run scripts normally
 
 ```powershell
-bin\AutoHotkey64.exe your_script.ahk
+bin\AutoHotkey64Console.exe your_script.ahk
 ```
 
-This follows standard GUI/runtime behavior unless you pass debug/error flags.
+The console engine keeps the terminal attached, so the shell waits for the script and receives its exit code, and it reports load and runtime errors on stderr. The GUI `bin\AutoHotkey64.exe` follows standard GUI/runtime behavior (error dialogs) unless you pass debug/error flags, and PowerShell does not wait for it unless its output is piped.
 
 ### 3. Run in console/headless error mode
 
 ```powershell
-bin\AutoHotkey64.exe /ErrorStdOut your_script.ahk
+bin\AutoHotkey64Console.exe /Headless your_script.ahk
+bin\AutoHotkey64Console.exe /Headless /Diag=json your_script.ahk   # one JSON diagnostic per line on stderr
 ```
 
-In this fork, runtime errors can be printed to stderr instead of modal dialogs (details below).
+In this fork, runtime errors can be printed to stderr instead of modal dialogs (details below). The console engine does this by default; `/ErrorStdOut[=encoding][:color]` selects the text encoding and color, and turns the routing on for the GUI engine. `/Headless` also reports the engine's own error and instance prompts on stderr, but a script's own `MsgBox`, `InputBox` and `Gui` still show and block. From Git Bash, which rewrites arguments that start with `/`, use `--headless`, `--diag=json` and `//ErrorStdOut`.
 
-Test file in repo:
+Test files in repo:
 
-- `tests/test_errorstdout.ahk`
+- `tests/test_errorstdout.ahk` (shows a `MsgBox` before its error, so not for unattended runs)
+- `tests/test_console.ahk` (dialog-free: stdout lines, then an uncaught error on stderr and exit code 10)
 
 ### 4. Run in debugger mode (DBGp)
 
 ```powershell
-bin\AutoHotkey64.exe /Debug your_script.ahk
+bin\AutoHotkey64Console.exe /Debug your_script.ahk
 ```
 
-AHK acts as the DBGp client and connects to a listening debugger server (default `localhost:9000`), such as:
+AHK acts as the DBGp client and connects to a listening debugger server (default `localhost:9000`; `/Debug=host:port` for another endpoint, `/Debug=stdio` for DBGp over stdin/stdout; `//Debug` from Git Bash), such as:
 
 - `debugger-tool/mcp-server`
 - `debugger-tool/examples/simple_client.py`
@@ -66,7 +73,7 @@ Example in repo:
 
 ### Console/Error path
 
-1. CLI flag parsed (`/ErrorStdOut`) in `source/AutoHotkey.cpp`.
+1. CLI flag parsed (`/ErrorStdOut`) in `source/AutoHotkey.cpp`; the console entrypoint enables it before parsing, so `AutoHotkey64Console.exe` needs no flag.
 2. Script errors route through `Script::ShowError(...)` in `source/error.cpp`.
 3. If `mErrorStdOut` is enabled, formatted output is written to `"**"` (stderr).
 4. Process exits with non-zero code for failures.
@@ -88,9 +95,9 @@ Example in repo:
 
 `source/ahkversion.h` defines:
 
-- `RAW_AHK_VERSION "2.1-alpha.29+Console"`
+- `RAW_AHK_VERSION "2.1-alpha.31+Console"`
 
-The `+Console` metadata signals this fork includes console-oriented behavior.
+The `+Console` metadata signals this fork includes console-oriented behavior. `--version` prints this string plus the build's source revision (CMake's `AHK_BUILD_REVISION`, with `-dirty` for uncommitted changes), compiler and architecture.
 
 ## 2) `/ErrorStdOut` behavior in this fork
 
@@ -99,6 +106,7 @@ The `+Console` metadata signals this fork includes console-oriented behavior.
 - `source/AutoHotkey.cpp`
   - Parses `/ErrorStdOut`, optional `=encoding`, and `:color`
   - Calls `Script::SetErrorStdOut(...)`
+  - Under `AHK_CONSOLE_ENTRYPOINT`, calls `g_script.SetErrorStdOut(nullptr)` at startup, so the console engine reports errors on stderr by default
 
 - `source/error.cpp`
   - `Script::SetErrorStdOut(...)` stores encoding mode and optional ANSI color handling.
@@ -195,7 +203,7 @@ This is used for higher quality error context and is a key capability for AI-ass
 
 ### `debugger-tool/mcp-server`
 
-- Bridges AI tools to AHK DBGp over stdio MCP
+- Bridges AI tools to AHK DBGp over stdio MCP (a legacy TypeScript adapter; the engine's own MCP server is `AutoHotkey64Console.exe mcp`, `source/mcp_server.cpp`, which has no DBGp tool)
 - Primary loop: debugger controls, breakpoints, stack/vars, evaluate
 
 ### `debugger-tool/ahk-error-agent`
@@ -223,27 +231,38 @@ full task list, the launch configurations, the recommended extensions
 ## Common Commands
 
 ```powershell
-# Build
-msbuild AutoHotkeyx.sln /p:Configuration=Release /p:Platform=x64
+# Build (x64 developer prompt; see BUILD.md for prerequisites, Win32 and mingw-w64)
+cmake -S . -B build_msvc_x64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/msvc/x64
+cmake --build build_msvc_x64 --target AutoHotkey64Console AutoHotkey64 --parallel 6
 
-# Normal run
-bin\AutoHotkey64.exe script.ahk
+# Normal run (errors on stderr)
+bin\AutoHotkey64Console.exe script.ahk
+
+# Syntax check: exit 0, or 13 for a syntax error or a missing script file
+bin\AutoHotkey64Console.exe check /Diag=json script.ahk
+# Single-script test: exit 0 on pass, 10 for an uncaught error, 12 for a parse
+# error, 14 for ExitApp(14), a persistent script or an execution failure
+# (--capabilities lists the codes under exitCodes)
+bin\AutoHotkey64Console.exe test script.ahk
 
 # Console/headless error mode
-bin\AutoHotkey64.exe /ErrorStdOut script.ahk
+bin\AutoHotkey64Console.exe /Headless /Diag=json script.ahk
 
 # Debug mode (default localhost:9000)
-bin\AutoHotkey64.exe /Debug script.ahk
+bin\AutoHotkey64Console.exe /Debug script.ahk
 
 # Debug mode with explicit endpoint
-bin\AutoHotkey64.exe /Debug=127.0.0.1:9000 script.ahk
+bin\AutoHotkey64Console.exe /Debug=127.0.0.1:9000 script.ahk
 ```
+
+From Git Bash, write `--headless`, `--diag=json`, `//Debug` and `//Debug=127.0.0.1:9000` instead of the `/` forms; Git Bash rewrites an argument that starts with a single `/` into a path.
 
 ## Known Caveats
 
 - Some docs under `debugger-tool/` describe stock AHK behavior where `/ErrorStdOut` only catches load-time errors. This fork changes runtime behavior in `source/error.cpp`.
 - DBGp stream packets (`<stream>`) are separate from normal `<response>` packets; tools need explicit handling if they want live stdout/stderr over debugger transport.
 - `/Debug` requires the debugger server to be listening first, otherwise connect will fail.
+- `/Headless` covers the engine's own prompts only; a script that calls `MsgBox`, `InputBox` or `Gui` still blocks on a real window.
 
 ## Quick Mental Model
 

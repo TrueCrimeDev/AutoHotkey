@@ -40,11 +40,14 @@ Evaluates an AHK expression string against the caller's live scope. Reads and wr
 x := 10
 y := 20
 
-MsgBox Eval("x + y")              ; -> 30
-Eval("x := x + 1")                ; mutates caller's x
-MsgBox x                          ; -> 11
-MsgBox Eval("[1,2,3].Map(n => n*n).Reduce((a,b) => a+b, 0)")  ; -> 14
+Print(Eval("x + y"))                              ; -> 30
+Eval("x := x + 1")                                ; mutates caller's x
+Print(x)                                          ; -> 11
+Print(Eval("((a, b) => a * a + b * b)(2, 3)"))    ; -> 13
 ```
+
+(`Array` has no `Map` or `Reduce` method, so an expression such as
+`[1,2,3].Map(...)` throws `MethodError`.)
 
 ### Signature
 
@@ -60,7 +63,8 @@ result := Eval(Expression)
 | When | Class | Notes |
 |---|---|---|
 | Gate not enabled | `Error` | Message: `"Eval is disabled (add #EnableEval to your script or pass /Eval)"` |
-| Input doesn't parse | `SyntaxError` | `.Message` carries the parser's diagnostic; `.File = "Eval"`, `.Line = 0`, `.Column = 0` (column info is best-effort and currently always 0) |
+| Input doesn't parse | `SyntaxError` | `.Message` carries the parser's diagnostic; `.File = "_Eval"`, `.Line = 0`, `.Column = 0` (column info is best-effort and currently always 0). It has no `What`, `Extra` or `Stack` property. |
+| Input longer than 16,384 UTF-16 code units | `ValueError` | `"Eval expression exceeds the 16384-character limit."`, raised before parsing |
 | Identifier missing in caller scope | `UnsetError` | Same as inline code |
 | Anything raised by the evaluated expression | unchanged | Propagated as-is |
 
@@ -71,8 +75,10 @@ Either route works; they're equivalent. Pick whichever fits your workflow.
 **CLI flag (for ad-hoc runs, third-party launchers, MCP/DBGp scenarios):**
 
 ```bat
-bin\AutoHotkey64.exe /Eval script.ahk
+bin\AutoHotkey64Console.exe /Eval script.ahk
 ```
+
+From Git Bash, which rewrites an argument starting with `/` into a path, write `--eval`.
 
 **Directive (self-documenting; recommended):**
 
@@ -90,11 +96,27 @@ Both flip the same internal flag. If both are set, no conflict.
 `Eval(...)` resolves identifiers in this order:
 
 1. The caller function's locals and parameters.
-2. The caller function's static / closure variables (if any).
+2. The caller function's static variables, and the outer variables a closure
+   captures. A closure captures only the outer variables its own code names, so
+   `inner() => Eval("c")` cannot see the outer `c` and throws
+   `"This dynamic variable is not included in this closure."`.
 3. Globals (including built-ins like `A_AhkVersion`).
 4. Throws `UnsetError` if the name is genuinely missing.
 
-It cannot create new locals — that protects you from accidentally polluting the caller's scope with typos.
+Assigning to a name the caller's scope does not have creates a variable there,
+so a typo in an assignment is not caught:
+
+- At global scope (the auto-execute section), `Eval("n := 7")` creates the
+  global `n`, which a function can then read through a `global n` declaration.
+- Inside a function, it adds a new local to that function. A later `Eval` in the
+  same call reads the value; no global is created or changed. The value is gone
+  when the call returns, so the next call starts with the name unassigned and
+  reading it before assigning throws `UnsetError`.
+- If that name is also a global, the new local hides it from then on: later
+  calls of the same function no longer read the global through `Eval`, and
+  reading the name there before assigning it throws `UnsetError`. Other
+  functions still see the global. Declare `global name` in the function to make
+  `Eval` read and write the global instead.
 
 ### Runtime parser repairs (September 2026)
 
@@ -116,7 +138,7 @@ unset, matching the inline expression. This formerly crashing case is tested in
 - G: `SyntaxError` with non-empty `Message` and a `Column` property on parse failure
 - H: reentrancy (nested `Eval`)
 
-Run it with `bin\AutoHotkey64.exe test tests\test_eval.ahk` (the `#EnableEval` directive at the top of the file enables the BIF; no CLI flag needed).
+Run it with `bin\AutoHotkey64Console.exe test tests\test_eval.ahk` (the `#EnableEval` directive at the top of the file enables the BIF; no CLI flag needed). It prints `all checks passed` and exits 0.
 
 `tests/test_eval_gated.ahk` confirms the gate is closed by default — calling `Eval(...)` without enabling it throws `"Eval is disabled"`.
 
@@ -241,15 +263,23 @@ On instances thrown by `Eval`:
 | Property | Type | Value |
 |---|---|---|
 | `Message` | String | The parser's diagnostic text |
-| `File` | String | `"Eval"` |
+| `File` | String | `"_Eval"` |
 | `Line` | Integer | `0` |
 | `Column` | Integer | `0` (best-effort placeholder for v1) |
+
+These four are the only properties; an `Eval` `SyntaxError` has no `What`,
+`Extra` or `Stack`, so reading `e.What` throws a `PropertyError`. Check with
+`e.HasProp("What")` in a handler that also sees other errors.
 
 Scripts can also throw their own:
 
 ```ahk
 throw SyntaxError("custom parse failure", "MyParser", 42)
 ```
+
+A `SyntaxError` the script constructs takes the usual `Error` arguments
+(`Message`, `What`, `Extra`) and has the usual `Error` properties (`What`,
+`Extra`, `File`, `Line`, `Stack`), but no `Column`.
 
 ---
 
@@ -264,8 +294,10 @@ Either route. Both routes are equivalent and idempotent.
 **CLI flag:**
 
 ```bat
-bin\AutoHotkey64.exe /CrashLog=C:\logs\ahk.log script.ahk
+bin\AutoHotkey64Console.exe /CrashLog=C:\logs\ahk.log script.ahk
 ```
+
+From Git Bash write `--crashlog='C:\logs\ahk.log'` (quoted, so bash keeps the backslashes).
 
 **Directive (in the script):**
 
@@ -280,7 +312,7 @@ The parent directory must exist; the file itself is created (or appended to) on 
 
 ### File format
 
-Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] key=value …` header line. Multi-line events indent continuation lines two spaces.
+Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] key=value …` header line. Multi-line events indent their field lines (`Message:`, `File:`, …) two spaces. The `Stack:` value is the error's own `Stack` text written as-is: its lines are not indented and end in CRLF, while the rest of the log uses LF. Treat everything up to the next `[YYYY-MM-DD` header line as part of the record.
 
 ### Event types
 
@@ -288,7 +320,7 @@ Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] ke
 |---|---|
 | `[START]` | First write after process launch. Fields: `pid`, `ahk=<version>`, `script=<absolute path>`, `cmdline=<full command line>`. |
 | `[PARSE]` | Parse / load-time error, before auto-exec. Fields: `pid`, `file`, `line` plus indented `Message:` line. |
-| `[ERROR]` | Uncaught script-level exception after all OnError handlers returned 0 / no handler registered. Fields: `pid`, `type=<ErrorClass>`, `mode=<Exit\|Continue>` plus indented `Message:` / `File:` / `Line:` / `What:` / `Extra:` / `Stack:` lines. |
+| `[ERROR]` | Uncaught script-level exception after all OnError handlers returned 0 / no handler registered. Fields: `pid`, `type=<ErrorClass>`, `mode=<Return\|Exit\|ExitApp>` (the mode an OnError callback receives: `Return` for a continuable runtime error such as a `MethodError`, `Exit` for a `throw`) plus indented `Message:` / `File:` / `Line:` / `What:` / `Extra:` / `Stack:` lines. |
 | `[FATAL]` | Interpreter-level SEH fault caught by `SetUnhandledExceptionFilter`. Fields: `pid`, `code=0x<hex>`, `address=0x<hex>` plus indented `LastFile:` / `LastLine:` / `LastHotkey:` lines (currently empty placeholders — see "Known limitations"). |
 | `[EXIT]` | Process termination — written by every exit path. Fields: `pid`, `code`, `reason=<name>`. |
 
@@ -312,17 +344,17 @@ Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] ke
 ### Example log
 
 ```
-[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.31+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64.exe /CrashLog=C:\logs\ahk.log app.ahk"
-[2026-05-13 21:43:22] [ERROR] pid=12345 type=TypeError mode=Exit
+[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.31+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64Console.exe /CrashLog=C:\logs\ahk.log app.ahk"
+[2026-05-13 21:43:22] [ERROR] pid=12345 type=MethodError mode=Return
   Message: This value of type "String" has no method named "DoStuff".
   File: C:\Users\me\Lib\Clip.ahk
   Line: 142
-  What: Foo
-  Extra: "abc"
+  What:
+  Extra:
   Stack:
-    C:\Users\me\Lib\Clip.ahk (142) : [Clip.Foo]
-    C:\Users\me\app.ahk (33) : [Clip.StartMonitor]
-    > Auto-execute
+C:\Users\me\Lib\Clip.ahk (142) : [Clip.Foo] s.DoStuff()
+C:\Users\me\app.ahk (33) : [Clip.StartMonitor] Clip.Foo()
+> Auto-execute
 [2026-05-13 21:43:22] [EXIT] pid=12345 code=10 reason=Error
 ```
 
@@ -368,8 +400,10 @@ When the script writes anything to stderr (via the existing `/ErrorStdOut` path)
 ### Usage
 
 ```bat
-bin\AutoHotkey64.exe /ErrorStdOut /StdErrFile=C:\logs\ahk.stderr script.ahk
+bin\AutoHotkey64Console.exe /ErrorStdOut /StdErrFile=C:\logs\ahk.stderr script.ahk
 ```
+
+From Git Bash write `//ErrorStdOut --stderrfile='C:\logs\ahk.stderr'`.
 
 The file gets the same byte-for-byte content the terminal's stderr would have received. If `/ErrorStdOut` is not set, this fork's headless paths still emit stderr, so the file still gets the formatted error output.
 
@@ -405,6 +439,12 @@ Existing exit-code taxonomy is preserved unchanged from the fork's prior behavio
 | `14` | `test` subcommand failed | `Test` |
 | `64` | CLI usage error | `Usage` |
 | `130` | Ctrl+C / Ctrl+Break / console close / logoff / shutdown | `ExternalSignal` |
+
+Under `test`, a script that runs to its end exits `0` and prints `TEST PASS`.
+An uncaught error still exits `10` and a parse error `12`; `14` comes from an
+explicit `ExitApp(14)` (the `tests/Test.ahk` framework's failure exit), a
+persistent script, or an execution failure. Other `ExitApp(n)` codes pass
+through. `--capabilities` lists these codes under `exitCodes`.
 
 ---
 
@@ -447,13 +487,27 @@ Both directives must appear at top-of-script scope, alongside `#Requires`, `#Sin
 
 ## 11. Tests in this repo
 
-All tests live under `tests/`. Run any of them with:
+The aggregate gate runs the automated suites against one engine: the `qa/`
+runner, `tests/test_eval*.ahk`, the Python checks, and `tests/run.ahk`.
 
 ```bat
-bin\AutoHotkey64.exe test tests\<script>.ahk
+python tests\run_console_gate.py bin\AutoHotkey64Console.exe
 ```
 
-(Exit 0 = pass, exit 14 = fail.)
+Run one `.ahk` suite with the `test` verb, for example
+`bin\AutoHotkey64Console.exe test tests\test_eval.ahk`. It exits 0 on pass; §7
+lists the failure codes. The Python checks take the engine path as their
+argument (`python tests\test_console_coverage.py bin\AutoHotkey64Console.exe`).
+
+The `test_crashlog_*.ahk` files are fixtures, not self-checking suites. Run one
+with `/CrashLog=` and check the log with `crashlog_check.ahk`, which exits 0
+when every substring is present, 14 when one is missing, and 64 on a usage
+error:
+
+```bat
+bin\AutoHotkey64Console.exe /Headless /CrashLog=C:\temp\se.log tests\test_crashlog_start_exit.ahk
+bin\AutoHotkey64Console.exe /Headless tests\crashlog_check.ahk C:\temp\se.log "[START]" "reason=Normal"
+```
 
 | Test | Covers |
 |---|---|
@@ -471,43 +525,73 @@ bin\AutoHotkey64.exe test tests\<script>.ahk
 | `qa/tests/test_inspect.ahk` | `Inspect`: primitives, depth/MaxItems clamps, arrays/maps/JSON.Object, class getters and methods, native Gui controls, cycles, 60-deep chains, 500-property objects. |
 | `qa/tests/test_processpipe.ahk` | `ProcessPipe`: UTF-8 round trip, timeouts, Kill, stderr separation, 2 MB producer without deadlock, 200 KB line across chunk boundaries, argument quoting, kill-on-release, error paths. |
 | `tests/test_console_coverage.py` | `/Coverage=`: DA/LF/LH consistency, structural lines excluded, per-iteration `while` counts, relative path resolution, report survives uncaught errors and `ExitApp(14)`. |
-| `tests/test_repl.sh` | `repl` subcommand end-to-end (bash; pipes stdin): values, cross-line state, error resilience, JSON mode, `ExitApp` passthrough, script-hosted session. |
+| `tests/test_repl.sh` | `repl` subcommand end-to-end (bash under WSL; pipes stdin): values, cross-line state, error resilience, JSON mode, `ExitApp` passthrough, script-hosted session. Pass the engine as its argument. It writes `/Diag=json` and calls `wslpath`, so under Git Bash its JSON-mode and script-hosted checks fail for path reasons; the gate covers the REPL with `tests/test_console_repl.py`. |
 | `tests/manual_*.ahk` | Manual verification scripts (SEH, recursion, long-running for Ctrl+C). Not run automatically. |
 
-The Alpha22-29 feature showcases under `examples/` (`examples/Alpha22_Example.ahk` through `examples/Alpha29_Example.ahk`) exercise upstream alpha features and are unaffected by the fork-only additions.
+The alpha feature showcases under `examples/` (`examples/Alpha22_Example.ahk` through `examples/Alpha31_Example.ahk`) exercise upstream alpha features and are unaffected by the fork-only additions.
 
 ---
 
 ## 12. Build paths
 
-Two build systems coexist; both produce `bin/AutoHotkey64.exe`. **GCC (mingw-w64) is the canonical compiler**; MSVC remains available and still produces the CI release binary.
+CMake is the supported build route. [`BUILD.md`](BUILD.md) documents it for
+MSVC x64, MSVC Win32 and mingw-w64 GCC x64, and `.github/workflows/build.yml`
+builds all three configurations that way, into isolated output directories
+(`out/msvc/x64`, `out/msvc/Win32`, `out/mingw/x64`). Each CI build job
+syntax-checks every `.ahk` and runs `tests/run_console_gate.py` against its
+fresh Console executable; the x64 jobs also run the MCP conformance check. A
+build produces the console engine (`AutoHotkey64Console.exe`, or
+`AutoHotkey32Console.exe` for Win32) and the GUI engine (`AutoHotkey64.exe` /
+`AutoHotkey32.exe`).
 
-### GCC / mingw-w64 (canonical)
+### MSVC
+
+From an x64 developer command prompt:
+
+```cmd
+cmake -S . -B build_msvc_x64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/msvc/x64
+cmake --build build_msvc_x64 --target AutoHotkey64Console AutoHotkey64 --parallel 6
+python tests/run_console_gate.py out/msvc/x64/AutoHotkey64Console.exe
+```
+
+Win32 uses an x86 developer prompt, its own build and output directories, and
+the targets `AutoHotkey32Console` and `AutoHotkey32`. `/Zc:preprocessor`
+(required by `__VA_OPT__` in `script_func_impl.h`) is set in both
+`CMakeLists.txt` and `Config.vcxproj`.
+
+### GCC / mingw-w64
+
+In the MSYS2 MINGW64 shell:
 
 ```bash
-# from the repo root (WSL or a Windows shell):
-cmd.exe /c build.bat                 # append `clean` to force a fresh configure
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+cmake -S . -B build_mingw_x64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/mingw/x64
+cmake --build build_mingw_x64 --target AutoHotkey64Console AutoHotkey64 --parallel 6
 ```
 
-`build.bat` drives MSYS2's mingw-w64 toolchain through CMake — Ninja when present, otherwise MinGW Makefiles — and writes `bin/AutoHotkey64.exe`; the build tree lives in `build_gcc/`. Requires MSYS2 with:
+`build.bat` is a convenience wrapper for this route. It builds in `build_gcc/`
+with CMake's default `AHK_OUTPUT_DIR` (`bin`), so it overwrites
+`bin\AutoHotkey64Console.exe` and `bin\AutoHotkey64.exe`. Set `MSYS2_ROOT` if
+MSYS2 isn't at `C:\msys64`, and append `clean` to force a fresh configure.
 
-```
-pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
-```
+GCC executables link their runtime statically. Some MSVC-only constructs are
+guarded with `#ifdef _MSC_VER`:
 
-Set `MSYS2_ROOT` if MSYS2 isn't at `C:\msys64`. The `build-mingw` job in `.github/workflows/build.yml` builds this route in CI on every push. Statically linked (~3.2 MB). Some MSVC-only constructs are guarded with `#ifdef _MSC_VER`:
-
-- `__try`/`__except` SEH around the crash-log filter's defensive guard (mingw GCC doesn't support that syntax — bare filter still works, just without the inner reentrancy catch).
+- `__try`/`__except` SEH around the crash-log filter's defensive guard (mingw GCC doesn't support that syntax — bare filter still works, just without the inner reentrancy catch). Do not assume identical native exception behavior across compilers.
 - Various goto-init-crossing block wraps and `std::nullptr_t` qualifications throughout `source/` (mingw GCC is stricter than MSVC).
-- ASM stubs (`x64call.asm` / `x64stub.asm`) have GAS-syntax twins (`x64call.s` / `x64stub.s`) for the mingw build.
+- ASM stubs (`source/libx64call/x64call.asm` / `x64stub.asm`) have GAS-syntax twins (`x64call.s` / `x64stub.s`) for the mingw build.
 
-### MSVC (alternative)
+### Other routes and releases
 
-```bat
-build_local.bat
-```
+`AutoHotkeyx.sln`, `build_local.bat` and `build_vs18.cmd` remain available for
+the GUI executable only. Use CMake for the Console target and for isolated
+builds that do not replace the engine in `bin\`.
 
-Uses Visual Studio BuildTools (VS18 / VS2022) → `AutoHotkeyx.sln` / `AutoHotkeyx.vcxproj`. Smaller binary (~1.3 MB) with full SEH crash-log fidelity; this is what the CI `release` job ships. The `Config.vcxproj` includes `/Zc:preprocessor` (required by `__VA_OPT__` in `script_func_impl.h`).
+A `v*` tag publishes a non-draft release only after the compiler gates, the
+coverage tests and the Node debugger-client builds pass. Its assets are the
+MSVC x64 and Win32 GUI and Console executables, the mingw x64 executables with
+`-mingw` filenames, their SHA-256 and `.capabilities.json` files, and the x64
+`tree-sitter-ahk.dll`.
 
 ---
 
@@ -516,7 +600,7 @@ Uses Visual Studio BuildTools (VS18 / VS2022) → `AutoHotkeyx.sln` / `AutoHotke
 ### Headless script with crash logging and stderr capture
 
 ```bat
-bin\AutoHotkey64.exe ^
+bin\AutoHotkey64Console.exe ^
     /Headless ^
     /ErrorStdOut ^
     /CrashLog=C:\logs\ahk.log ^
@@ -533,10 +617,14 @@ bin\AutoHotkey64.exe ^
 
 ; Now Eval() works and any uncaught error lands in C:\logs\ahk.log.
 result := Eval("1 + 2")
-Print "result is " . result
+Print("result is " result)
 ```
 
 ### Interactive REPL (manual session)
+
+For a terminal or an agent's stdin pipe, use the `repl` subcommand (§16). This
+`InputBox` loop is a GUI alternative; it opens a dialog per line, so do not run
+it unattended.
 
 ```ahk
 #Requires AutoHotkey v2.1-alpha.29
@@ -547,11 +635,11 @@ Loop {
     if line.Result != "OK"
         break
     try
-        Print line.Value " = " (Eval(line.Value) ?? "<unset>")
+        Print(line.Value " = " (Eval(line.Value) ?? "<unset>"))
     catch SyntaxError as e
-        Print "syntax error: " e.Message
+        Print("syntax error: " e.Message)
     catch as e
-        Print e.__Class ": " e.Message
+        Print(e.__Class ": " e.Message)
 }
 ```
 
@@ -608,10 +696,13 @@ interpreter state: evaluate expressions in milliseconds, build and poke GUIs
 interactively, and drive it all from a terminal or an agent's stdin pipe.
 
 ```bat
-bin\AutoHotkey64.exe repl                       :: bare session (synthetic empty script)
-bin\AutoHotkey64.exe repl script.ahk            :: load script, run auto-execute, then REPL
-bin\AutoHotkey64.exe repl /Diag=json script.ahk :: JSON result lines on stdout
+bin\AutoHotkey64Console.exe repl                       :: bare session (synthetic empty script)
+bin\AutoHotkey64Console.exe repl script.ahk            :: load script, run auto-execute, then REPL
+bin\AutoHotkey64Console.exe repl /Diag=json script.ahk :: JSON result lines on stdout
 ```
+
+Use the console engine: the session reads stdin and writes stdout, so the shell
+must stay attached. From Git Bash write `repl --diag=json`.
 
 ### Semantics
 
@@ -636,8 +727,10 @@ bin\AutoHotkey64.exe repl /Diag=json script.ahk :: JSON result lines on stdout
 
 ### Output
 
-Text mode: the expression's value prints to stdout; void/unset results print an empty line;
-objects print as `<ClassName object>`; errors print one line to stderr.
+Text mode: the expression's value prints to stdout; an empty string prints an empty line,
+while an unset result (and a blank input line) prints nothing; objects print as one line of
+`Inspect` JSON (§18, depth 1, at most 50 items per list), such as
+`{"type":"Object","properties":{"a":1}}`; errors print one line to stderr.
 
 JSON mode (`/Diag=json`): one stdout result per input line, including blank lines,
 `.help`, and `.exit`. Ordinary script stdout is redirected to stderr before the
@@ -667,15 +760,21 @@ ordered with input and use dynamic, length-aware serialization. Explicit
 ### v1 limitations
 
 - Single-line expressions only (no multi-line blocks; use commas or load a script).
-- No `ToString` dispatch for object results (`<Array object>`, not contents).
+- No `ToString` dispatch for object results: they print as `Inspect` JSON, never
+  through the object's own `ToString`.
+- An expression longer than 16,384 UTF-16 code units is rejected with
+  `ValueError: Eval expression exceeds the 16384-character limit.` on stderr, and
+  the session continues with the next line.
 - Scratch expression allocations remain in the process heap until exit; very long
-  sessions and oversized expressions still need a separate resource-use review.
+  sessions still need a separate resource-use review.
 
-Implementation: `source/error.cpp` (reader thread, mailbox, `ReplDrainInput`,
-`EvalCore` shared with the `Eval` BIF), dispatch via `AHK_REPL_INPUT` in
-`MainWindowProc`. Design: `docs/superpowers/specs/2026-06-12-repl-mode-design.md`.
-Tests: `tests/test_repl.sh`, `tests/test_console_repl.py`. Run the aggregate checks
-with `python tests/run_console_gate.py bin/AutoHotkey64.exe`.
+Implementation: `source/console_repl.cpp` (stdin reader thread, mailbox,
+`Script::ReplDrainInput`), dispatch via `AHK_REPL_INPUT` in `MainWindowProc`
+(`source/script2.cpp`), and `ConsoleEval::Evaluate` in `source/console_eval.cpp`,
+shared with the `Eval` BIF. Design: `docs/superpowers/specs/2026-06-12-repl-mode-design.md`.
+Tests: `tests/test_console_repl.py` (in the gate) and `tests/test_repl.sh` (bash
+under WSL; see §11). Run the aggregate checks with
+`python tests/run_console_gate.py bin/AutoHotkey64Console.exe`.
 
 ---
 
@@ -688,9 +787,22 @@ connects the two and writes a standard LCOV tracefile at exit.
 
 ### Enabling it
 
-```bat
-bin\AutoHotkey64.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
+```powershell
+New-Item -ItemType Directory -Force coverage | Out-Null
+bin\AutoHotkey64Console.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
 ```
+
+From Git Bash:
+
+```bash
+mkdir -p coverage
+./bin/AutoHotkey64Console.exe --headless --coverage=coverage/tests.lcov test tests/run.ahk
+```
+
+Create the report's directory first. The engine does not create it: with a
+missing directory the run still exits with its normal code (0 for a passing
+`test`) and prints nothing on stderr, but no report is written.
+`qa/tests/test_coverage_missing_dir.ahk` pins this current behavior.
 
 `--coverage=<path>` is accepted too. A relative path is resolved against the
 working directory at launch, before the script can `SetWorkingDir`. When the
@@ -738,7 +850,8 @@ python tools\lcov_summary.py "coverage/**/*.lcov" --include "^Lib/" --out covera
 ```
 
 `qa/run.ahk` launches one process per test; set `AHK_QA_COVERAGE_DIR=<dir>`
-and every child writes its own `<test>_<pid>_<n>.lcov` there for the merge.
+and every child writes its own `<test>_<pid>_<n>.lcov` there for the merge
+(the runner creates that directory itself).
 Any LCOV consumer (Codecov, `genhtml`, VS Code Coverage Gutters) reads the
 files directly.
 
@@ -785,7 +898,8 @@ Print(Inspect(btn, 1))
 | `circular` | any node | this object is already open further up |
 
 Nested primitives are inlined as JSON values; nested objects are descriptors.
-`Depth` is clamped to 0…32 and `MaxItems` to ≥ 1. Getters are never evaluated:
+`Depth` is clamped to 0…1000 (the JSON nesting limit) and `MaxItems` to ≥ 1.
+`MaxItems` also caps each `getters` / `setters` / `methods` name list. Getters are never evaluated:
 evaluating one could run arbitrary script, so a value that only exists behind a
 getter appears by name only. Read it explicitly if you need it.
 
@@ -847,7 +961,7 @@ Unknown formats exit 64.
 
 ## 21. Native MCP tools: `check`, `run`, `test`
 
-`AutoHotkey64.exe mcp` now covers the whole check / run / test loop without a
+`AutoHotkey64Console.exe mcp` now covers the whole check / run / test loop without a
 Node or Python bridge. Each tool spawns this same executable in a child
 process (`/Headless /Diag=json`), captures both streams, and returns every
 stderr line that parses as a diagnostic:
@@ -856,7 +970,7 @@ stderr line that parses as a diagnostic:
 |---|---|---|
 | `check` | `file`, `cwd?`, `timeout_ms?` | `ok`, `exitCode` (0/13), `diagnostics[]`, `stdout`, `stderr` |
 | `run` | `file`, `args?[]`, `cwd?`, `timeout_ms?` | same plus `timedOut`; the process tree is killed at `timeout_ms` (default 30000, max 600000) |
-| `test` | as `run` | `exitCode` 0 pass / 14 fail |
+| `test` | as `run` | `exitCode` 0 pass, 10 uncaught error, 12 parse error, 14 for `ExitApp(14)`, a persistent script or an execution failure (§7) |
 
 `diagnostics[]` items are the engine's schema-2 diagnostic objects (`type`,
 `message`, `file`, `line`, `column`, `stack`, …). A persistent script under

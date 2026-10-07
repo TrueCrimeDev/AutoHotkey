@@ -309,7 +309,9 @@ jobs:
         git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
 
   # Tag `vX.Y.Z` -> published (non-draft) release with the engines attached, so
-  # consumers can `gh release download -R TrueCrimeDev/AutoHotkey -p AutoHotkey64.exe`.
+  # consumers can `gh release download -R TrueCrimeDev/AutoHotkey -p AutoHotkey64Console.exe`
+  # (the console engine; the GUI AutoHotkey64.exe and the 32-bit and -mingw
+  # builds are attached too).
   release:
     needs: [build, build-mingw, test, debugger-clients]
     runs-on: ubuntu-latest

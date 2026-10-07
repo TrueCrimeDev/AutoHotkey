@@ -1,8 +1,21 @@
 #Requires AutoHotkey v2.1-alpha.31
 ; tests/run.ahk -- single-process test entry point.
 ;
-;   bin\AutoHotkey64.exe /Headless /Diag=json test tests\run.ahk
-;   bin\AutoHotkey64.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
+; Run it from the repository root with the fork's console engine.
+;
+; PowerShell:
+;   bin\AutoHotkey64Console.exe /Headless /Diag=json test tests\run.ahk
+;   New-Item -ItemType Directory -Force coverage | Out-Null
+;   bin\AutoHotkey64Console.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
+;
+; Git Bash rewrites arguments that start with "/" into paths, so use the aliases:
+;   ./bin/AutoHotkey64Console.exe --headless --diag=json test tests/run.ahk
+;   mkdir -p coverage
+;   ./bin/AutoHotkey64Console.exe --headless --coverage=coverage/tests.lcov test tests/run.ahk
+;
+; Create the coverage directory first: when it is missing, --coverage (/Coverage)
+; writes nothing and the run still exits 0 with no diagnostic
+; (qa/tests/test_coverage_missing_dir.ahk pins that behavior).
 ;
 ; Exit codes: 0 all passed, 14 any failure (or a test file not listed below).
 ; Every tests/*.test.ahk must be #Included here; the check below fails the run

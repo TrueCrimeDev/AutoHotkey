@@ -17,7 +17,12 @@
 ; Suite exit code = total failing assertions + crashes, so `$? -eq 0` from any
 ; shell means the whole tree is green.
 ;
-; Usage: bin\AutoHotkey64.exe /Headless /ErrorStdOut qa\run.ahk
+; Usage (PowerShell or cmd, from the repo root):
+;   bin\AutoHotkey64Console.exe /Headless /ErrorStdOut qa\run.ahk
+; Usage (Git Bash, which rewrites a leading / into a path):
+;   ./bin/AutoHotkey64Console.exe --headless //ErrorStdOut qa/run.ahk
+; Use the console engine: PowerShell does not wait for the GUI AutoHotkey64.exe
+; unless its output is piped, so $LASTEXITCODE would not be the suite's result.
 ; AHK_QA_TIMEOUT_MS overrides the 30000 ms per-child timeout.
 
 engine  := A_AhkPath

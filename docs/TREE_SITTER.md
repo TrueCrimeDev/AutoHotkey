@@ -8,9 +8,14 @@ so scripts can use it directly via `DllCall` — no separate `tree-sitter.dll` r
 this DLL — no `DllCall` needed. The raw `DllCall` surface documented further down
 still works and is the fallback on builds that predate the BIF.
 
-> `TSParse()` requires the engine to be rebuilt from source (`build_local.bat`).
-> Stock `AutoHotkey64.exe` builds before that rebuild will raise
-> `Error: TSParse — call to nonexistent function`.
+> `TSParse()` exists only in this fork's engine. Build it with CMake per
+> [`BUILD.md`](../BUILD.md), or use a release console engine. An engine without
+> the BIF (stock AutoHotkey, or a fork build that predates it) treats `TSParse`
+> as an unassigned global variable, so the call fails at runtime with `This
+> global variable has not been assigned a value.` To probe a fork engine, run
+> its `check` on a one-line script that calls `TSParse("x := 1")`: an engine
+> without the BIF still prints `CHECK PASS` and exits 0, but first warns `This
+> global variable appears to never be assigned a value.`
 
 ## Native API: `TSParse(Source)`
 
@@ -55,8 +60,7 @@ Errors are raised as exceptions: a missing/invalid DLL throws
 `tree-sitter-ahk.dll could not be loaded …`; a runtime/grammar ABI mismatch
 throws `tree-sitter language/runtime ABI mismatch.`
 
-Implementation: `source/error.cpp` (next to `_ScriptGetLines`), registered in
-`source/lib/functions.h`.
+Implementation: `source/ts_api.cpp`, registered in `source/lib/functions.h`.
 
 ## Validity: Check(Source)
 
@@ -121,5 +125,9 @@ Top-level statements parse to named children of `source_file` — e.g.
 parse, child walk with byte ranges, and `has_error` on deliberately broken input.
 
 ```bash
-bin/AutoHotkey64.exe tests/test_treesitter_dll.ahk   # prints PASS, exit 0
+./bin/AutoHotkey64Console.exe --headless tests/test_treesitter_dll.ahk   # prints PASS, exit 0
+./bin/AutoHotkey64Console.exe test tests/test_tsparse_bif.ahk             # TSParse BIF; PASS, exit 0
 ```
+
+An engine outside `bin/` needs the x64 `tree-sitter-ahk.dll` beside it (CMake
+does not copy it there).

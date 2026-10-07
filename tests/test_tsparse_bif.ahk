@@ -1,13 +1,15 @@
 /*
 test_tsparse_bif.ahk — smoke test for the native TSParse() BIF
 
-Exercises the engine-level tree-sitter integration (source/error.cpp +
+Exercises the engine-level tree-sitter integration (source/ts_api.cpp +
 source/lib/functions.h) end to end: parse, tree wrapper, node fields, child
 walk, named-child filtering, node text, and error detection.
 
-REQUIRES a from-source rebuild (build_local.bat) — TSParse does not exist in
-engine builds that predate the integration; those raise
-"Error: TSParse — call to nonexistent function".
+REQUIRES this fork's engine, built per BUILD.md (CMake) or a release console
+engine, with the x64 tree-sitter-ahk.dll beside it. Run:
+  bin\AutoHotkey64Console.exe test tests\test_tsparse_bif.ahk
+Engines without the TSParse BIF treat it as an unassigned global variable and
+fail at runtime with "This global variable has not been assigned a value."
 */
 #Requires AutoHotkey v2.1-alpha.30
 

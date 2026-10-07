@@ -1,20 +1,33 @@
 # qa/ — fork regression suite
 
 Empirically-verified interpreter regression tests for this AutoHotkey fork.
-Distinct from `tests/` (ad-hoc manual crashlog/debugger experiments).
+Distinct from `tests/`, which holds the single-process `Test.ahk` framework
+suite (`tests/run.ahk`), the Python CLI/REPL/MCP checks, and manual
+crashlog/debugger experiments.
 
 ## Run
 
 ```powershell
-bin\AutoHotkey64.exe /Headless /ErrorStdOut qa\run.ahk
+bin\AutoHotkey64Console.exe /Headless /ErrorStdOut qa\run.ahk
 ```
+
+From Git Bash, which rewrites an argument that starts with `/` into a path:
+
+```bash
+./bin/AutoHotkey64Console.exe --headless //ErrorStdOut qa/run.ahk
+```
+
+Use the console engine. PowerShell does not wait for the GUI `AutoHotkey64.exe`
+unless its output is piped, so `$LASTEXITCODE` would not hold the suite's result.
+Every child runs under the same executable as the runner (`A_AhkPath`), so pass
+the engine you want to validate, such as an isolated `out\msvc\x64` build.
 
 Suite exit code = failing assertions + crashes/timeouts, so `0` means the whole
 tree is green. Empty discovery is a failure. For a shell-independent command
 that waits for the executable and runs the complete release gate, use:
 
 ```powershell
-python tests/run_console_gate.py bin/AutoHotkey64.exe
+python tests/run_console_gate.py bin/AutoHotkey64Console.exe
 ```
 
 ## How it works
@@ -38,6 +51,11 @@ each one's exit code + stdout. Because each test is isolated:
 Set `AHK_QA_TIMEOUT_MS` to an integer from 1 to 300000 to override the per-child
 timeout. Invalid settings fail the suite. The outer release gate additionally
 bounds each complete suite to 180 seconds.
+
+Set `AHK_QA_COVERAGE_DIR` to a directory and every child also gets
+`/Coverage=<dir>\<test>_<pid>_<n>.lcov`; the runner creates the directory
+first, so it may be missing. CI does this and merges the reports with
+`tools/lcov_summary.py`.
 
 This is the key difference from a single-process `#Include` runner, which
 cannot survive a test that fails to load.
@@ -73,7 +91,7 @@ standalone (its exit code = its own failure count).
 ## Runner regression checks
 
 ```powershell
-python tests/test_qa_runner.py bin/AutoHotkey64.exe
+python tests/test_qa_runner.py bin/AutoHotkey64Console.exe
 ```
 
 These tests copy the runner into an isolated temporary suite and verify real
