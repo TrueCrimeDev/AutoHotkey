@@ -17,40 +17,117 @@ under `debugger-tool/` are separate consumers of the engine's DBGp protocol.
 - Runtime features are registered in `source/lib/functions.h`; consult their
   implementations and `updates.md` before inventing helper dependencies.
 - `debugger-tool/mcp-ahk/mcp.ahk` is an alternate script implementation with a
-  smaller tool surface. `debugger-tool/mcp-server/` and `ahk-error-agent/` are
-  TypeScript DBGp clients/adapters; they are not the native server.
+  smaller tool surface. `debugger-tool/mcp-server/` and
+  `debugger-tool/ahk-error-agent/` are TypeScript DBGp clients/adapters; they
+  are not the native server.
 - CMake shares engine objects across GUI, Console, and optional Harness targets.
   Read `BUILD.md` for supported compiler routes and exact-artifact verification.
 
 Do not infer the installed engine version or user-wide MCP registration from
-this document. The checked-in `.mcp.json` currently starts the native `mcp` verb
-using a WSL path; Windows hosts need a Windows executable path in their own
-configuration. Inspect the active host's configuration before changing it.
+this document. The checked-in `.mcp.json` starts `./bin/AutoHotkey64Console.exe mcp`,
+a path relative to the project root. Inspect the active host's configuration
+before changing it.
+
+## Claude Code setup
+
+- Start `claude` at the repository root; `.mcp.json` and `.claude/settings.json`
+  resolve from there.
+- `bin/*.exe` is gitignored, so a fresh clone has no engine: the project MCP
+  server cannot start and the post-edit syntax gate is off. Build per `BUILD.md`
+  (CMake's default `AHK_OUTPUT_DIR` is `bin`) or copy a release console engine
+  into `bin/`. An engine anywhere else needs the x64 `tree-sitter-ahk.dll` beside
+  it for `ast_outline` and `TSParse`; CMake does not copy it.
+- `ahk-mcp` (project, `.mcp.json`) is the engine's native `mcp` verb. Use
+  `mcp__ahk-mcp__check`, `run` and `test` for this repo's scripts; they run the
+  fork engine. If `tools/list` lacks `check`, `run` and `test`, the server is
+  running an older engine: it was started from an earlier `.mcp.json` (which
+  launched the stale GUI `bin/AutoHotkey64.exe`), or `bin/` holds a
+  pre-a551fcd4 build. Reconnect it (`/mcp`) and compare `--version`; rebuild
+  only if `bin/AutoHotkey64Console.exe` itself lacks them.
+- `ahk` (user-wide, if connected) is a separate Node server. Its `AHK_Check`,
+  `AHK_Run` and `AHK_Eval` use the engine its `AHK_PATH` names, normally stock
+  AutoHotkey, which rejects fork directives such as `#EnableEval` and lacks the
+  fork BIFs; `AHK_Eval` and the `uia_*` inspector need the fork. Only its `core`
+  toolset is listed. `debug` (`AHK_Debug_DBGp`), `uia` (used by the `uia` skill),
+  `library`, `extras` and `legacy` stay hidden until
+  `AHK_Settings {"action":"enable_toolset","toolset":"debug"}`, which persists
+  machine-wide in `%APPDATA%\ahk-mcp\tool-settings.json`. Enable a toolset, or
+  change that server's registration, only when the user asks.
+- Hooks are registered in the committed `.claude/settings.json` and run as
+  `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/<name>.sh"`; they need Git for Windows
+  bash, not python or jq. Engine: `AHK_CUSTOM_EXE` if set (only that), else
+  `bin/AutoHotkey64Console.exe`, else `bin/AutoHotkey64.exe`. An exe without the
+  fork's marker text (stock AutoHotkey) is refused wherever it lives. Test them with `bash .claude/hooks/test-hooks.sh`; see
+  `.claude/hooks/README.md`.
+  - SessionStart, `ahk-debug-context.sh`: reports the detected engine and the
+    tooling map.
+  - PostToolUse on Edit/Write/MultiEdit/`AHK_File_Edit`/`AHK_File_Create`,
+    `ahk-post-edit.sh`: runs the fork `check` on an edited `.ahk` file inside
+    the repo. A syntax error (engine exit 12/13) is fed back to you as hook
+    feedback (hook exit 2): fix it and re-check. Warnings pass. The
+    `test_crashlog_parse*.ahk` and `test_parse_error*.ahk` fixtures are skipped.
+  - PreToolUse, PostToolUse and PostToolUseFailure on `mcp__ahk__AHK_Debug_DBGp`,
+    `check-ahk-connection.sh` and `post-capture-guidance.sh`: add DBGp workflow
+    guidance. They fire only while the `debug` toolset is enabled.
+- Per-user overrides belong in `.claude/settings.local.json` and
+  `CLAUDE.local.md`; both are gitignored.
+- The Bash tool is Git Bash, which rewrites any argument that starts with `/`
+  into a path: `check /Diag=json f.ahk` checks `C:\Program Files\Git\Diag=json`
+  and exits 13 ("Script file not found."), the same code as a syntax error. Use
+  the aliases `--diag=json`, `--headless`, `--coverage=`, `--trace`, `--eval`,
+  `--crashlog=` and `--stderrfile=`, or double the slash for switches without
+  one (`//Debug`, `//include`, `//ErrorStdOut`). PowerShell passes `/Flag`
+  unchanged. Use `python`, not `python3`, which may be the Microsoft Store stub.
 
 ## Running and testing
 
 Use the exact fresh engine path. An isolated build need not replace `bin/` or
-modify an installed alias:
+modify an installed alias. `bin/AutoHotkey64Console.exe` is what `.mcp.json` and
+the hooks use; check its `--version`, because `bin/` may be stale or `-dirty`.
+Use the Console exe: PowerShell does not wait for the GUI `AutoHotkey64.exe`
+unless it is piped, so `$LASTEXITCODE` is lost.
 
 ```powershell
-$engine = (Resolve-Path out/msvc/x64/AutoHotkey64Console.exe).Path
+$engine = (Get-Item out/msvc/x64/AutoHotkey64Console.exe, bin/AutoHotkey64Console.exe -ErrorAction Ignore | Select-Object -First 1).FullName
 & $engine --version
 & $engine --capabilities
 & $engine run ScriptName.ahk
-& $engine check /Diag=json ScriptName.ahk
-& $engine test /Headless tests/run.ahk
-& $engine /Headless '/Coverage=coverage/tests.lcov' test tests/run.ahk
+& $engine check --diag=json ScriptName.ahk
+& $engine test tests/run.ahk
+New-Item -ItemType Directory -Force coverage | Out-Null   # --coverage writes nothing into a missing directory
+& $engine --coverage=coverage/tests.lcov test tests/run.ahk
 & $engine mcp
 python tests/run_console_gate.py $engine
 python tools/check_all.py $engine
 . ./tools/ahk.ps1 -EnginePath $engine
 ```
 
-`check` returns 13 for syntax failure; ordinary parse errors return 12, uncaught
-runtime errors 10, and explicit test failures 14. Read `--capabilities` for the
-complete exit-code contract. `/Headless` and `check` are not sandboxes: loading
-can perform operations such as `#DllLoad`. Do not execute arbitrary untrusted
-scripts merely to validate them.
+From Git Bash (the Bash tool):
+
+```bash
+engine=out/msvc/x64/AutoHotkey64Console.exe; [ -f "$engine" ] || engine=./bin/AutoHotkey64Console.exe
+"$engine" check --diag=json ScriptName.ahk
+"$engine" test tests/run.ahk
+mkdir -p coverage && "$engine" --coverage=coverage/tests.lcov test tests/run.ahk
+python tests/run_console_gate.py "$engine"
+```
+
+`check` and `test` already run headless. `check` prints `CHECK PASS` (or
+`{"kind":"check","status":"pass"}` with `--diag=json`) on stdout and returns 0;
+it returns 13 for a syntax failure and also when the script file is missing
+(`Script file not found.`, line 0), so read the diagnostic before calling it a
+syntax error. `run` returns 12 for parse errors and 10 for uncaught runtime
+errors. `test` returns 0 on pass and 14 only for an explicit `ExitApp(14)`, a
+persistent script, or an execution failure; an uncaught error inside a test
+still returns 10. Diagnostics go to stderr (one flat JSON object per line with
+`--diag=json`), but `#Warn ..., StdOut` sends warnings to stdout, so read both
+streams. `/ErrorStdOut` only selects encoding and color here; it does not move
+diagnostics to stdout. Read `--capabilities` for the complete exit-code
+contract. `/Headless` only routes error and warning dialogs to stderr; `MsgBox`,
+`InputBox` and `Gui` still block, so do not run dialog-driven scripts
+unattended. `/Headless` and `check` are not sandboxes: loading can perform
+operations such as `#DllLoad`. Do not execute arbitrary untrusted scripts
+merely to validate them.
 
 ## Key directories
 
@@ -63,6 +140,7 @@ scripts merely to validate them.
 | `debugger-tool/ahk-error-agent/` | Separate error capture agent |
 | `debugger-tool/mcp-ahk/` | Alternate script MCP implementation and CLI adapter |
 | `out/`, `build_*/` | Isolated generated binaries and build trees |
+| `.claude/` | Claude Code hooks, the `uia` skill, and shared settings |
 
 ## Native MCP tools
 
@@ -73,7 +151,7 @@ live server's registry and counters.
 
 | Tools | Purpose |
 | --- | --- |
-| `ast_outline` | Tree-sitter structure and spans; requires the x64 grammar DLL |
+| `ast_outline` | Tree-sitter structure and spans; needs the x64 `tree-sitter-ahk.dll` beside the engine |
 | `source_outline`, `workspace_symbols` | Lightweight source/symbol scans |
 | `get_source_context` | Source lines around a location |
 | `check`, `run`, `test` | Child-engine execution with diagnostics and captured streams |
@@ -82,32 +160,53 @@ live server's registry and counters.
 Native execution tools default to a 30-second timeout (`timeout_ms`: 1–600000)
 and an 8 MiB combined raw-output capture limit. Hitting the capture limit
 terminates the job and returns `ok:false`, `outputLimitExceeded:true`, and
-`captureLimitBytes:8388608`. Inspect `timedOut` separately.
+`captureLimitBytes:8388608`. Inspect `timedOut` separately. When
+`MCP_TOOL_TIMEOUT` is set (check the user's settings `env`), Claude Code
+abandons an MCP call after that many milliseconds while the child keeps
+running to its own `timeout_ms`; keep `timeout_ms` below that limit.
 
 No `#Include McpClient.ahk` is required to run the native server. That file is a
 client helper only for an AHK script which wants to call another MCP process.
 
 ## _ScriptGetLines
 
-Custom AHK build includes `_ScriptGetLines()` for source context:
+This fork includes `_ScriptGetLines(Filename, LineNumber, Range := 0)` for source context:
 
 ```autohotkey
-lines := _ScriptGetLines(A_LineFile, A_LineNumber, -3)  ; 3 lines before/after
+lines := (_ScriptGetLines(A_LineFile, A_LineNumber, 3) ?? "") || []  ; up to 3 parsed lines before/after
 for line in lines {
-    MsgBox Format("{:03}: {}", line.Number, line.Text)
+    Print("{:03}: {}", line.Number, line.Text)
 }
 ```
 
-Merged from lexikos' `linecontext` branch.
+It returns an Array of `{File, Number, Text}` objects, one per parsed line;
+comments and blank lines are skipped. `Text` is the engine's rendering of the
+parsed line, not the raw source: trailing comments are dropped, and
+`for line in lines {` comes back as `For line in lines` plus a separate `{`
+entry with the same `Number`. Those brace entries count toward `Range`. A
+negative or omitted range returns just the given line. A line number with no
+code (blank, comment-only or past the end) returns no Array, and what you get
+depends on the script's compatibility mode: by default (v2.0 mode) an empty
+string, which `for` rejects with `TypeError`; under
+`#Requires AutoHotkey v2.1-...` no value, so even a plain assignment throws
+`UnsetError`. Neither `?? []` nor `|| []` alone covers both modes; guard with
+`(... ?? "") || []` as above. Merged from lexikos' `linecontext` branch.
 
 ## CloudAHK Error Handlers
 
-```bash
-# Basic (stock AHK v2)
-AutoHotkey.exe /include include/cloudahk-error-handler.ahk script.ahk
+The handlers live in `debugger-tool/ahk-error-agent/include/`. `/include` takes
+one file and must precede the script path.
 
-# Enhanced (requires _ScriptGetLines build)
-AutoHotkey_custom.exe /include include/cloudahk-error-handler-enhanced.ahk script.ahk
+```powershell
+# Basic (any AHK v2 engine, including stock)
+& $engine /include debugger-tool/ahk-error-agent/include/cloudahk-error-handler.ahk script.ahk
+# Enhanced (adds source lines through _ScriptGetLines, i.e. this fork)
+& $engine /include debugger-tool/ahk-error-agent/include/cloudahk-error-handler-enhanced.ahk script.ahk
+```
+
+```bash
+# Git Bash: double the slash
+"$engine" //include debugger-tool/ahk-error-agent/include/cloudahk-error-handler-enhanced.ahk script.ahk
 ```
 
 ## AHK v2 Syntax Rules
@@ -121,9 +220,18 @@ AutoHotkey_custom.exe /include include/cloudahk-error-handler-enhanced.ahk scrip
 - **Always use parentheses on every function call**: `Print("text")` not `Print "text"`, `MsgBox("hi")` not `MsgBox "hi"`, `Eval(expr)` not `Eval expr`. Applies to ALL functions — built-ins, BIFs, user-defined, fork additions. No command-style calls.
 - **Backticks are escape characters inside double-quoted strings.** `"`a"` is alert/bell, not a literal backtick. To quote code/identifiers inside Print strings, use single quotes: `Print("'i32' is removed")`. Backticks in `;` comments and `/* */` blocks are fine.
 
-## Fork-only BIFs (always available)
+## Fork-only BIFs (built in)
 
-These do not exist in upstream AutoHotkey. Use them directly — no `#include`, no helpers.
+These do not exist in upstream AutoHotkey, so stock engines (including one a
+user-wide `ahk` server may run) lack them. Use them directly — no `#include`,
+no helpers. `Inspect`, `ProcessPipe` and `/Coverage` need an engine whose
+`--capabilities` `features` lists `inspect`, `processPipe` and `coverage`
+(built from a551fcd4 or later); an older build, such as a stale
+`bin/AutoHotkey64.exe`, lacks them. `features` does not cover the other BIFs
+(its `check` is the CLI verb, not `Check()`). To probe one, run `check` on a
+one-line script that calls it. A missing function does not fail `check`: the
+exit code stays 0, and a warning, `This global variable appears to never be
+assigned a value.`, names it.
 
 - **`Print(Fmt?, Values*)`** — stdout println with built-in `Format` dispatch.
   - `Print()` → blank line
@@ -131,7 +239,7 @@ These do not exist in upstream AutoHotkey. Use them directly — no `#include`, 
   - `Print("x={}, y={}", x, y)` → calls `Format(Fmt, Values*)` then writes
   - **Don't write `Print(Format("...", x))`** — pass the args directly to `Print` instead.
   - Writes to an attached console or redirected stdout when available.
-- **`Eval(Expression)`** — runtime expression eval. Gated by `#EnableEval` directive or `/Eval` CLI flag. Throws `SyntaxError` on parse failure and a catchable `ValueError` above 16,384 UTF-16 code units. The REPL uses the same limit and continues after an oversized expression. Compiled Eval storage still has process lifetime to preserve closures. See `updates.md` section 1.
+- **`Eval(Expression)`** — runtime expression eval. Gated by `#EnableEval` directive or `/Eval` CLI flag (`--eval` from Git Bash). Throws `SyntaxError` on parse failure and a catchable `ValueError` above 16,384 UTF-16 code units. The REPL uses the same limit and continues after an oversized expression. Compiled Eval storage still has process lifetime to preserve closures. See `updates.md` section 1.
 - **`SyntaxError`** — exception class for parse errors. Has `Message`, `What`, `Extra`, `Line`, `Column`.
 - **`Check(Source)`** — validate AHK source with automatic oracle parity: spawns this exe in check mode (`/Diag=json /Check`) against a temp file in a child process, so host state is untouched and the verdict matches the CLI. Returns `{ Ok, Diagnostics, Raw }`: `Ok` is 1/0 (child exit 0 = valid, 13 = syntax error); `Diagnostics` is an Array (empty when Ok=1) of `{ Severity, Type, Code, Message, Extra, File, Line, Column }`; `Raw` is the captured child output. Its shared child runner has a 30-second timeout and 8 MiB combined output budget; spawn, timeout, or output-limit failure returns Ok=0 with a synthetic diagnostic. `Raw` combines stderr then stdout, preserving each stream's order without promising cross-stream chronology. Temporary-file and process-tree cleanup are automatic. The check-mode child skips ordinary script execution, but load-time directives such as `#DllLoad` can still have side effects; it is not a sandbox. This — not `TSParse(...).HasError` — is the correct 'does it parse?' check.
 - **`JSON`** — native JSON class, no include. `JSON.Parse(Text, Reviver?, Options?)`
@@ -157,26 +265,52 @@ These do not exist in upstream AutoHotkey. Use them directly — no `#include`, 
   and 188/188 n_ (`qa/tests/test_jsonsuite.ahk`).
 - **`Inspect(Value, Depth := 2, MaxItems := 100)`** — JSON description of a live value: `type`, own `properties`, names of `getters`/`setters`/`methods` (never invoked), `items`/`entries`, `truncated`/`circular` flags. The REPL prints object results with it. `updates.md` §18.
 - **`ProcessPipe(Command, Args?, WorkingDir?)`** — child process with UTF-8 stdio pipes in a job object: `Send(text, timeout?)`/`SendLine`, `ReadLine(timeout)`/`Read`/`ReadStdErr`, `Wait`, `Close`, `Kill`, `PID`/`Running`/`ExitCode`/`AtEOF`. Releasing the object kills the tree. `updates.md` §19.
-- **`TSParse(Source)`** — parse AHK source with the bundled tree-sitter grammar; returns a snapshot tree of plain AHK objects. Lazily loads `bin/tree-sitter-ahk.dll` on first call. Returns `{ Root, Source, HasError }`; each node has `Type`, `StartByte`/`EndByte`, `StartRow`/`StartCol`/`EndRow`/`EndCol`, `Text`, `IsNamed`/`IsMissing`/`IsError`/`IsExtra`/`HasError`, `FieldName`, `Children`, `NamedChildren`, `Truncated`. For **structure only** — the grammar is incomplete (false `HasError` on valid code, e.g. typed Structs, fat-arrow methods, `^j::` hotkeys); do not use `TSParse(...).HasError` as a validity check. For 'does it parse?' use the `Check` BIF above (real-engine oracle), or the `check` CLI subcommand. Full docs: `docs/TREE_SITTER.md`.
+- **`TSParse(Source)`** — parse AHK source with the bundled tree-sitter grammar; returns a snapshot tree of plain AHK objects. Lazily loads `tree-sitter-ahk.dll` on first call, from the engine's own directory and then the normal DLL search path (`bin/` ships the x64 DLL; copy it beside an isolated build). Returns `{ Root, Source, HasError }`; each node has `Type`, `StartByte`/`EndByte`, `StartRow`/`StartCol`/`EndRow`/`EndCol`, `Text`, `IsNamed`/`IsMissing`/`IsError`/`IsExtra`/`HasError`, `FieldName`, `Children`, `NamedChildren`, `Truncated`. For **structure only** — the grammar is incomplete (false `HasError` on valid code, e.g. typed Structs, fat-arrow methods, `^j::` hotkeys); do not use `TSParse(...).HasError` as a validity check. For 'does it parse?' use the `Check` BIF above (real-engine oracle), or the `check` CLI subcommand. Full docs: `docs/TREE_SITTER.md`.
 
 Full reference: `updates.md` in the repo root.
 
 ## Design Documents
 
-- `docs/plans/2026-01-11-interactive-llm-debugger-design.md` - Historical debugger integration design
+- `docs/plans/2026-06-21-in-process-mcp-server-design.md` - Native in-process MCP server design (historical)
 
 ## DBGp Protocol
 
-AutoHotkey debugger uses DBGp protocol on port 9000:
+`/Debug[=host[:port]]` makes the engine connect out to a DBGp listener (default
+`localhost:9000`); `/Debug=stdio` speaks DBGp over stdin/stdout. Start the
+listener first and put the switch before the script path.
 
-```bash
-# AHK connects TO the debugger (server must be listening first)
-1. Start MCP server (listens on 9000)
-2. Run: AutoHotkey.exe /Debug script.ahk
-3. AHK connects to localhost:9000
+```text
+PowerShell:  & .\bin\AutoHotkey64Console.exe /Debug script.ahk
+Git Bash:    ./bin/AutoHotkey64Console.exe //Debug script.ahk
+Other port:  /Debug=localhost:9001  (Git Bash: //Debug=localhost:9001)
 ```
 
-Key commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`, `stack_get`
+- The project `ahk-mcp` server has no DBGp tool, and the legacy
+  `debugger-tool/mcp-server` adapter is not registered.
+- The user-wide `ahk` server's `AHK_Debug_DBGp` is in its hidden `debug`
+  toolset; enable it only when the user asks. It ignores its `port` argument,
+  binds 9000, and silently moves to 9001+ when 9000 is busy, so read
+  `action:"status"` for the port.
+- Loop: `start`; the user launches the script with `/Debug`. Once connected,
+  the engine stops at the script's first line, and nothing runs until you send
+  `run` or a step action. To examine state, use `breakpoint_set`, `run`,
+  `stack_trace` and `variables_get`.
+- `capture_error` blocks until an error is queued or its timeout expires. In
+  the current ahk-mcp source nothing queues one (`queueError` is called only
+  from `captureErrorContext`, which has no caller), so expect
+  `{"captured":false,"reason":"timeout"}`. To find a runtime error, use
+  breakpoints and stepping, or run the script with `mcp__ahk-mcp__run` or
+  `test` and read its diagnostics.
+- `analyze_error` needs a captured error object, so it is reachable only once
+  capture works; it returns a Markdown prompt for you to analyze (there is no
+  confidence score). `apply_fix` works on its own: it takes `file`, `line`, the
+  exact current `original` line and `replacement`, and rewrites CRLF files with
+  LF.
+- Only one listener can own a port, so a VS Code debug session and
+  `AHK_Debug_DBGp` must not share one (thqby's default debug port range is
+  9002-9100).
+
+DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`, `stack_get`
 
 ---
 

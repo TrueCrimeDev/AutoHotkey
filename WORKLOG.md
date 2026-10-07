@@ -366,3 +366,32 @@ unlogged loop session between 3 and now.)
   Scripts now derive locations from their own path with `AHK_*` overrides;
   `.mcp.json` uses `./bin/AutoHotkey64.exe` (verified to answer `initialize`
   from the repo root); `.claude/settings.local.json` untracked and ignored.
+
+### Session 11 (2026-10-06) — Claude Code agent setup audit and repair
+- Audited the agent setup (hooks, SessionStart context, `.mcp.json`, local
+  settings, `uia` skill, CLAUDE.md, `.vscode/`) with parallel fact-gatherers,
+  per-area auditors and adversarial verifiers: 89 findings, all confirmed.
+- Root causes: every hook parsed JSON with `python3`, which is the Microsoft
+  Store stub on this host, so the post-edit syntax gate never ran; Git Bash
+  rewrites a bare `/Diag=json` into a path, so even a working parser checked
+  `C:\Program Files\Git\Diag=json` (exit 13). The SessionStart context taught
+  alpha.30, a WSL path, hidden or legacy `ahk` tools, and "`/Headless`
+  suppresses all dialogs". `.mcp.json` launched the stale GUI build
+  `bin/AutoHotkey64.exe` (ef2047d4, pre-a551fcd4): 5 MCP tools, no
+  check/run/test, no Inspect/ProcessPipe//Coverage.
+- Hooks rebuilt on the contract read from the installed Claude Code 2.1.287
+  binary (PostToolUse carries `tool_response`; exit 2 + stderr reaches
+  Claude; context goes in `hookSpecificOutput`). They are bash-only (no
+  python/jq), ASCII, and resolve the engine as `AHK_CUSTOM_EXE`, then
+  `bin/AutoHotkey64Console.exe`, then `bin/AutoHotkey64.exe`. An exe without
+  the fork's marker text is refused: stock AutoHotkey pops modal #Warn
+  dialogs, because upstream `/ErrorStdOut` does not cover warnings.
+  Registration moved to the committed `.claude/settings.json`;
+  `.mcp.json` now starts `./bin/AutoHotkey64Console.exe mcp` (8 tools).
+- `bash .claude/hooks/test-hooks.sh`: 147 passed, 0 failed, 0 skipped.
+  SessionStart: 35 ASCII lines in ~0.4 s.
+- Found outside this repo, not changed: the user-wide `ahk` server's
+  `AHK_PATH` is stock alpha.32, so `AHK_Eval` and `uia_*` fail; its
+  `capture_error` can never capture (`queueError` has no live caller);
+  `--coverage=` into a missing directory writes nothing and exits 0. No
+  build toolchain is installed on this machine, so no task was build-tested.

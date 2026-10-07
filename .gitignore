@@ -67,5 +67,6 @@ coverage/
 junit.xml
 diag.jsonl
 
-# Per-machine Claude Code permissions (never commit)
+# Personal Claude Code settings and memory (never commit)
 .claude/settings.local.json
+CLAUDE.local.md
