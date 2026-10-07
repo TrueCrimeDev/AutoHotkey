@@ -1,11 +1,11 @@
-# mcp.ahk — an MCP server that runs inside AutoHotkey64.exe
+# mcp.ahk — an MCP server that runs inside the fork engine
 
 **One self-contained file. No includes, no separate runtime.** It runs inside the
 AutoHotkey process (the script *is* the server), and its tools are also callable
 as a plain function.
 
 > **Native verb:** the same server is also compiled into the fork engine as
-> `AutoHotkey64.exe mcp` (C++, `source/mcp_server.cpp`) — zero files needed
+> `AutoHotkey64Console.exe mcp` (C++, `source/mcp_server.cpp`) — zero files needed
 > beyond the exe + `tree-sitter-ahk.dll`. The five shared tools retain their
 > payloads; the native server also provides `check`, `run`, and `test`.
 > `tests/conformance_native.py` checks native discovery and compares shared
@@ -21,16 +21,20 @@ Requires the fork engine (`2.1-alpha.31+Console`) for the
 **1. Run it in the exe as an MCP server** (stdio — for Claude Code / Cursor):
 
 ```
-bin\AutoHotkey64.exe debugger-tool\mcp-ahk\mcp.ahk
+bin\AutoHotkey64Console.exe debugger-tool\mcp-ahk\mcp.ahk
 ```
 
 Register with a client:
 
 ```json
-{ "mcpServers": { "ahk-mcp": {
-  "command": "C:\\Users\\...\\AutoHotkey\\bin\\AutoHotkey64.exe",
+{ "mcpServers": { "ahk-mcp-script": {
+  "command": "C:\\Users\\...\\AutoHotkey\\bin\\AutoHotkey64Console.exe",
   "args": ["C:\\Users\\...\\AutoHotkey\\debugger-tool\\mcp-ahk\\mcp.ahk"] } } }
 ```
+
+Use the console engine, as the repository's own `.mcp.json` does for the native
+verb (`"args": ["mcp"]`, server name `ahk-mcp`). Pick a different server name
+for this script server if you register both, so neither replaces the other.
 
 **2. Call a tool as a function:**
 
@@ -76,8 +80,9 @@ for ASCII-safe payloads. A `CreateProcess` pipe transport would add full UTF-8.)
 ## Command line
 
 `ahkmcp` runs any tool from the shell and prints the result (pretty JSON by
-default, `--raw` for compact/pipeable). Launchers are path-relative, so the repo
-can live anywhere — put `debugger-tool\mcp-ahk` on your PATH and:
+default, `--raw` for compact/pipeable). The launchers find `cli.ahk` and `bin\`
+relative to their own folder, so the repo can live anywhere — put
+`debugger-tool\mcp-ahk` on your PATH and:
 
 ```
 ahkmcp list                                     list tools
@@ -88,11 +93,38 @@ ahkmcp server_status
 ahkmcp ast_outline C:\proj\x.ahk --raw          compact JSON (pipe to jq)
 ```
 
-- Windows / PowerShell: `ahkmcp.cmd`
-- WSL / bash: `ahkmcp` (auto-translates `/mnt/...` path args to Windows form)
-
 Args are positional per tool, or `key=value` in any order. It calls `MCP()`
 in-process — no server, no protocol.
+
+There are two launchers:
+
+- **`ahkmcp.cmd`** for cmd and PowerShell. **Pass absolute paths.** The engine
+  starts `cli.ahk` with its working directory set to `debugger-tool\mcp-ahk`, so
+  a relative path resolves there, not where you are: `ahkmcp source_outline
+  "sub dir\x.ahk"` fails with `error: (3) The system cannot find the path
+  specified.`, and a bare name such as `cli.ahk` silently picks the file in
+  the launcher's folder.
+- **`ahkmcp`** (bash) for Git Bash, MSYS2, Cygwin and WSL. It converts the path
+  argument of `ast_outline`, `source_outline`, `get_source_context` and
+  `workspace_symbols` (the first positional argument, or `file=` / `root=`) to
+  an absolute Windows path with `cygpath -w`, or `wslpath -w` under WSL. That
+  covers `/c/...`, `/mnt/c/...` and relative paths, including ones with spaces.
+
+Both launchers behave the same way otherwise:
+
+- **Engine.** `AHK_CUSTOM_EXE` when set (only that, never a fallback), else
+  `bin\AutoHotkey64Console.exe`, else `bin\AutoHotkey64.exe`. The console engine
+  is preferred because the shell waits for it and receives its output and exit
+  code. The bash launcher also accepts a `C:\...` value for `AHK_CUSTOM_EXE`.
+- **Fork check.** `cli.ahk` needs this fork's engine (`TSParse`, `Print`). An
+  exe without the fork's `CHECK PASS` marker, such as stock AutoHotkey, is
+  refused with exit `126`; a missing engine exits `127`.
+- **Exit code.** The engine runs with `/Headless`, and the launcher returns
+  `cli.ahk`'s exit code: `0` on success, `2` for an unknown tool, `1` when a
+  tool fails (for example, a path that does not exist).
+- **`workspace_symbols` root.** Without a root it scans the directory you run
+  the launcher from: the launcher inserts `root=<current directory>`. A root you
+  pass, as the first positional argument or as `root=`, still wins.
 
 ## Tools
 
@@ -124,9 +156,10 @@ the engine's built-in `mcp` verb — all five tools, no server script).
 ## Tests
 
 ```
-bin\AutoHotkey64.exe debugger-tool\mcp-ahk\tests\test_json.ahk        # 38 codec tests
-bin\AutoHotkey64.exe debugger-tool\mcp-ahk\tests\test_protocol.ahk    # 27 dispatch tests
-bin\AutoHotkey64.exe debugger-tool\mcp-ahk\tests\test_tools.ahk       # 16 tool tests
+# Script-server unit tests (each exits 0 when all pass):
+bin\AutoHotkey64Console.exe /Headless debugger-tool\mcp-ahk\tests\test_json.ahk        # 38 codec tests
+bin\AutoHotkey64Console.exe /Headless debugger-tool\mcp-ahk\tests\test_protocol.ahk    # 27 dispatch tests
+bin\AutoHotkey64Console.exe /Headless debugger-tool\mcp-ahk\tests\test_tools.ahk       # 16 tool tests
 
 # Native protocol and shared-tool differential checks (Windows or WSL):
 python debugger-tool/mcp-ahk/tests/conformance_native.py path/to/AutoHotkey64Console.exe
