@@ -68,8 +68,12 @@ action=$REPLY
 
 case $action in
     capture_error)
-        lead="capture_error waits up to its timeout (default 30000 ms) for an error the ahk server has queued, but (as of 2026-10) nothing queues errors, so expect captured:false. For an error's message, line and stack, run the script with mcp__ahk-mcp__run or mcp__ahk-mcp__test instead, or use breakpoint_set, run and stack_trace." ;;
-    run|step_into|step_over|step_out|variables_get|evaluate|stack_trace|breakpoint_*)
+        lead="capture_error waits up to its timeout (default 30000 ms) for the next uncaught runtime error. It captures only on an ahk server with the ahk-mcp capture fix (see CLAUDE.md, DBGp Protocol), restarted since (action status then lists error_capture and session): there every uncaught error is captured with its stack and variables from the moment the script connects. capture_error returns the oldest queued error at once, even one from an earlier run (clear_errors drops those), and resumes a script paused at a breakpoint or throw only when nothing is queued, so after a step stops at a throw, send run. It returns early with reason session_ended when the script ends first, or not_listening at once when start was not called. A run whose end you already learned (its error was returned, or a run reply said Status: stopped) is not reported again, nor is one that ended before clear_errors (which drops queued errors and a remembered end; a script that ends after clear_errors is still reported once): capture_error then waits for a relaunch and times out without one, so have the user relaunch first, once the old run has exited (#SingleInstance refuses a relaunch of the same script while it is alive). An older build (status lists only connected, port and errors_queued) never queues an error and always times out with captured:false: run the script with mcp__ahk-mcp__run or mcp__ahk-mcp__test instead, or use breakpoint_set, run and stack_trace." ;;
+    evaluate)
+        lead="AHK_Debug_DBGp evaluate needs a script connected to the DBGp listener and paused. AutoHotkey's debugger has no eval command: a server with the capture fix reads a variable or property path (x, obj.prop, arr[1]) and rejects operators (a + b), and an older server's evaluate always fails with Command timeout after 10 s. variables_get (context 0 local, 1 global) works on either." ;;
+    breakpoint_set)
+        lead="AHK_Debug_DBGp breakpoint_set needs a script connected to the DBGp listener. Pass file and line only: AutoHotkey has no conditional breakpoints (a server with the capture fix rejects a condition at once, an older one fails with Command timeout after 10 s)." ;;
+    run|step_into|step_over|step_out|variables_get|stack_trace|breakpoint_*)
         lead="AHK_Debug_DBGp $action needs a script connected to the DBGp listener." ;;
     *)
         exit 0 ;;
@@ -144,10 +148,10 @@ else
     if [[ $cli == *" "* ]]; then ps="'$ps'"; cli="\"$cli\""; fi
 fi
 
-msg="$lead The listener (action start) must already be running before the user launches the script with /Debug."
-msg+=" PowerShell: & $ps /Debug script.ahk ; Git Bash: $cli //Debug script.ahk (Git Bash rewrites a bare /Debug into a path)$note."
-msg+=" Once connected, the script is paused at its first line until you send action run (or step_into/step_over)."
-msg+=" A bare /Debug connects to localhost:9000. The listener uses port 9000 by default but silently moves to 9001+ when 9000 is busy, so check action status and, if it moved, launch with /Debug=localhost:<port> (Git Bash: //Debug=localhost:<port>)."
+msg="$lead The listener (action start) must already be running before the user launches the script with /Debug=localhost:<port>, using the port that start or action status reports."
+msg+=" PowerShell: & $ps /Debug=localhost:<port> /Headless script.ahk ; Git Bash: $cli //Debug=localhost:<port> --headless script.ahk (Git Bash rewrites a bare /Debug into a path)$note. With no listener on that port the engine shows a modal \"continue without the debugger?\" box, even headless; /Headless turns the engine's other prompts into stderr text. A relaunch of a script whose previous run is still alive (attached, paused or running) meets the default #SingleInstance prompt: headless, it prints \"Another instance is already running\" and exits 64 without connecting, so send run (or stop) and let the old run exit first."
+msg+=" Once connected, the script is paused at its first line until you send action run or a step (on a build with the capture fix, capture_error also starts it)."
+msg+=" A bare /Debug always connects to localhost:9000. The listener uses port 9000 by default but silently moves to 9001+ when 9000 is busy, and only a build with the capture fix honors start's port argument."
 msg+=" A VS Code AutoHotkey debug session runs its own separate DBGp listener on its own configured port."
 
 json_escape "$msg"

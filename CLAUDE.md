@@ -52,7 +52,10 @@ before changing it.
   `library`, `extras` and `legacy` stay hidden until
   `AHK_Settings {"action":"enable_toolset","toolset":"debug"}`, which persists
   machine-wide in `%APPDATA%\ahk-mcp\tool-settings.json`. Enable a toolset, or
-  change that server's registration, only when the user asks.
+  change that server's registration, only when the user asks. Its
+  `AHK_Debug_DBGp` `capture_error` captures, and its `evaluate` works, only on
+  a server with the ahk-mcp capture fix (not on ahk-mcp `master`), restarted
+  since; see [DBGp Protocol](#dbgp-protocol).
 - Hooks are registered in the committed `.claude/settings.json` and run as
   `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/<name>.sh"`; they need Git for Windows
   bash, not python or jq. Engine: `AHK_CUSTOM_EXE` if set (only that), else
@@ -240,8 +243,8 @@ assigned a value.`, names it.
   - **Don't write `Print(Format("...", x))`** — pass the args directly to `Print` instead.
   - Writes to an attached console or redirected stdout when available.
 - **`Eval(Expression)`** — runtime expression eval. Gated by `#EnableEval` directive or `/Eval` CLI flag (`--eval` from Git Bash). Throws `SyntaxError` on parse failure and a catchable `ValueError` above 16,384 UTF-16 code units. The REPL uses the same limit and continues after an oversized expression. Compiled Eval storage still has process lifetime to preserve closures. See `updates.md` section 1.
-- **`SyntaxError`** — exception class for parse errors. Has `Message`, `What`, `Extra`, `Line`, `Column`.
-- **`Check(Source)`** — validate AHK source with automatic oracle parity: spawns this exe in check mode (`/Diag=json /Check`) against a temp file in a child process, so host state is untouched and the verdict matches the CLI. Returns `{ Ok, Diagnostics, Raw }`: `Ok` is 1/0 (child exit 0 = valid, 13 = syntax error); `Diagnostics` is an Array (empty when Ok=1) of `{ Severity, Type, Code, Message, Extra, File, Line, Column }`; `Raw` is the captured child output. Its shared child runner has a 30-second timeout and 8 MiB combined output budget; spawn, timeout, or output-limit failure returns Ok=0 with a synthetic diagnostic. `Raw` combines stderr then stdout, preserving each stream's order without promising cross-stream chronology. Temporary-file and process-tree cleanup are automatic. The check-mode child skips ordinary script execution, but load-time directives such as `#DllLoad` can still have side effects; it is not a sandbox. This — not `TSParse(...).HasError` — is the correct 'does it parse?' check.
+- **`SyntaxError`** — exception class for parse errors (`is Error`). One thrown by `Eval` has only the own properties `Message`, `File` (`"_Eval"`), `Line` (0) and `Column` (0); reading its `What`, `Extra` or `Stack` throws `PropertyError`, so a generic `catch as e` logger must guard them. One built with `SyntaxError(Message, What?, Extra?)` has the usual Error properties (`What`, `Extra`, `File`, `Line`, `Stack`) and no `Column`.
+- **`Check(Source)`** — validate AHK source with automatic oracle parity: spawns this exe in check mode (`/Diag=json /Check`) against a temp file in a child process, so host state is untouched and the verdict matches the CLI. Returns `{ Ok, Diagnostics, Raw }`: `Ok` is 1 when the child exits 0 (warnings allowed) and 0 otherwise (13 for a syntax error); `Diagnostics` is an Array of `{ Severity, Type, Code, Message, Extra, File, Line, Column }` that is empty when Ok=1, even after warnings, and otherwise holds one record: the first diagnostic record in `Raw`, whatever its severity. A load-time warning printed before the error (VarUnset warnings are on by default) therefore takes the error's place, so check `Diagnostics[1].Severity` and read `Raw` for the rest. `Raw` is the captured child output. Its shared child runner has a 30-second timeout and 8 MiB combined output budget; a spawn failure, a timeout, an output-limit failure, or a nonzero exit with no diagnostic record returns Ok=0 with one synthetic diagnostic (`Severity` "error", `Code` 0, `Line` 0, a `Message` starting "Check:"). `Raw` combines stderr then stdout, preserving each stream's order without promising cross-stream chronology. Temporary-file and process-tree cleanup are automatic. The check-mode child skips ordinary script execution, but load-time directives such as `#DllLoad` can still have side effects; it is not a sandbox. This — not `TSParse(...).HasError` — is the correct 'does it parse?' check.
 - **`JSON`** — native JSON class, no include. `JSON.Parse(Text, Reviver?, Options?)`
   and `JSON.Stringify(Value, Replacer?, Space?, Options?)`, aliased `Load`/`Dump`;
   `JSON.ParseAt(Text, &Pos, Options?)` parses one value from `Pos` and advances it
@@ -253,8 +256,11 @@ assigned a value.`, names it.
   `true`/`false`/`null` reach script as `1`/`0`/`""` — the container remembers what
   they were, so they re-emit as keywords. Arrays parse to `JSON.Array` (derives
   from `Array`, so `is Array` and every Array method still work) and carry the
-  same tags; changing an array's length drops its tags rather than risk
-  mislabelling a value. Options: `Container` ("JSON.Object"|"Map"),
+  same tags. Inserting, removing or resizing (`Push`, `InsertAt`, `RemoveAt`,
+  `Pop`, `Length`, `Capacity`) and `Clone` keep each remaining item's tag, and
+  new items carry none (`Push(true)` emits `1`); assigning an element, even
+  its own value, or `Delete`-ing it drops that element's tag, so an edit
+  never revives the source keyword. Options: `Container` ("JSON.Object"|"Map"),
   `Booleans`/`Null` ("integer"/"empty"|"native" for `JSON.True/False/Null`
   singletons, which round-trip inside arrays too), `MaxDepth`, `AllowComments`,
   `AllowTrailingCommas`, `EnsureAscii`, `EscapeSlash`. Plain object literals
@@ -277,35 +283,95 @@ Full reference: `updates.md` in the repo root.
 
 `/Debug[=host[:port]]` makes the engine connect out to a DBGp listener (default
 `localhost:9000`); `/Debug=stdio` speaks DBGp over stdin/stdout. Start the
-listener first and put the switch before the script path.
+listener first and put the switch before the script path. Name the port the
+listener reports: a bare `/Debug` always means 9000, which another program may
+hold. With no listener on that port (never started, stopped, or its server
+restarted) the engine opens a modal "Failed to connect to an active debugger
+client. Continue running the script without the debugger?" box, even with
+`/Headless`; a script still attached when its listener goes away without
+detaching it gets a similar one (a fixed build's `stop` detaches). `/Headless`
+turns the engine's other prompts into stderr text. That includes the default
+`#SingleInstance Prompt`, which runs before the debugger connects: a relaunch
+of a script whose previous run is still alive (attached, paused or running)
+prints `Another instance is already running. Use #SingleInstance Force or
+/force.`, exits 64 and never connects. The console engine reports an uncaught
+error on stderr and exits 10 with or without `/Headless`.
 
 ```text
-PowerShell:  & .\bin\AutoHotkey64Console.exe /Debug script.ahk
-Git Bash:    ./bin/AutoHotkey64Console.exe //Debug script.ahk
-Other port:  /Debug=localhost:9001  (Git Bash: //Debug=localhost:9001)
+PowerShell:  & .\bin\AutoHotkey64Console.exe /Debug=localhost:9001 /Headless script.ahk
+Git Bash:    ./bin/AutoHotkey64Console.exe //Debug=localhost:9001 --headless script.ahk
 ```
 
 - The project `ahk-mcp` server has no DBGp tool, and the legacy
   `debugger-tool/mcp-server` adapter is not registered.
 - The user-wide `ahk` server's `AHK_Debug_DBGp` is in its hidden `debug`
-  toolset; enable it only when the user asks. It ignores its `port` argument,
-  binds 9000, and silently moves to 9001+ when 9000 is busy, so read
-  `action:"status"` for the port.
-- Loop: `start`; the user launches the script with `/Debug`. Once connected,
-  the engine stops at the script's first line, and nothing runs until you send
-  `run` or a step action. To examine state, use `breakpoint_set`, `run`,
-  `stack_trace` and `variables_get`.
-- `capture_error` blocks until an error is queued or its timeout expires. In
-  the current ahk-mcp source nothing queues one (`queueError` is called only
-  from `captureErrorContext`, which has no caller), so expect
-  `{"captured":false,"reason":"timeout"}`. To find a runtime error, use
-  breakpoints and stepping, or run the script with `mcp__ahk-mcp__run` or
-  `test` and read its diagnostics.
-- `analyze_error` needs a captured error object, so it is reachable only once
-  capture works; it returns a Markdown prompt for you to analyze (there is no
-  confidence score). `apply_fix` works on its own: it takes `file`, `line`, the
-  exact current `original` line and `replacement`, and rewrites CRLF files with
-  LF.
+  toolset; enable it only when the user asks. `start` binds 9000 by default and
+  silently moves to 9001+ when that port is busy; its reply and
+  `action:"status"` give the port. A build with the capture fix honors the
+  `port` argument; an older build ignores it.
+- What works depends on the server build. The ahk-mcp capture fix captures
+  errors and evaluates paths. It is on ahk-mcp's local branch
+  `fix/dbgp-capture-error` (not pushed, and not merged into `master`, which
+  lacks it), and a running server loads a rebuilt `dist/` only after it
+  restarts. `status` tells the builds apart: a fixed build lists
+  `error_capture`, `session` and `waiting_connections`, an older one only
+  `connected`, `port` and `errors_queued`. An older build never queues an
+  error, so its
+  `capture_error` always times out with `{"captured":false,"reason":"timeout"}`
+  and `analyze_error` is unreachable; its `evaluate`, and `breakpoint_set`
+  with a `condition`, fail with `Command timeout` after 10 s. There, read
+  values with `variables_get`, use breakpoints and stepping, or run the script
+  with `mcp__ahk-mcp__run` or `test` and read its diagnostics.
+- Loop on a fixed build:
+  1. `start`; the user launches the script with `/Debug=localhost:<port>`. On
+     connecting the server sets an exception breakpoint, and the script waits
+     at its first line. Set breakpoints then (`breakpoint_set` fails with
+     `Not connected` before the script connects, and AutoHotkey rejects a
+     `condition`).
+  2. `run`, or let `capture_error` start the script. Every uncaught error is
+     captured in the background and the script resumed (`run` then answers
+     `error captured, script resumed (...)`); the console engine then prints
+     the error on stderr and exits 10. At a breakpoint use `stack_trace`,
+     `variables_get` (context 0 local, 1 global) and `evaluate`, which reads a
+     variable or property path (`x`, `obj.prop`, `arr[1]`, `m["key"]`) and
+     rejects operators (`a + b`): the engine has no eval command. A step that
+     reaches a throw stays paused there.
+  3. `capture_error` (`timeout`, default 30000 ms) returns the oldest queued
+     error at once as `{"captured":true,"error":{...}}`, even one from an
+     earlier run (`clear_errors` drops those). It resumes a script paused at
+     a breakpoint or throw only when nothing is queued (one waiting at its
+     first line is started either way), so after a step stops at a throw,
+     send `run` (or call `capture_error` again) to let the script finish. The
+     error has `error_type`, `message`, `file`, `line`, `source_context`,
+     `stack_trace` (local paths), `local_variables`, `global_variables`,
+     `timestamp`, `detected_by` and `session`, plus `what`, `extra` and
+     `ahk_stack` when the thrown value has them. `line` is `Error.Line` (the
+     caller's line when `what` names a function); `stack_trace[0]` is where
+     the throw ran, which this fork's own error report (stderr, `--diag=json`)
+     names instead (a fork bug; see WORKLOG Session 12).
+     `detected_by:"stderr"` has no stack or variables. With nothing to return
+     it gives `"reason":"not_listening"` at once without `start`, and
+     `"reason":"session_ended"` (with `exit`) when the script ends during the
+     call, or ended unreported before it. A run whose end you already learned
+     is not reported again: once its error was returned or a `run` reply said
+     `Status: stopped`, the call waits for the next launch and returns
+     `"reason":"timeout"` without one, so relaunch first. `clear_errors` drops
+     queued errors and a remembered end, so it has the same effect only on a
+     script that already ended; one that ends after `clear_errors` is still
+     reported once as `session_ended`. Before a relaunch of the same script,
+     let the old run exit (send `run`, or `stop`, which detaches it, then
+     `start` again; close a persistent script): while it is alive the
+     default `#SingleInstance Prompt` refuses the relaunch (exit 64, never
+     connects; `Force` or `/force` replaces the old run instead), so
+     `capture_error` times out or returns the old run's `session_ended`. A
+     result adds `waiting_connections` when another script (or a copy of one
+     with `#SingleInstance Off`) connected while one is attached; it waits,
+     paused at its first line, until the attached script ends.
+  4. `analyze_error` with `error` set to that object returns a Markdown prompt
+     for you to analyze (no confidence score). Show the user your diagnosis,
+     then `apply_fix` (`file`, `line`, the exact current `original` line,
+     `replacement`; it rewrites CRLF files with LF, on any build) and have
+     the user relaunch once the old run has exited.
 - Only one listener can own a port, so a VS Code debug session and
   `AHK_Debug_DBGp` must not share one (thqby's default debug port range is
   9002-9100).
@@ -314,7 +380,7 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
 
 ---
 
-# Current State & Open Items (updated 2026-09-19)
+# Current State & Open Items (updated 2026-10-07)
 
 - Target language version: `2.1-alpha.31+Console`, based on upstream
   `v2.1-alpha.31`. Always verify the actual executable's `--version` and hash;
@@ -348,3 +414,20 @@ Open items:
   **source** — only the `.dll` is vendored.
 - [ ] `FileRead` on a zero-byte file returns **no value** on this alpha
   (see WORKLOG 2026-08-26) — pin intended behavior with a qa test.
+
+Engine bugs found 2026-10-07 (WORKLOG Sessions 12-13; none fixed yet):
+- [ ] `JSON()` is callable (`source/json.cpp:1969`: JSON class built on `JsonObject::sPrototype` with no constructor); `Set`/`Keys`/`Count` on the result read or write invalid memory (exit 11 or heap corruption).
+- [ ] `JSON.True`/`JSON.False`/`JSON.Null` are writable value properties (`json.cpp:1995` `SetOwnProp`; its comment says getter-only): `JSON.True := 5` sticks.
+- [ ] JSON `MaxDepth` counts differently: the parser (`json.cpp:954`, `:999`, root at depth 0) accepts MaxDepth+1 nested containers, the writer (`json.cpp:1108`) MaxDepth, so a parsed document can fail to re-serialize.
+- [ ] With `AllowTopLevelScalar: false`, `Parse`/`ParseAt` (`json.cpp:1464`, `:1875`) always report line 1, col 1, pos 1 (ParseAt leaves `Pos`), and `Validate` (`json.cpp:1780`) the position after the value.
+- [ ] `Check()` builds its diagnostic from the first record of any severity (`source/console_check.cpp:262`), so a warning can replace the error; its field extraction (`:110`, `:137`) can also read past that record.
+- [ ] DBGp `WritePropertyData` (upstream code too): `source/Debugger.cpp:1508`/`:1514` base64-encodes from the tail of the same buffer and can overwrite unread UTF-8 (long values arrive corrupted); `:1476` counts a surrogate pair as 7 bytes (no `++i`), skewing `size` and `-m` truncation and splitting pairs.
+- [ ] `Debugger::FatalError` (`Debugger.cpp:2786`) shows a modal Yes/No box even under `/Headless` (failed connect, lost connection); only `/Debug=stdio` prints it instead.
+- [ ] `source/error.cpp:1797` passes `TokenToString(t)` (Extra or Message) to `GetLine` instead of `file`, so the uncaught-error report and `--diag=json` name the throw line, not `Error.Line` (fork-only, from d8217d1a).
+- [ ] `error.cpp:1778` `ExprTokenType t` reaches `:1797` uninitialized when the thrown object has own `File`/`Line` but neither `Message` nor `Extra`.
+- [ ] The headless/`/ErrorStdOut` error report goes through a fixed `DIAG_JSON_BUF_SIZE` buffer (`error.cpp:1167`, defined `:294`) and is silently truncated (long `Message`/`Extra`).
+- [ ] The crash log writes `Stack:` text raw (`source/crashlog.cpp:190`): not indented and CRLF-terminated, unlike every other LF line.
+- [ ] An `Eval` `SyntaxError` lacks the standard Error properties (`source/console_eval.cpp:59`-`64` sets only `Message`/`File`/`Line`/`Column`), so reading `What`/`Extra`/`Stack` throws.
+- [ ] An `Eval` assignment inside a function permanently adds a local to it (`console_eval.cpp:28` parses in the caller's scope); decide if intended (`updates.md` §1 documents it).
+- [ ] `--coverage=` into a missing directory writes nothing, prints nothing and exits 0 (`source/coverage.cpp:92`); `qa/tests/test_coverage_missing_dir.ahk` pins it.
+- [ ] DBGp has no `eval` command (`source/Debugger.cpp:47` command table) and `breakpoint_set` rejects conditions (`Debugger.cpp:771`): clients read paths with `property_get`.

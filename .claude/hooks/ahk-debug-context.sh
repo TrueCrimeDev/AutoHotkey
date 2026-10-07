@@ -225,14 +225,13 @@ cat <<'EOF'
 - Its debug (AHK_Debug_DBGp), uia (uia_*), library, extras and legacy toolsets stay hidden until AHK_Settings {"action":"enable_toolset","toolset":"debug"} (one toolset per call). That persists machine-wide in %APPDATA%\ahk-mcp\tool-settings.json: enable a toolset only when the user asks. Use the /uia skill before UI automation.
 
 ### DBGp debug loop (AHK_Debug_DBGp, debug toolset)
-1. Call action start BEFORE the user launches the script. The listener uses port 9000 but silently moves to 9001+ when 9000 is busy: check action status.
 EOF
 cat <<EOF
-2. The user launches with /Debug (bare = localhost:9000, else /Debug=localhost:<port>). PowerShell: & $ps /Debug script.ahk. Git Bash: $cli //Debug script.ahk (//Debug=localhost:<port>)
+- Call action start first and use the port it reports (9001+ when 9000 is busy); the user then launches with that port and headless. PowerShell: & $ps /Debug=localhost:<port> /Headless script.ahk. Git Bash: $cli //Debug=localhost:<port> --headless script.ahk. A bare /Debug always means 9000. With no listener on the port the engine shows a modal "continue without the debugger?" box, even headless.
 EOF
 cat <<'EOF'
-3. The script connects paused at its first line and waits there until you send action run (or step_into/step_over). Set line breakpoints (breakpoint_set with file, line) while it is paused there, then run (before the script connects, breakpoint_set fails with Not connected); while it is stopped use stack_trace, variables_get and evaluate.
-4. capture_error returns only errors the ahk server has queued, and (as of 2026-10) nothing queues them, so expect captured:false; retrying or a longer timeout does not help. For an error's message, line and stack, run the script with mcp__ahk-mcp__run / mcp__ahk-mcp__test (or the engine CLI) and read the diagnostics. If an error is ever captured: analyze_error returns a Markdown prompt for you to analyze (no confidence score); show the user your diagnosis, then apply_fix (file, line, the exact current line as original, replacement) and have the user re-run.
+- capture_error and analyze_error work only on an ahk server with the ahk-mcp capture fix, restarted since (action status lists error_capture). An older server's capture_error always times out with captured:false: run the script with mcp__ahk-mcp__run / mcp__ahk-mcp__test and read the diagnostics.
+- The loop, result reasons and evaluate limits are in CLAUDE.md, DBGp Protocol. The DBGp hooks add step guidance once the debug toolset is in use.
 
 ### Hooks (.claude/settings.json)
 EOF

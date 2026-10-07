@@ -543,16 +543,35 @@ t_end
 section "ahk-debug-context.sh (SessionStart)"
 # =================================================================================
 SS_REQUIRED=(mcp__ahk-mcp__check AHK_Debug_DBGp enable_toolset --diag=json //Debug 9001
-             capture_error analyze_error apply_fix MsgBox InputBox "Script file not found"
+             capture_error analyze_error MsgBox InputBox "Script file not found"
              "#EnableEval" Print Inspect ProcessPipe TSParse _ScriptGetLines SyntaxError
-             PowerShell "Git Bash")
+             PowerShell "Git Bash" "capture fix" error_capture "captured:false"
+             "//Debug=localhost:<port> --headless script.ahk"
+             "/Debug=localhost:<port> /Headless script.ahk" "continue without the debugger"
+             "CLAUDE.md, DBGp Protocol")
 SS_STALE=(AHK_Lint AHK_Diagnostics wslpath /mnt/ alpha.30 "suppress all dialogs" debug_run watch_add
-          use_api ANTHROPIC_API_KEY autohotkey-debug tool_output)
+          use_api ANTHROPIC_API_KEY autohotkey-debug tool_output "nothing queues" "expect captured:false"
+          "modal error box" fix/dbgp-capture-error)
 ss_common() {
     want_rc 0; want_no_err; want_ascii; want_fast 3000
     count_lines "$OUT"; (( REPLY <= 50 )) || bad "stdout has $REPLY lines, want at most 50"
     want_has out "${SS_REQUIRED[@]}"
     want_lacks out "${SS_STALE[@]}"
+    # The DBGp section stays a short summary: the debug toolset is hidden by
+    # default, and the DBGp hooks carry the details once it is in use. Its two
+    # launch commands print the engine path, which follows TMPDIR in the
+    # copied-engine cases, so only the fixed text is measured: each engine
+    # form counts as one byte.
+    local dbgp=${OUT#*$'\n### DBGp debug loop'*$'\n'} fixed
+    local launch_re='^(.*PowerShell: & ).*( /Debug=localhost:<port> /Headless script\.ahk\. Git Bash: ).*( //Debug=localhost:<port> --headless script\.ahk\..*)$'
+    dbgp=${dbgp%%$'\n### '*}; dbgp=${dbgp%$'\n'}
+    count_lines "$dbgp"; (( REPLY <= 4 )) || bad "the DBGp section has $REPLY lines under its heading, want at most 4"
+    if [[ $dbgp =~ $launch_re ]]; then
+        fixed=${BASH_REMATCH[1]}E${BASH_REMATCH[2]}E${BASH_REMATCH[3]}
+        (( ${#fixed} <= 1000 )) || bad "the DBGp section has ${#fixed} bytes of fixed text (engine paths not counted), want at most 1000"
+    else
+        bad "the DBGp section lacks the PowerShell and Git Bash launch commands"
+    fi
 }
 ss_payload='{"session_id":"hooktest-0001","transcript_path":"C:\\Users\\tester\\.claude\\projects\\hooktest\\0001.jsonl","cwd":"'$J_CWD'","hook_event_name":"SessionStart","source":"startup"}'
 
@@ -952,7 +971,8 @@ t_end
 t_begin "PreToolUse run, non-fork bin/AutoHotkey64Console.exe: launch commands name bin/AutoHotkey64.exe"
 calls_reset; dbgp PreToolUse run; run check-ahk-connection.sh "$REPLY"
 want_rc 0; want_no_err; want_ascii; want_hso PreToolUse
-want_has ctx './bin/AutoHotkey64.exe //Debug script.ahk' '& .\bin\AutoHotkey64.exe /Debug script.ahk'
+want_has ctx './bin/AutoHotkey64.exe //Debug=localhost:<port> --headless script.ahk' \
+    '& .\bin\AutoHotkey64.exe /Debug=localhost:<port> /Headless script.ahk'
 want_lacks ctx "AutoHotkey64Console.exe //Debug" BUILD.md
 want_not_called
 t_end
@@ -1065,10 +1085,29 @@ for a in capture_error run step_into step_over step_out variables_get evaluate s
     t_begin "action $a: launch and port reminder"
     dbgp PreToolUse "$a"; run check-ahk-connection.sh "$REPLY"
     want_rc 0; want_no_err; want_ascii; want_hso PreToolUse
-    want_has ctx start /Debug
+    want_has ctx start /Debug "continue without the debugger" "#SingleInstance" \
+        "Another instance is already running" "exits 64 without connecting"
+    want_lacks ctx "nothing queues" "expect captured:false" "modal error box" fix/dbgp-capture-error
     if [[ $a == run || $a == capture_error ]]; then
-        want_has ctx "//Debug" "AutoHotkey64Console.exe" 9000 9001 status PowerShell "Git Bash" "VS Code"
+        want_has ctx "//Debug" "AutoHotkey64Console.exe" 9000 9001 status PowerShell "Git Bash" "VS Code" \
+            "./bin/AutoHotkey64Console.exe //Debug=localhost:<port> --headless script.ahk" \
+            '& .\bin\AutoHotkey64Console.exe /Debug=localhost:<port> /Headless script.ahk'
     fi
+    if [[ $a == capture_error ]]; then
+        want_has ctx "capture fix" "CLAUDE.md, DBGp Protocol" error_capture errors_queued session_ended \
+            not_listening "captured:false" mcp__ahk-mcp__run "only when nothing is queued" \
+            "after a step stops at a throw" clear_errors "said Status: stopped" "relaunch first" \
+            "ends after clear_errors is still reported once" "once the old run has exited"
+        want_hasi ctx "older build" "times out"
+    else
+        want_lacks ctx error_capture "said Status: stopped"
+    fi
+    case $a in
+        evaluate) want_has ctx "no eval command" obj.prop "Command timeout" variables_get ;;
+        breakpoint_set) want_has ctx "no conditional breakpoints" "Command timeout" ;;
+        *) want_lacks ctx "eval command" "conditional breakpoints" ;;
+    esac
+    [[ $a == run ]] && want_has ctx "capture_error also starts it"
     t_end
 done
 for a in start stop status analyze_error apply_fix get_source list_errors clear_errors no_such_action; do
@@ -1123,14 +1162,61 @@ quiet() {       # quiet LABEL PAYLOAD
 shapes '{"captured":false,"reason":"timeout"}'
 for s in "${SHAPES[@]}"; do
     guidance "capture_error captured:false (${s%%$'\t'*}): timeout guidance" PostToolUse capture_error "${s#*$'\t'}"
-    want_hasi ctx "timed out"; want_has ctx /Debug status port
+    want_hasi ctx "timed out"; want_has ctx /Debug status port error_capture "capture fix" mcp__ahk-mcp__run
+    want_has ctx "returned its error" "said Status: stopped" "relaunch" "the port start or status reports" \
+        "clear_errors ran after the script had ended" "#SingleInstance refuses" "Another instance is already running" \
+        "exits 64 without ever connecting"
+    want_lacks ctx fix/dbgp-capture-error
+    want_lacks ctx "nothing queues" session_ended not_listening waiting_connections unconfirmed_reports
+    want_lacks ctx "9001+"
+    t_end
+done
+shapes '{"captured":false,"reason":"timeout","session":1,"waiting_connections":1,"note":"1 script(s) connected while session 1 was attached and wait, paused at their first line, until it ends; they have not run yet."}'
+for s in "${SHAPES[@]}"; do
+    guidance "capture_error timeout with waiting_connections (${s%%$'\t'*}): another script waits" PostToolUse capture_error "${s#*$'\t'}"
+    want_hasi ctx "timed out"; want_has ctx "This result has waiting_connections" "still attached" stop error_capture \
+        "another script" "#SingleInstance Off" "same script is never counted here"
+    want_lacks ctx "a relaunched script has not run" "waits behind"
+    want_lacks ctx unconfirmed_reports session_ended
+    t_end
+done
+shapes '{"captured":false,"reason":"timeout","session":3,"unconfirmed_reports":[{"error_type":"Error","message":"logged only","file":"C:\\x.ahk","line":4,"detected_by":"stderr","session":3}],"note":"..."}'
+guidance "capture_error timeout with unconfirmed_reports: not confirmed yet" PostToolUse capture_error "${SHAPES[0]#*$'\t'}"
+want_hasi ctx "timed out"; want_has ctx "This result has unconfirmed_reports" OutputDebug "exits with an error"
+want_lacks ctx "This result has waiting_connections"
+t_end
+guidance "capture_error {\"captured\":false} without a reason: timeout guidance" PostToolUse capture_error \
+    '"tool_response":[{"type":"text","text":"{\"captured\":false}"}]'
+want_hasi ctx "timed out"
+t_end
+# A fixed server's early returns. exit.reason ("error" here) must not be read
+# as the outer reason.
+shapes '{"captured":false,"reason":"session_ended","exit":{"status":"stopped","reason":"error"}}'
+for s in "${SHAPES[@]}"; do
+    guidance "capture_error session_ended (${s%%$'\t'*}): the script ended first" PostToolUse capture_error "${s#*$'\t'}"
+    want_has ctx session_ended exit "reason ok" mcp__ahk-mcp__run "/Debug=localhost:<port>" "reported this way once" \
+        "unless a run reply already said it stopped" "clear_errors ran after it ended" \
+        "ends after clear_errors is still reported once"
+    want_lacksi ctx "timed out" not_listening waiting_connections
+    t_end
+done
+shapes '{"captured":false,"reason":"session_ended","exit":{"status":"stopped","reason":"ok"},"session":1,"waiting_connections":1,"note":"The next script that connected while session 1 was attached starts now as session 2, paused at its first line: call capture_error (or run) to run it."}'
+guidance "capture_error session_ended with waiting_connections: the next script is attached" PostToolUse capture_error "${SHAPES[0]#*$'\t'}"
+want_has ctx session_ended "This result has waiting_connections" "attached now"; want_lacksi ctx "timed out"
+t_end
+shapes '{"captured":false,"reason":"not_listening"}'
+for s in "${SHAPES[@]}"; do
+    guidance "capture_error not_listening (${s%%$'\t'*}): call start" PostToolUse capture_error "${s#*$'\t'}"
+    want_has ctx not_listening "action start" "/Debug=localhost:<port>" "//Debug=localhost:<port>"
+    want_lacksi ctx "timed out" session_ended
     t_end
 done
 captured=$'{\n  "captured": true,\n  "error": {\n    "error_type": "Error",\n    "message": "Call to nonexistent function.",\n    "file": "C:\\\\Scripts\\\\demo.ahk",\n    "line": 3\n  }\n}'
 shapes "$captured"
 for s in "${SHAPES[@]}"; do
     guidance "capture_error captured:true (${s%%$'\t'*}): analyze, diagnose, apply_fix" PostToolUse capture_error "${s#*$'\t'}"
-    want_has ctx analyze_error Markdown apply_fix original; want_hasi ctx diagnosis
+    want_has ctx analyze_error Markdown apply_fix original session detected_by unconfirmed; want_hasi ctx diagnosis
+    want_has ctx clear_errors unverified_fields "still paused" "send run" "stack_trace[0]" "#SingleInstance refuses"
     want_lacksi ctx "timed out"
     t_end
 done
@@ -1141,7 +1227,10 @@ t_end
 shapes $'Fix applied at C:\\Scripts\\demo.ahk:3\n- Old: x := Abs(\n+ New: x := Abs(1)'
 for s in "${SHAPES[@]}"; do
     guidance "apply_fix \"Fix applied\" (${s%%$'\t'*}): ask for a /Debug re-run" PostToolUse apply_fix "${s#*$'\t'}"
-    want_hasi ctx "re-run"; want_has ctx /Debug CRLF LF
+    want_hasi ctx "re-run"; want_has ctx "/Debug=localhost:<port>" capture_error CRLF LF clear_errors "send run" \
+        "continue without the debugger" "The old run must have exited first" "#SingleInstance refuses the relaunch" \
+        "Another instance is already running" "exits 64 without connecting" "call start again"
+    want_lacks ctx "waits behind" "send run first"
     t_end
 done
 shapes $'Error: Line mismatch at 3.\nExpected: "x := Abs("\nFound: "y := 2"'
@@ -1159,12 +1248,52 @@ jesc $'Fix applied at C:\\Scripts\\caf\xc3\xa9.ahk:3'
 guidance "non-ASCII in the result: output stays ASCII" PostToolUse apply_fix "\"tool_response\":[{\"type\":\"text\",\"text\":\"$REPLY\"}]"
 t_end
 
+# An older server's evaluate, and its breakpoint_set with a condition, time out.
+guidance "PostToolUseFailure evaluate (Command timeout): an older server has no eval" PostToolUseFailure evaluate \
+    '"error":"Error: Command timeout","is_interrupt":false'
+want_has ctx "no eval command" "capture fix" variables_get error_capture "obj.prop"; want_lacks ctx fix/dbgp-capture-error
+t_end
+text_blocks 'Error: Command timeout'
+guidance "evaluate \"Error: Command timeout\" as PostToolUse: an older server has no eval" PostToolUse evaluate "\"tool_response\":$REPLY"
+want_has ctx "no eval command" variables_get
+t_end
+text_blocks $'{\n  "expression": "msg",\n  "result": "Command timeout",\n  "type": "string"\n}'
+dbgp PostToolUse evaluate "\"tool_response\":$REPLY"; quiet "evaluate whose value says Command timeout: no output" "$REPLY"
+dbgp PostToolUseFailure evaluate '"error":"Error: evaluate reads variables and property paths only","is_interrupt":false'
+quiet "PostToolUseFailure evaluate (rejected expression): no output" "$REPLY"
+envelope PostToolUseFailure mcp__ahk__AHK_Debug_DBGp '{"action":"breakpoint_set","file":"C:\\x.ahk","line":3,"condition":"a = 1"}' \
+    '"error":"Error: Command timeout","is_interrupt":false'
+t_begin "PostToolUseFailure breakpoint_set with a condition (Command timeout): drop the condition"
+run post-capture-guidance.sh "$REPLY"
+want_rc 0; want_no_err; want_ascii; want_hso PostToolUseFailure
+want_has ctx "no conditional breakpoints" "file and line only" "capture fix"; want_lacks ctx fix/dbgp-capture-error
+t_end
+dbgp PostToolUseFailure breakpoint_set '"error":"Error: Command timeout","is_interrupt":false'
+quiet "PostToolUseFailure breakpoint_set without a condition: no output" "$REPLY"
+
 text_blocks $'## AutoHotkey Error Analysis\n\nAnalyze this error.'
 dbgp PostToolUse analyze_error "\"tool_response\":$REPLY"; quiet "analyze_error result: no output" "$REPLY"
+# start and status tell a server without the capture fix from a fixed one.
+old_hint="capture_error never captures"
 text_blocks $'{\n  "connected": false,\n  "port": 9001,\n  "errors_queued": 0\n}'
-dbgp PostToolUse status "\"tool_response\":$REPLY"; quiet "status result: no output" "$REPLY"
+guidance "status from a server without the capture fix: capture_error cannot capture" PostToolUse status "\"tool_response\":$REPLY"
+want_has ctx "$old_hint" "capture fix" "CLAUDE.md, DBGp Protocol" "/Debug=localhost:<port>" mcp__ahk-mcp__run breakpoint_set \
+    "Command timeout" variables_get
+t_end
+text_blocks $'{\n  "connected": true,\n  "port": 9001,\n  "listening": true,\n  "engine_state": "break",\n  "session": 2,\n  "waiting_connections": 0,\n  "errors_queued": 0,\n  "reports_unconfirmed": 0,\n  "error_capture": {\n    "enabled": true,\n    "exception_breakpoint": "enabled",\n    "stderr_stream": "enabled"\n  }\n}'
+dbgp PostToolUse status "\"tool_response\":$REPLY"; quiet "status from a server with the capture fix: no output" "$REPLY"
+text_blocks $'DBGp listener started on port 9001.\nRun your script with: AutoHotkey64.exe /Debug your_script.ahk'
+guidance "start from a server without the capture fix: capture_error cannot capture" PostToolUse start "\"tool_response\":$REPLY"
+want_has ctx "$old_hint" "ignores its port argument" "/Debug=localhost:<port>"
+t_end
+text_blocks $'DBGp listener started on port 9001.\nRun your script with: AutoHotkey64.exe /Debug=localhost:9001 your_script.ahk\nRuntime errors are captured automatically; use capture_error to get them.'
+dbgp PostToolUse start "\"tool_response\":$REPLY"; quiet "start from a server with the capture fix: no output" "$REPLY"
 text_blocks $'DBGp listener started on port 9000.'
-dbgp PostToolUse start "\"tool_response\":$REPLY"; quiet "start result: no output" "$REPLY"
+dbgp PostToolUse start "\"tool_response\":$REPLY"; quiet "start result without a launch hint: no output" "$REPLY"
+text_blocks 'Already connected to AutoHotkey debugger'
+dbgp PostToolUse start "\"tool_response\":$REPLY"; quiet "start while connected: no output" "$REPLY"
+dbgp PostToolUseFailure status '"error":"Error: boom","is_interrupt":false'
+quiet "PostToolUseFailure status: no output" "$REPLY"
 text_blocks 'Breakpoint set'
 dbgp PostToolUse capture_error "\"tool_response\":$REPLY"; quiet "capture_error without a captured field: no output" "$REPLY"
 dbgp PostToolUseFailure capture_error '"error":"Error: Not connected to AutoHotkey debugger","is_interrupt":false'

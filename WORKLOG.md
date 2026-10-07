@@ -395,3 +395,150 @@ unlogged loop session between 3 and now.)
   `capture_error` can never capture (`queueError` has no live caller);
   `--coverage=` into a missing directory writes nothing and exits 0. No
   build toolchain is installed on this machine, so no task was build-tested.
+
+### Session 12 (2026-10-07) — DBGp guidance synced with the ahk-mcp capture fix
+- The ahk-mcp capture fix makes the `ahk` server's `capture_error` and
+  `evaluate` work; a running server loads it only after a restart. It is on
+  ahk-mcp's local branch `fix/dbgp-capture-error` (not pushed or merged;
+  `dist/` rebuilt), so a checkout elsewhere gets `master`, which lacks it.
+  Driven in-process
+  from that `dist/` against `bin/AutoHotkey64Console.exe` (43776299d43a-dirty)
+  with `/Debug=localhost:9437 /Headless`:
+  - `capture_error` before `start`: `not_listening` in 1 ms. `start` with
+    `port:9437` bound 9437 (with no `port` it moves past the held 9000).
+  - Without `run`, `capture_error` started a script paused at line 1 and
+    returned its ZeroDivisionError (line 5) in 2 ms; the engine exited 10. A
+    second call after that exit timed out (2016 ms): the run's error was
+    already returned, so the call waits for the next launch.
+  - A step that reached a throw answered `break (error: ...)`. `capture_error`
+    returned the queued error in 2 ms and the script was still paused 1.5 s
+    later (`engine_state` `break`) until `run` (exit 10).
+  - At a breakpoint, `evaluate` read `a`, `obj.name`, `obj.list[2]`, `m["k"]`
+    and `obj.list.Length` in 0-1 ms and rejected `a + b` at once; a
+    `breakpoint_set` `condition` was rejected at once (DBGp error 3). ahk-mcp
+    `master`'s client (bundled with esbuild) failed both with
+    `Command timeout` after 10020 and 10000 ms; `context_get` worked.
+  - `throw ValueError("named what", "Inner", "some extra")` inside `Inner()`:
+    `line` 5 (`Error.Line`), `stack_trace[0]` line 9, captured once
+    (`list_errors` count 0 after exit 10). A thrown string has `extra` but
+    no `what` or `ahk_stack`.
+  - A second script (`#SingleInstance Off`) launched while a `Sleep(5000)`
+    script was attached: `capture_error` timed out with
+    `waiting_connections:1` and a `note`; the next call returned the first
+    script's `session_ended` `{stopped, ok}` with `waiting_connections:1`,
+    and the next the second script's ValueError (session 2). A relaunch of
+    the same script does not wait like this: see Session 13.
+  - An error queued after `run` with nobody waiting came back first after a
+    relaunch, which was started at once (exit 10 within 1.5 s). A script that
+    ended while nobody waited was reported once, as `session_ended` after the
+    0.5 s grace (501 ms); the call after that timed out.
+- Engine bug (this fork only): the uncaught-error report (stderr text and
+  `--diag=json`) names the line the throw ran, not `Error.Line`, when they
+  differ. `source/error.cpp:1797` passes `TokenToString(t)` to `GetLine` as the
+  file name, and `t` last held `Extra` (else `Message`), so the lookup fails
+  and the throw line stays; it should pass `file`. Repro: the same throw with
+  an OnError callback added above it (prints `Error.Line`, returns 0) printed
+  `Error.Line=6`, and the report said `what_line.ahk (10) : ==> named what`
+  (`"line":10` with `--diag=json`), exit 10. Upstream
+  v2.1-alpha.31 and .32 look the line up by file index; the call came with
+  d8217d1a (`_ScriptGetLines`, the linecontext merge). By reading only: when
+  neither `Message` nor `Extra` is an own property, `t` is read uninitialized.
+- `JSON.Array` keyword tags, run on the same engine: `Push`, `InsertAt`,
+  `RemoveAt`, `Pop`, `Length` and `Clone` keep each remaining item's tag
+  (`[true,null,false,1]` grown to 6 gave `[true,null,false,1,null,null]`), and
+  assigning an element drops only its tag (`h[2] := 0` gave
+  `[true,0,false,1]`). CLAUDE.md said a length change drops all tags.
+- CLAUDE.md (DBGp Protocol, the `ahk` bullet, the JSON bullet), the three DBGp
+  hooks, `test-hooks.sh` and the hooks README now say this. `capture_error`
+  resumes a paused script only when nothing is queued; its timeout guidance
+  names the "error already returned" cause, the port `start` or `status`
+  reports, and adds notes for `waiting_connections` and
+  `unconfirmed_reports`. `evaluate` and conditional breakpoints are described
+  per build, with PostToolUse guidance when an older build times out.
+- Corrections after review (same engine and `dist/`; the DBGp run on port 9447):
+  - The docs said `/Headless` was needed or an uncaught error would open a
+    modal error box. Not on the console engine: without `/Headless` or a
+    debugger a divide by zero printed its report on stderr and exited 10 in
+    77 ms (`SetErrorStdOut(nullptr)` at console start, `error.cpp:1165`). The
+    real modal prompt is the debugger's: with no listener on the port,
+    `Debugger.cpp:2725`/`2751` call `FatalError`, which shows a "Failed to
+    connect to an active debugger client. Continue running the script
+    without the debugger?" MessageBox, with or without `/Headless` (only
+    `/Debug=stdio` prints it instead); a connection lost mid-run shows the
+    same kind of box. `/Headless` under `/Debug` only turns prompts such as
+    `#SingleInstance` into stderr text (a refused relaunch then exits 64;
+    see Session 13). Read from source, not run, to keep a dialog off the
+    desktop.
+  - A `run` that answered `Status: stopped` (clean script, exit 0) made the
+    next `capture_error` wait out its timeout (3001 ms, `reason:"timeout"`);
+    without that `run`, `capture_error` returned `session_ended`
+    `{stopped, ok}` in 1 ms. The docs said only "returns session_ended when
+    the script ends first".
+  - The hooks no longer name the branch; they test for `error_capture` in
+    `status` and point at CLAUDE.md. The SessionStart DBGp section is three
+    lines (896 bytes, from 2103), since the debug toolset is hidden by default
+    and the DBGp hooks carry the details; `test-hooks.sh` caps it.
+- `bash .claude/hooks/test-hooks.sh`: 170 passed, 0 failed, 0 skipped. Seven
+  mutations that restore an old claim (on a scratch copy of the hooks) each
+  fail 1 to 11 cases. SessionStart: 34 ASCII lines, 5231 bytes.
+
+### Session 13 (2026-10-07) — relaunch semantics, BIF corrections, open engine bugs
+- A relaunch does not wait behind an attached run of the same script.
+  `#SingleInstance` (default `Prompt`, `globaldata.cpp:78`) is checked before
+  the debugger connects (`AutoHotkey.cpp:234`, connect at `:637`); under
+  `/Headless` it prints `Another instance is already running. Use
+  #SingleInstance Force or /force.` and exits 64 (`AutoHotkey.cpp:556`).
+  Driven from ahk-mcp's `dist/` (local branch `fix/dbgp-capture-error`)
+  against `bin/AutoHotkey64Console.exe` (43776299d43a-dirty) with
+  `/Debug=localhost:9611 /Headless` (9612 for the waiting cases):
+  - The same script relaunched while its first run was paused at a throw
+    after a step, or still running: exit 64 with that text, never connected,
+    `status` `waiting_connections:0`. A `capture_error` sent then returned
+    the old run's `session_ended` `{stopped, ok}` when it ended.
+  - `run` on the paused run (it exited 10), `clear_errors`, then the same
+    relaunch: it connected as session 2 and `capture_error` returned its
+    ValueError.
+  - A different script, or a second copy of a `#SingleInstance Off` script,
+    launched while a `Sleep(6000)` script ran: `status` and a timeout showed
+    `waiting_connections:1` with the `note`; the next call returned the first
+    script's `session_ended` with `waiting_connections:1`, the next the
+    second's.
+  - `clear_errors` while a script ran, then the script ended: the next
+    `capture_error` still returned `session_ended` (509 ms) and the one after
+    timed out. A script that ended unobserved, then `clear_errors`:
+    `capture_error` timed out (1521 ms). `clear_errors` drops queued errors
+    and a remembered end, not the end of a run still going.
+- CLAUDE.md (DBGp Protocol), the three DBGp hooks and the hooks README now say
+  this: let the old run exit (`run`, or `stop` then `start`) before a
+  relaunch; the timeout guidance names the refused relaunch;
+  `waiting_connections` means another script (or a `#SingleInstance Off`
+  copy) is waiting; `clear_errors` acts on a run only after it ended. The
+  ahk-mcp fix is described as a local branch (not pushed or merged).
+- CLAUDE.md BIF bullets, each rechecked on the same engine:
+  - An `Eval` `SyntaxError` has own `Message`, `File` `_Eval`, `Line` 0,
+    `Column` 0, and `What`/`Extra`/`Stack` throw `PropertyError`;
+    `SyntaxError("m", "w", "ex")` has `What`, `Extra`, `File`, `Line`,
+    `Stack` and no `Column`.
+  - `JSON.Array` tags: `Push`, `InsertAt`, `RemoveAt`, `Pop`, `Length`,
+    `Capacity` and `Clone` keep the remaining tags, new items have none
+    (`Push(true)` emits `1`), and assigning (even `h[1] := h[1]`) or `Delete`
+    drops that element's keyword.
+  - `Check` on a source with a VarUnset warning on line 1 and a `Goto` to a
+    missing label on line 3 gives `Ok=0` and one diagnostic, the line-1
+    warning; a warning-only source gives `Ok=1` and no diagnostics; a
+    nonzero exit with no record gets a synthetic `Check:` diagnostic
+    (`console_check.cpp:264`, from source).
+- CLAUDE.md Open items now lists the engine bugs found this session, one line
+  each with its source location; none is fixed.
+- `test-hooks.sh`: the SessionStart DBGp-section cap counted the engine path,
+  printed twice, so the copied-engine case failed with a long `TMPDIR` (1250
+  bytes). It now measures the fixed text only (841 bytes, cap 1000). New
+  assertions cover the refused relaunch and `clear_errors` wording; restoring
+  the old `msg_fixed` and PreToolUse text on a scratch copy fails 14 cases.
+- `tests/crashlog_check.ahk`, `test_ahkmon.ahk` and `test_check_bif.ahk` usage
+  comments name `bin\AutoHotkey64Console.exe`. All three pass `check`;
+  `test_check_bif.ahk` passes on the console engine, and `crashlog_check.ahk`
+  exits 0, 14 and 64 as its comment says.
+- `bash .claude/hooks/test-hooks.sh`: 170 passed, 0 failed, 0 skipped with the
+  default `TMPDIR` and with a long scratch `TMPDIR`. SessionStart: 34 ASCII
+  lines, 5231 bytes, 0.3 s.
