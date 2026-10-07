@@ -7,17 +7,31 @@
   "files.exclude": {
     "**/.history": true
   },
-  "cmake.configureOnOpen": true,
+  // CMake Tools (see BUILD.md): never configure on folder open; keep each
+  // kit, architecture and build type in its own build tree; and write the
+  // executables under out/vscode/ (Debug appends _debug) instead of the
+  // default bin/, which holds the engine that .mcp.json and the tasks use.
+  // Pick the build type with the CMake Tools variant selector.
+  "cmake.configureOnOpen": false,
   "cmake.generator": "Ninja",
-  "cmake.preferredGenerators": [
-    "Ninja",
-    "Visual Studio 15 2017"
-  ],
-  "cmake.buildDirectory": "${workspaceFolder}/build",
+  "cmake.buildDirectory": "${workspaceFolder}/build_vscode/${buildKitVendor}-${buildKitTargetArch}-${buildType}",
   "cmake.configureSettings": {
-    "CMAKE_BUILD_TYPE": "Release"
+    "AHK_OUTPUT_DIR": "out/vscode/${buildKitVendor}-${buildKitTargetArch}"
   },
   "cmake.useCMakePresets": "never",
+  // thqby AutoHotkey2 LSP interpreter for this workspace. thqby 3.0.10
+  // resolves a relative path against the first workspace folder, in both the
+  // extension and its language server. This is the GUI build on purpose. The
+  // language server starts the interpreter as a plain child process at
+  // startup and whenever this setting changes, to read A_ variables, and F1
+  // help does the same. Started that way, the console build would open its
+  // own console window each time. Caveat: bin\AutoHotkey64.exe is currently
+  // an older build than bin\AutoHotkey64Console.exe (its --capabilities lists
+  // no inspect, processPipe or coverage). Until both are rebuilt (the
+  // bin\*.exe engines are gitignored; see BUILD.md), scripts started with
+  // thqby's Run command cannot use Inspect or ProcessPipe. Use the
+  // "Run AHK (fork, color)" task instead.
+  "AutoHotkey2.InterpreterPath": "bin\\AutoHotkey64.exe",
   "files.associations": {
     "*.ahk": "ahk2"
   }

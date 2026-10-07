@@ -5,25 +5,67 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug x64w C++",
+            // Debugs the engine itself (C++), running it on the active .ahk file
+            // (focus the script before pressing F5). The preLaunchTask builds the
+            // CMake MSVC x64 Debug console engine; CMakeLists.txt appends _debug to
+            // AHK_OUTPUT_DIR, so it lands in out\msvc\x64_debug. Needs
+            // ms-vscode.cpptools (recommended in .vscode/extensions.json) plus
+            // Visual Studio 2022 / Build Tools 18, CMake and Ninja. If the build
+            // fails, do not choose "Debug Anyway".
+            "name": "Debug engine (C++, CMake MSVC x64 Debug console)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "bin_debug/AutoHotkey64.exe",
-            "args": [],
+            "program": "${workspaceFolder}/out/msvc/x64_debug/AutoHotkey64Console.exe",
+            "args": ["${file}"],
             "stopAtEntry": false,
-            "cwd": "${workspaceRoot}",
-            "preLaunchTask": "build-debug"
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "preLaunchTask": "build-debug (CMake, MSVC x64 -> out/msvc/x64_debug)"
         },
         {
-            // Debugs the active .ahk with the LIVE fork build in bin\ (bin_debug\
-            // is the MSVC debug build of the interpreter itself, often stale).
-            // DBGp allows ONE listener on port 9000: F5 here and an MCP DBGp
-            // listener (AHK_Debug_DBGp) are mutually exclusive.
-            "name": "Debug x64w AHK",
+            // Legacy Visual Studio solution route: Debug|x64 GUI build in
+            // bin_debug\ (no console target). If the build fails, do not choose
+            // "Debug Anyway": an existing bin_debug exe may predate the CLI.
+            "name": "Debug engine (C++, msbuild .sln GUI Debug x64)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin_debug/AutoHotkey64.exe",
+            "args": ["${file}"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "preLaunchTask": "build-debug (msbuild .sln, GUI only, x64 -> bin_debug)"
+        },
+        {
+            // Debugs the active .ahk script over DBGp with the fork's console
+            // engine (the bin\*.exe engines are gitignored: build one first, see
+            // BUILD.md).
+            // Requires the zero-plusplus.vscode-autohotkey-debug extension, which
+            // provides the "autohotkey" debug type; the thqby AutoHotkey2 LSP does
+            // not include a debugger and asks for one. Without it VS Code reports
+            // that the debug type is not supported. .vscode/extensions.json
+            // recommends it, so VS Code offers to install it (see
+            // docs/VSCODE_SETUP.md).
+            // Console window (not verified here; the extension is not installed):
+            // if the adapter starts the runtime as an ordinary child of VS Code,
+            // which has no console, this console-subsystem engine opens its own
+            // console window on each launch. To avoid that, set "runtime" to
+            // ${workspaceFolder}/bin/AutoHotkey64.exe, the GUI build that
+            // AutoHotkey2.InterpreterPath uses. That exe is currently older than
+            // the console build (its --capabilities lists no inspect, processPipe
+            // or coverage) until both are rebuilt.
+            // Port: zero-plusplus listens on 9002 by default. Unless the active
+            // editor is an AHK v1 file, thqby merges its AutoHotkey2.DebugConfiguration
+            // setting (default port "9002-9100") into this configuration. The
+            // user-wide 'ahk' MCP server's DBGp listener (mcp__ahk__AHK_Debug_DBGp;
+            // debug toolset, hidden by default) starts at 9000 and moves to 9001+
+            // when busy, so the two normally coexist. The project's ahk-mcp server
+            // (.mcp.json, the engine's native mcp verb) has no DBGp tool.
+            "name": "Debug AHK script (DBGp, fork console engine)",
             "type": "autohotkey",
             "request": "launch",
             "program": "${file}",
-            "runtime": "${workspaceRoot}/bin/AutoHotkey64.exe",
+            "runtime": "${workspaceFolder}/bin/AutoHotkey64Console.exe",
             "useDebugDirective": true,
             "args": [],
             "variableCategories": [

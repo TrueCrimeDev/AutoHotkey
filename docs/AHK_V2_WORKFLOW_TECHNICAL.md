@@ -207,13 +207,18 @@ This is used for higher quality error context and is a key capability for AI-ass
 
 ### VS Code tasks
 
-Workspace tasks are defined in `.vscode/tasks.json`, including:
+Workspace tasks are defined in `.vscode/tasks.json` and use the fork's console
+engine, `bin\AutoHotkey64Console.exe` (build it first; the `bin\*.exe` engines
+are gitignored):
 
-- Run with debug interceptor
-- Run normally
-- Start global debug server
+- `Run AHK (fork, color)`, `Check AHK (fork)` and `Test AHK (fork)` for the active file
+- `QA suite (fork)` (`qa/run.ahk`, the default test task) and `Console gate (choose engine)` (`tests/run_console_gate.py`)
+- CMake MSVC build tasks (`out/msvc/x64`, the default build task; `out/msvc/x64_debug`; `out/msvc/Win32`), `build.bat` (mingw, overwrites `bin\`), and the legacy msbuild `.sln` tasks (GUI only)
 
-Those tasks reference `AutoDebug.ahk` and `GlobalDebugServer.ahk`; ensure those scripts exist in your local workspace if you use those tasks.
+The repository ships no keybindings; VS Code reads shortcuts only from the
+user's own `keybindings.json`. See [VSCODE_SETUP.md](VSCODE_SETUP.md) for the
+full task list, the launch configurations, the recommended extensions
+(`.vscode/extensions.json`) and an optional user keybinding example.
 
 ## Common Commands
 

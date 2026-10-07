@@ -1,24 +1,23 @@
 {
     // See https://go.microsoft.com/fwlink/?LinkId=733558
-    // for the documentation about the tasks.json format
+    // for the documentation about the tasks.json format.
+    //
+    // Engine tasks run the fork's console build, bin\AutoHotkey64Console.exe.
+    // The bin\*.exe engines are gitignored, so a fresh clone has none until built
+    // (BUILD.md). The GUI build, bin\AutoHotkey64.exe, writes nothing to a task
+    // terminal, so it is not used here.
+    //
+    // Build tasks mirror BUILD.md. They were written on a machine without
+    // cmake, ninja, MSVC or MSYS2 and have NOT been run end to end.
     "version": "2.0.0",
-    "windows": {
-        "options": {
-            "shell": {
-                "executable": "cmd.exe",
-                "args": ["/C", "${workspaceFolder}/vsc-build-env.cmd", "&&"]
-            }
-        },
-        "problemMatcher": "$msCompile"
-    },
     "tasks": [
         {
-            // Runs the active file with the fork build in the integrated
-            // TERMINAL (VT-capable) — so ANSI escapes render in color, unlike
-            // the AHK extension's Run button which uses the non-VT OUTPUT panel.
+            // Runs the active file with the console engine in the integrated
+            // terminal, so Print / FileAppend(..., "*") output and ANSI colour
+            // appear (the AHK extension's Run button uses the non-VT OUTPUT panel).
             "label": "Run AHK (fork, color)",
             "type": "process",
-            "command": "${workspaceFolder}\\bin\\AutoHotkey64.exe",
+            "command": "${workspaceFolder}\\bin\\AutoHotkey64Console.exe",
             "args": ["${file}"],
             "presentation": {
                 "echo": true,
@@ -31,13 +30,15 @@
             "problemMatcher": []
         },
         {
-            // Syntax-check the active file with the fork engine (exit 13 = fail).
-            // The matcher turns `file (line) : ==> msg` into clickable entries
-            // in the Problems panel.
+            // Syntax-checks the active file (check implies /Headless and
+            // /ErrorStdOut). Exit 0 = CHECK PASS (warnings do not fail it);
+            // 13 = syntax error or missing file. The matcher turns
+            // `file (line) : ==> [Warning: ]msg` stderr lines into Problems
+            // entries, with warnings as warnings.
             "label": "Check AHK (fork)",
             "type": "process",
-            "command": "${workspaceFolder}\\bin\\AutoHotkey64.exe",
-            "args": ["check", "/ErrorStdOut", "${file}"],
+            "command": "${workspaceFolder}\\bin\\AutoHotkey64Console.exe",
+            "args": ["check", "${file}"],
             "group": "test",
             "presentation": {
                 "echo": true,
@@ -49,20 +50,25 @@
             "problemMatcher": {
                 "owner": "ahk",
                 "fileLocation": "absolute",
+                "severity": "error",
                 "pattern": {
-                    "regexp": "^(.+) \\((\\d+)\\) : ==> (.+)$",
+                    "regexp": "^\\s*(.+?) \\((\\d+)\\) : ==> (?:(Warning): )?(.+)$",
                     "file": 1,
                     "line": 2,
-                    "message": 3
+                    "severity": 3,
+                    "message": 4
                 }
             }
         },
         {
-            // Run the active file through the engine's test runner (exit 14 = fail).
+            // Runs the active file in test mode (implies /Headless and
+            // /ErrorStdOut). Exit 0 = pass; 14 = explicit ExitApp(14), a
+            // persistent script, or an exec failure; an uncaught runtime error
+            // keeps 10 and a parse error 12 (see --capabilities exitCodes).
             "label": "Test AHK (fork)",
             "type": "process",
-            "command": "${workspaceFolder}\\bin\\AutoHotkey64.exe",
-            "args": ["test", "/ErrorStdOut", "${file}"],
+            "command": "${workspaceFolder}\\bin\\AutoHotkey64Console.exe",
+            "args": ["test", "${file}"],
             "group": "test",
             "presentation": {
                 "echo": true,
@@ -74,21 +80,24 @@
             "problemMatcher": {
                 "owner": "ahk",
                 "fileLocation": "absolute",
+                "severity": "error",
                 "pattern": {
-                    "regexp": "^(.+) \\((\\d+)\\) : ==> (.+)$",
+                    "regexp": "^\\s*(.+?) \\((\\d+)\\) : ==> (?:(Warning): )?(.+)$",
                     "file": 1,
                     "line": 2,
-                    "message": 3
+                    "severity": 3,
+                    "message": 4
                 }
             }
         },
         {
-            // Whole-tree regression suite (qa/run.ahk, subprocess-per-test).
-            // Exit code = failing assertions + crashes.
+            // Whole-tree regression suite (qa/run.ahk, one subprocess per test),
+            // invoked as tests/run_console_gate.py does. Exit code = failing
+            // assertions + crashes.
             "label": "QA suite (fork)",
             "type": "process",
-            "command": "${workspaceFolder}\\bin\\AutoHotkey64.exe",
-            "args": ["/ErrorStdOut", "${workspaceFolder}\\qa\\run.ahk"],
+            "command": "${workspaceFolder}\\bin\\AutoHotkey64Console.exe",
+            "args": ["/Headless", "/ErrorStdOut", "${workspaceFolder}\\qa\\run.ahk"],
             "group": {
                 "kind": "test",
                 "isDefault": true
@@ -103,30 +112,131 @@
             "problemMatcher": {
                 "owner": "ahk",
                 "fileLocation": "absolute",
+                "severity": "error",
                 "pattern": {
-                    "regexp": "^(.+) \\((\\d+)\\) : ==> (.+)$",
+                    "regexp": "^\\s*(.+?) \\((\\d+)\\) : ==> (?:(Warning): )?(.+)$",
                     "file": 1,
                     "line": 2,
-                    "message": 3
+                    "severity": 3,
+                    "message": 4
                 }
             }
         },
         {
-            // Canonical engine build: mingw-w64 GCC via C:\msys64 → bin\.
-            // (build.bat; the msbuild tasks below are the legacy MSVC route.)
-            "label": "build (fork, mingw)",
+            // Aggregate regression gate (BUILD.md) against a chosen console
+            // engine, normally a fresh CMake output. Needs python on PATH.
+            "label": "Console gate (choose engine)",
             "type": "process",
-            "command": "cmd.exe",
-            "args": ["/C", "${workspaceFolder}\\build.bat"],
+            "command": "python",
+            "args": ["${workspaceFolder}\\tests\\run_console_gate.py", "${input:gateEngine}"],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            // Supported route (BUILD.md "MSVC"): CMake + Ninja in an x64 MSVC
+            // developer environment, isolated output in out\msvc\x64 (GUI and
+            // Console). It does not touch bin\. vsc-build-env.cmd finds Visual
+            // Studio through vswhere (BUILD.md requires VS 2022 or Build Tools 18
+            // with the C++ desktop workload, plus CMake and Ninja).
+            "label": "build (CMake, MSVC x64 -> out/msvc/x64)",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "AHK_VS_ARCH": "amd64"
+                },
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": ["/C", "call", "\"${workspaceFolder}\\vsc-build-env.cmd\"", "&&"]
+                }
+            },
+            "command": "cmake -S . -B build_msvc_x64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/msvc/x64 && cmake --build build_msvc_x64 --target AutoHotkey64Console AutoHotkey64 --parallel 6",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            // Debug build of the console engine for the C++ launch configuration.
+            // CMakeLists.txt appends _debug to AHK_OUTPUT_DIR for Debug builds,
+            // so the exe lands in out\msvc\x64_debug.
+            "label": "build-debug (CMake, MSVC x64 -> out/msvc/x64_debug)",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "AHK_VS_ARCH": "amd64"
+                },
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": ["/C", "call", "\"${workspaceFolder}\\vsc-build-env.cmd\"", "&&"]
+                }
+            },
+            "command": "cmake -S . -B build_msvc_x64_debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DAHK_OUTPUT_DIR=out/msvc/x64 && cmake --build build_msvc_x64_debug --target AutoHotkey64Console --parallel 6",
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            // Win32 variant of the supported route: x86 developer environment,
+            // separate build and output directories (as CI uses out/msvc/Win32).
+            "label": "build (CMake, MSVC Win32 -> out/msvc/Win32)",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "AHK_VS_ARCH": "x86"
+                },
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": ["/C", "call", "\"${workspaceFolder}\\vsc-build-env.cmd\"", "&&"]
+                }
+            },
+            "command": "cmake -S . -B build_msvc_win32 -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/msvc/Win32 && cmake --build build_msvc_win32 --target AutoHotkey32Console AutoHotkey32 --parallel 6",
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            // Convenience route (BUILD.md): build.bat -> build_gcc\, output bin\.
+            // It OVERWRITES both bin\ engines; stop the ahk-mcp server and any
+            // running bin\ engine first, or linking fails on the locked exe.
+            // Needs MSYS2 at %MSYS2_ROOT% (default C:\msys64).
+            "label": "build (build.bat, mingw -> bin, overwrites bin)",
+            "type": "process",
+            "command": "cmd.exe",
+            "args": ["/C", "call", "${workspaceFolder}\\build.bat"],
+            "group": "build",
             "problemMatcher": "$gcc"
         },
         {
-            "label": "build",
+            // Legacy Visual Studio solution route: GUI executable only
+            // (bin\AutoHotkey64.exe / AutoHotkey32.exe; Debug -> bin_debug\).
+            // RawAhkVersion / AhkVersionN pin the fork's version as
+            // build_local.bat does (keep in sync with source/ahkversion.h);
+            // without them the project takes its version from `git describe`,
+            // which can name an older tag. --version still reports
+            // revision=unknown on this route.
+            "label": "build (msbuild .sln, GUI only -> bin)",
             "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "RawAhkVersion": "2.1-alpha.31+Console",
+                    "AhkVersionN": "2,1,0,31"
+                },
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": ["/C", "call", "\"${workspaceFolder}\\vsc-build-env.cmd\"", "&&"]
+                }
+            },
             "command": "msbuild",
             "args": [
                 "/p:Platform=${input:platform}",
@@ -136,11 +246,23 @@
                 "/consoleloggerparameters:NoSummary",
                 "${workspaceFolder}/AutoHotkeyx.sln"
             ],
-            "group": "build"
+            "group": "build",
+            "problemMatcher": "$msCompile"
         },
         {
-            "label": "rebuild",
+            "label": "rebuild (msbuild .sln, GUI only -> bin)",
             "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "RawAhkVersion": "2.1-alpha.31+Console",
+                    "AhkVersionN": "2,1,0,31"
+                },
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": ["/C", "call", "\"${workspaceFolder}\\vsc-build-env.cmd\"", "&&"]
+                }
+            },
             "command": "msbuild",
             "args": [
                 "/p:Platform=${input:platform}",
@@ -150,11 +272,23 @@
                 "/consoleloggerparameters:NoSummary",
                 "${workspaceFolder}/AutoHotkeyx.sln"
             ],
-            "group": "build"
+            "group": "build",
+            "problemMatcher": "$msCompile"
         },
         {
-            "label": "build-debug",
+            "label": "build-debug (msbuild .sln, GUI only, x64 -> bin_debug)",
             "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "RawAhkVersion": "2.1-alpha.31+Console",
+                    "AhkVersionN": "2,1,0,31"
+                },
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": ["/C", "call", "\"${workspaceFolder}\\vsc-build-env.cmd\"", "&&"]
+                }
+            },
             "command": "msbuild",
             "args": [
                 "/p:Platform=x64",
@@ -164,10 +298,23 @@
                 "/consoleloggerparameters:NoSummary",
                 "${workspaceFolder}/AutoHotkeyx.sln"
             ],
-            "group": "build"
+            "group": "build",
+            "problemMatcher": "$msCompile"
         }
     ],
     "inputs": [
+        {
+            "id": "gateEngine",
+            "description": "Console engine for tests/run_console_gate.py",
+            "type": "pickString",
+            "options": [
+                "out/msvc/x64/AutoHotkey64Console.exe",
+                "out/msvc/Win32/AutoHotkey32Console.exe",
+                "out/mingw/x64/AutoHotkey64Console.exe",
+                "bin/AutoHotkey64Console.exe"
+            ],
+            "default": "out/msvc/x64/AutoHotkey64Console.exe"
+        },
         {
             "id": "platform",
             "description": "Platform",

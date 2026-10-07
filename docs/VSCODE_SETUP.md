@@ -1,147 +1,115 @@
-# VS Code Debug Setup - Quick Reference
+# VS Code Setup - Quick Reference
 
-## ✅ Tasks Created
+The workspace configuration lives in `.vscode/tasks.json`, `.vscode/launch.json`,
+`.vscode/settings.json` and `.vscode/extensions.json`. Engine tasks use the
+fork's console build, `bin\AutoHotkey64Console.exe`. The engines in `bin\`
+(`bin\*.exe`) are gitignored (only `bin\tree-sitter-ahk.dll` is tracked), so a
+fresh clone has no engine until you build one (see `BUILD.md`).
 
-Three VS Code tasks are now available:
+## Extensions
 
-1. **Run AHK with Debug Interceptor**
-   - Runs current file through AutoDebug.ahk
-   - Errors sent to GlobalDebugServer
-   - Keyboard shortcut: `Alt + F13`
+`.vscode/extensions.json` recommends these, so VS Code offers to install them
+when the folder is opened (or search `@recommended` in the Extensions view).
 
-2. **Run AHK Normally (No Debug)**
-   - Runs current file without debugging
-   - Standard AHK execution
-   - Keyboard shortcut: `Ctrl + F13`
+| Extension | Needed for |
+|-----------|------------|
+| `thqby.vscode-autohotkey2-lsp` | AHK v2 language server. `.ahk` files are associated with its `ahk2` language, and `AutoHotkey2.InterpreterPath` is set for this workspace in `.vscode/settings.json` |
+| `zero-plusplus.vscode-autohotkey-debug` | The `autohotkey` debug type used by the "Debug AHK script" launch configuration. The thqby extension has no debugger of its own and asks for one |
+| `ms-vscode.cpptools` | The `cppvsdbg` engine-debugging launch configurations, and the `$gcc` problem matcher of the `build.bat` task |
+| `ms-vscode.cmake-tools` | The optional CMake Tools integration configured by the `cmake.*` keys in `.vscode/settings.json` (`configureOnOpen` is off). The build tasks call `cmake` directly and do not need it |
 
-3. **Start Global Debug Server**
-   - Launches GlobalDebugServer.ahk in background
-   - Required for global error monitoring
-   - Keyboard shortcut: `Shift + F13`
+`AutoHotkey2.InterpreterPath` points at `bin\AutoHotkey64.exe`, the GUI build,
+so the language server can start it without opening a console window. That
+build is currently older than `bin\AutoHotkey64Console.exe` (its
+`--capabilities` lists no inspect, processPipe or coverage) until both are
+rebuilt. The extension's own Run command uses it and shows output in the
+OUTPUT panel without ANSI colour; use the `Run AHK (fork, color)` task for the
+console engine.
 
----
+## Tasks
 
-## Keyboard Shortcuts (Project-Specific)
+Run them with `Ctrl+Shift+P` -> "Tasks: Run Task". `Ctrl+Shift+B` runs the
+default build task.
 
-| Key | Action |
-|-----|--------|
-| `Alt + F13` | Run with Debug Interceptor |
-| `Ctrl + F13` | Run Normally (No Debug) |
-| `Shift + F13` | Start Global Debug Server |
+| Label | What it does |
+|-------|--------------|
+| `Run AHK (fork, color)` | Runs the active file with the console engine in a dedicated terminal, so `Print` output and ANSI colour show |
+| `Check AHK (fork)` | `check` on the active file. Exit 0 = `CHECK PASS` (warnings do not fail it); 13 = syntax error or missing file. Errors and warnings go to Problems |
+| `Test AHK (fork)` | `test` on the active file. Exit 0 = pass; 10 = uncaught runtime error; 12 = parse error; 14 = explicit `ExitApp(14)`, a persistent script, or an exec failure |
+| `QA suite (fork)` | `qa/run.ahk` with `/Headless /ErrorStdOut` (default test task). Exit code = failing assertions + crashes |
+| `Console gate (choose engine)` | `python tests/run_console_gate.py <engine>` against an engine you pick; needs Python on PATH |
+| `build (CMake, MSVC x64 -> out/msvc/x64)` | Supported route from `BUILD.md` (default build task); builds GUI and Console into `out\msvc\x64` and does not touch `bin\` |
+| `build-debug (CMake, MSVC x64 -> out/msvc/x64_debug)` | Debug console engine for the C++ launch configuration (CMake appends `_debug` to the output directory) |
+| `build (CMake, MSVC Win32 -> out/msvc/Win32)` | 32-bit variant of the supported route |
+| `build (build.bat, mingw -> bin, overwrites bin)` | Convenience route; overwrites both `bin\` engines (stop the ahk-mcp server and any running `bin\` engine first). Needs MSYS2 at `%MSYS2_ROOT%` (default `C:\msys64`) |
+| `build (msbuild .sln, GUI only -> bin)`, `rebuild (msbuild .sln, GUI only -> bin)`, `build-debug (msbuild .sln, GUI only, x64 -> bin_debug)` | Legacy Visual Studio solution route; GUI executable only |
 
-**Note:** These shortcuts only work in this workspace.
+The MSVC tasks run through `vsc-build-env.cmd`, which finds Visual Studio with
+`vswhere`. They need Visual Studio 2022 or Build Tools 18 with the C++ desktop
+workload, plus CMake and Ninja for the CMake tasks (MSYS2 for `build.bat`). The
+build tasks mirror `BUILD.md` but have not been run end to end from VS Code.
 
----
+`/Headless` only redirects error and warning dialogs to stderr. `MsgBox`,
+`InputBox` and GUI windows still block a task until you close them.
 
-## How to Use
+## Launch configurations (F5)
 
-### First Time Setup:
-1. Press `Shift + F13` to start GlobalDebugServer
-2. Open any `.ahk` file
-3. Press `Alt + F13` to run with debugging
+| Name | What it does |
+|------|--------------|
+| `Debug engine (C++, CMake MSVC x64 Debug console)` | Builds and debugs `out\msvc\x64_debug\AutoHotkey64Console.exe` on the active `.ahk` file |
+| `Debug engine (C++, msbuild .sln GUI Debug x64)` | Legacy route: builds and debugs `bin_debug\AutoHotkey64.exe` on the active `.ahk` file |
+| `Debug AHK script (DBGp, fork console engine)` | Debugs the active script over DBGp with `bin\AutoHotkey64Console.exe`; needs `zero-plusplus.vscode-autohotkey-debug` |
 
-### Daily Use:
-1. Open your AHK script in VS Code
-2. Press `Alt + F13`
-3. Script runs with automatic error reporting
-4. Check GlobalDebugServer GUI for errors
+Focus the `.ahk` file before pressing F5: every configuration passes `${file}`.
+If a pre-launch build fails, do not choose "Debug Anyway".
 
----
+The DBGp configuration has not been tried here, because the debug extension is
+not installed on the machine where it was written. If each launch opens an
+extra console window, set its `runtime` to `${workspaceFolder}/bin/AutoHotkey64.exe`
+(the GUI build; see the caveat under Extensions).
 
-## Making Shortcuts Global (Optional)
+Port notes: the zero-plusplus adapter listens on 9002 by default, and thqby
+merges its `AutoHotkey2.DebugConfiguration` port range (`9002-9100`) into the
+launch. The user-wide `ahk` MCP server's DBGp listener (`AHK_Debug_DBGp`, in
+the debug toolset that is hidden by default) starts at 9000 and moves to 9001+
+when busy, so the two normally coexist. The project's `ahk-mcp` server (the
+engine's native `mcp` verb) has no DBGp tool.
 
-To use these shortcuts in **all** VS Code workspaces:
+## Keyboard shortcuts (optional, user-level)
 
-1. Press `Ctrl + Shift + P`
-2. Type: "Preferences: Open Keyboard Shortcuts (JSON)"
-3. Add the following to your **user** keybindings:
+The repository ships no shortcuts: VS Code reads keybindings only from your
+**user** `keybindings.json`, not from the workspace. To add some, run
+"Preferences: Open Keyboard Shortcuts (JSON)" and add entries that use the
+current task labels (pick keys that are free in your setup):
 
 ```json
 [
   {
-    "key": "alt+f13",
-    "command": "workbench.action.tasks.runTask",
-    "args": "Run AHK with Debug Interceptor",
-    "when": "editorLangId == ahk2 || resourceExtname == .ahk"
-  },
-  {
     "key": "ctrl+f13",
     "command": "workbench.action.tasks.runTask",
-    "args": "Run AHK Normally (No Debug)",
-    "when": "editorLangId == ahk2 || resourceExtname == .ahk"
+    "args": "Run AHK (fork, color)",
+    "when": "editorLangId == ahk2"
   },
   {
-    "key": "shift+f13",
+    "key": "alt+f13",
     "command": "workbench.action.tasks.runTask",
-    "args": "Start Global Debug Server"
+    "args": "Check AHK (fork)",
+    "when": "editorLangId == ahk2"
   }
 ]
 ```
 
----
-
-## Running Tasks Manually
-
-If keyboard shortcuts don't work:
-
-1. Press `Ctrl + Shift + P`
-2. Type: "Tasks: Run Task"
-3. Select from the list:
-   - Run AHK with Debug Interceptor
-   - Run AHK Normally (No Debug)
-   - Start Global Debug Server
-
----
-
-## Files Created
-
-- `.vscode/tasks.json` - Task definitions
-- `.vscode/keybindings.json` - Workspace-specific shortcuts
-- `VSCODE_SETUP.md` - This file
-
----
-
 ## Troubleshooting
 
-### Shortcut not working?
-- Check that you're editing an `.ahk` file
-- Reload VS Code window: `Ctrl + Shift + P` → "Reload Window"
-- Verify tasks.json exists in `.vscode/` folder
-
-### Task fails to run?
-- Check that AutoHotkey is installed at: `C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe`
-- Verify AutoDebug.ahk exists in workspace root
-- Check terminal output for error messages
-
-### GlobalDebugServer not receiving errors?
-- Ensure server is running (press `Shift + F13`)
-- Check Windows system tray for server icon
-- Verify port 9999 is not blocked by firewall
-
----
-
-## Alternative: Command Palette
-
-You can also run tasks via Command Palette:
-
-1. `Ctrl + Shift + P`
-2. Type "task" and select "Tasks: Run Task"
-3. Choose your task
-
----
-
-## Quick Test
-
-1. Create a test file: `test.ahk`
-2. Add code:
-   ```autohotkey
-   #Requires AutoHotkey v2.0
-   MsgBox("Test script")
-   x := 1 / 0  ; Error
-   ```
-3. Press `Alt + F13`
-4. Error should appear in GlobalDebugServer
-
----
-
-**Happy debugging!** 🛡️
+- **"Configured debug type 'autohotkey' is not supported"**: install
+  `zero-plusplus.vscode-autohotkey-debug`.
+- **An engine task fails to start because the executable does not exist**:
+  build the engine (`BUILD.md`), then check that `bin\AutoHotkey64Console.exe`
+  exists.
+- **An MSVC build task stops with "unable to locate build tools"**:
+  `vsc-build-env.cmd` found no `vswhere.exe` or no Visual Studio installation
+  with the C++ tools. If it gets past that and then fails to run `cmake` or
+  `ninja`, they are not on PATH. See `BUILD.md` for the required toolchain.
+- **Problems panel stays empty after Check**: the matcher reads
+  `file (line) : ==> [Warning: ]message` lines from stderr. A passing check
+  with no warnings prints only `CHECK PASS`.
