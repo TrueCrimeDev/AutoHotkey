@@ -2787,9 +2787,14 @@ int Debugger::FatalError(LPCTSTR aMessage)
 {
 	g_Debugger.Disconnect();
 
-	if (g_DebugStdio)
+	if (g_DebugStdio || g_script.mErrorStdOut || g_script.mHeadless)
 	{
 		// In stdio mode, write error to stderr instead of showing a dialog.
+		// Otherwise use the same test as Script::ShowError: a run that reports
+		// errors on stderr continues without the debugger rather than block on a
+		// modal prompt that nobody may be there to answer.  mErrorStdOut is on by
+		// default in this fork (Script::Script) and only an invalid encoding, which
+		// ends the run, clears it, so in practice the prompt below is not reached.
 		fprintf(stderr, "Debugger error: %ls\n", aMessage);
 		// MinGW's stdio wrapper can buffer redirected stderr until process exit.
 		// A detached persistent script stays alive, so deliver the notice now.
