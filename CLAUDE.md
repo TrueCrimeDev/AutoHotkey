@@ -406,6 +406,7 @@ Open items:
 - [x] Stale `export` module examples fixed 2026-09-10: keyword dropped, and the
   `#Import {X} from M` / bare `#Import "file.ahk"` forms (never valid on this
   engine) rewritten as `#Import M {X}` / `#Import "file.ahk" {*}`.
+- [ ] **`&Module.Var` corrupts the heap on alpha.33 (upstream bug)**: any script that takes a reference to a module variable (`r := &Mod.X`) exits with 0xC0000374/0xC0000005 after the auto-execute section, and passing it ByRef (`Bump(&Mod.X)`) leaves the variable reported as unassigned. Reproduced on the official `AutoHotkey_2.1-alpha.33.zip` GUI build on 2026-10-08, so it is upstream's `ScriptModule::__Ref` (commit `9f4df71b`), not the merge. Reading and writing through `%r%` works until exit. Avoid `&Module.Var` until upstream fixes it; `#Import Mod {X}` plus `&X` is the safe form.
 - [ ] **Module init is not lazy on alpha.31**: a `#Module` nothing imports still
   runs, before `__Main`'s auto-execute section (`examples/alpha21/05_lazy_module_init.ahk`
   documents the observation). alpha.21 notes promised first-reference init —
