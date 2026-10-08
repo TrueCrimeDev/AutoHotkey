@@ -272,10 +272,12 @@ Assert.truthy(InStr(r.out, "Invalid base class."), "forward-ref self-extend: 'In
 ;     clears VAR_ATTRIB_UNINITIALIZED so PerformAssign's fast path proceeds).
 ; OLD: "This parameter has not been assigned a value. Specifically: src"
 ;      thrown at the `a := src` line (exit 10).
-; Note: on alpha.31 the fast path copies the referenced *object* (Type(a) is
+; Note: on alpha.31 the fast path copied the referenced *object* (Type(a) was
 ;      "QaCell", not Integer), while `src + 0`, `(src ?? 0)` and Print(src) all
-;      read __Value. Var::Assign(Var&) documents a VAR_NORMAL precondition that
-;      a VAR_VIRTUAL_OBJ source violates, so that value is not pinned here.
+;      read __Value, so that value was left unpinned. Upstream alpha.32
+;      40a82a67 ("Fixed simple `a := b` assignments where b is a virtual
+;      reference") makes the fast path read __Value too: on alpha.33 `a` is the
+;      Integer 42 (the alpha.31 engine gives "QaCell"), pinned below.
 ; ============================================================================
 class QaCell {
     __New(v) => this._v := v
@@ -289,6 +291,10 @@ QaCopyOut(&src) {
     a := src            ; the simple-assignment fast path (not an expression)
     return IsSet(a)
 }
+QaCopyValue(&src) {
+    a := src            ; same fast path; returns what it copied
+    return a
+}
 QaReadWrite(&src) {
     before := src + 0   ; expression path: reads __Value
     src := 99           ; assignment through the virtual reference
@@ -298,6 +304,9 @@ QaReadWrite(&src) {
 cell := QaCell(42)
 Assert.noThrow(() => QaCopyOut(cell), "a := src (virtual reference): no unset-parameter error")
 Assert.truthy(QaCopyOut(cell), "a := src (virtual reference): a is set afterwards")
+copied := QaCopyValue(cell)
+Assert.eq(Type(copied), "Integer", "a := src (virtual reference): copies __Value, not the object (upstream 40a82a67)")
+Assert.eq(IsObject(copied) ? Type(copied) : copied, 42, "a := src (virtual reference): a holds __Value (upstream 40a82a67)")
 Assert.eq(QaReadWrite(cell), 42, "virtual reference: expression read sees __Value")
 Assert.eq(cell._v, 99, "virtual reference: assignment writes through __Value")
 

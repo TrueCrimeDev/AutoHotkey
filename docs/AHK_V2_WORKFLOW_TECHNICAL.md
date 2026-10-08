@@ -69,34 +69,52 @@ Example in repo:
 
 - `tests/test_console.ahk`
 
-### 6. Launch under MCP supervision (stdio debugger, preferred)
+### 6. Launch under MCP supervision (legacy stdio adapter)
 
-The MCP server can spawn the engine itself — no port 9000, no listen-first ordering:
+For this repo, run scripts with the native server's `mcp__ahk-mcp__run` and
+`mcp__ahk-mcp__test` (the `ahk-mcp` entry in `.mcp.json`). Those tools have no
+debugger. The stdio debugger launch below exists only in the legacy
+`debugger-tool/mcp-server` adapter, which `.mcp.json` does not register (see
+`debugger-tool/mcp-server/CLAUDE.md`):
 
-- MCP tool `launch_script` runs `bin\AutoHotkey64.exe /Debug=stdio script.ahk` as a child process.
+- Its `launch_script` tool runs `bin\AutoHotkey64.exe /Debug=stdio script.ahk` (the GUI
+  build by default; `AHK_EXE` overrides it) as a child process, so no port 9000
+  listener is involved.
 - DBGp frames travel over the child's stdin/stdout; script `Print()`/stdout output is
   redirected into DBGp `<stream>` packets (`stdout -c 2`) and read via `get_script_output`.
 - The script starts paused before auto-execute; `debug_run` begins execution.
 - An exception breakpoint is set by default, so uncaught errors break for inspection
-  (stack, variables, eval) instead of killing the process.
+  (stack and variables) instead of killing the process. The engine has no DBGp `eval`
+  command (it answers error 4), so the adapter's `evaluate` tool fails; read values with
+  `variables_get` or `property_get`.
 
 ### 7. Run generated code from stdin (no temp file)
 
-The engine accepts `*` as the script name and reads source from stdin:
+The engine accepts `*` as the script name and reads source from stdin. Use the console
+build, which the shell waits for:
 
 ```powershell
-echo 'Print("hi")' | bin\AutoHotkey64.exe /ErrorStdOut *
+'Print("hi")' | & .\bin\AutoHotkey64Console.exe *
+'Print("hi")' | & .\bin\AutoHotkey64Console.exe check *
+```
+
+```bash
+# Git Bash: quote * so the shell does not expand it to file names
+echo 'Print("hi")' | ./bin/AutoHotkey64Console.exe '*'
+echo 'Print("hi")' | ./bin/AutoHotkey64Console.exe check '*'
 ```
 
 Useful for validating or running harness-generated snippets without touching disk.
-Combine with `check` for syntax-only validation of a snippet.
+`check` validates a snippet without running it; its diagnostics name the file `*`.
+`/ErrorStdOut` is not needed on the console build (in Git Bash, write `//ErrorStdOut`).
 
-### 8. Interrupt a running script: break → eval → run
+### 8. Interrupt a running script: break → inspect → run
 
 DBGp advertises `supports_async=1`, so a busy script can be interrupted at any time:
 
-1. Send `break` (MCP: `debug_command` with `break`) — script pauses wherever it is.
-2. Inspect or mutate: `evaluate`, `variables_get`, `property_set`.
+1. Send `break` (legacy adapter: `debug_command` with `break`) — script pauses wherever it is.
+2. Inspect or mutate: `property_get`, `context_get` (adapter: `variables_get`), `property_set`.
+   There is no DBGp `eval`.
 3. Send `run` to resume.
 
 This is the supported "REPL into a running process" pattern; it works even when the

@@ -542,3 +542,49 @@ unlogged loop session between 3 and now.)
 - `bash .claude/hooks/test-hooks.sh`: 170 passed, 0 failed, 0 skipped with the
   default `TMPDIR` and with a long scratch `TMPDIR`. SessionStart: 34 ASCII
   lines, 5231 bytes, 0.3 s.
+
+### Session 14 (2026-10-08) — alpha.33 re-verification
+(The 2026-10-08 workflow asked for "Session 13"; that number is already the
+2026-10-07 entry above, so this one is 14.)
+- Engine: `bin/AutoHotkey64Console.exe` and `bin/AutoHotkey64.exe` both report
+  `2.1-alpha.33+Console`, revision `f7712ec15171` (MSVC, CI branch
+  `ci/alpha33`) with `inspect`, `processPipe` and `coverage`;
+  `bin/*.alpha31.bak` hold the previous alpha.31 engines. A session `ahk-mcp`
+  server started before the rebuild still reported `2.1-alpha.31+Console` in
+  `server_status`.
+- Totals on alpha.33: qa 764 passed, 0 failed, 0 crashed across 13 files
+  (762 + 2 new pins); console gate 14/14 suites; `test-hooks.sh` 170 passed,
+  0 failed, 0 skipped; `check fork.d.ahk` CHECK PASS (exit 0, the usual
+  `=> void` warnings); every tracked `examples/` file passes `check` (47/47).
+  `tools/check_all.py` gives 227/229 and exit 1: both failures are stale
+  copies under the orphaned `.kilo/worktrees/vanilla-toad` worktree, none in
+  the repo itself.
+- `qa/tests/test_alpha31.ahk` section 11: upstream alpha.32 `40a82a67` makes
+  `a := src` (src a virtual reference) copy `__Value`. The note now says so and
+  two asserts pin `Integer` 42; the alpha.31 backup engine fails exactly those
+  two (`expected: Integer actual: QaCell`).
+- Docs: README badge, intro and Eval line, updates.md base version, Eval
+  line and crash-log sample now name alpha.33; `fork.d.ahk` `@since` for
+  `Inspect` and `ProcessPipe` restored to `2.1-alpha.31+Console` (both came in
+  `a551fcd4`, which reported alpha.31). The v2.1 no-value mode is described as
+  coming from a top-level `#Requires` in the module's own file (upstream
+  `47eabd41`, `08beacf1`): probes give v2.0 mode for one in an `#Include` or a
+  function, v2.1 for one at the top level or in an included file that declares
+  its own `#Module`. CLAUDE.md drops the `launch_script` advice (legacy,
+  unregistered adapter) for `mcp__ahk-mcp__run`/`test` plus stdin forms checked
+  in both shells (`'Print("hi")' | & $engine *`; Git Bash needs `'*'`, and the
+  old `/ErrorStdOut *` line exits 12 there). `docs/AHK_V2_WORKFLOW_TECHNICAL.md`
+  sections 6-8, `docs/VSCODE_SETUP.md`, and the function-named references in
+  `docs/AHK_CONSOLE_STDOUT_PROCESS.md` follow suit.
+- Module init: every module runs at startup in reverse creation order
+  (`script.cpp:1042`); a first reference only runs one early (`c0ab7108`,
+  `var.cpp:1444`). Probes: `NeverUsed` body, then `Used`, then `__Main`;
+  `Y body start`, `X body ran`, `Y reads XVal=1`, `__Main`. Upstream design,
+  not a fork regression; `docs/alpha/v2.1-alpha.21.md` no longer calls it lazy.
+- CLAUDE.md open items: every engine-bug entry rechecked on alpha.33 with
+  current `file:line` (error.cpp moved +6: `:1784`, `:1803`); none fixed. New
+  entries: the `source_outline`/`workspace_symbols` regex scan
+  (`mcp_server.cpp:930`), `--help` omitting `/Debug` and the `--` aliases,
+  and follow-ups outside this pass's scope (`test_alpha33.ahk`, hard-coded
+  version pins, `check_all` walking `.kilo/`, upstream `.github` files,
+  `.vscode/launch.json:54`).

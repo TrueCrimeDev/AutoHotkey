@@ -19,10 +19,10 @@ when the folder is opened (or search `@recommended` in the Extensions view).
 | `ms-vscode.cmake-tools` | The optional CMake Tools integration configured by the `cmake.*` keys in `.vscode/settings.json` (`configureOnOpen` is off). The build tasks call `cmake` directly and do not need it |
 
 `AutoHotkey2.InterpreterPath` points at `bin\AutoHotkey64.exe`, the GUI build,
-so the language server can start it without opening a console window. That
-build is currently older than `bin\AutoHotkey64Console.exe` (its
-`--capabilities` lists no inspect, processPipe or coverage) until both are
-rebuilt. The extension's own Run command uses it and shows output in the
+so the language server can start it without opening a console window. It can
+lag `bin\AutoHotkey64Console.exe` when only one of them is rebuilt, so compare
+their `--version` and `--capabilities` (both report `2.1-alpha.33+Console`,
+revision `f7712ec15171`, as of 2026-10-08). The extension's own Run command uses it and shows output in the
 OUTPUT panel without ANSI colour; use the `Run AHK (fork, color)` task for the
 console engine.
 

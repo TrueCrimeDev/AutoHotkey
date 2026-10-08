@@ -5,7 +5,7 @@ errors go to `stderr` (as text **or** JSON), failures return meaningful exit cod
 can be suppressed, and the debugger speaks DBGp so an LLM can drive it. Everything else is
 stock AutoHotkey.
 
-![engine](https://img.shields.io/badge/engine-2.1--alpha.31%2BConsole-5B9FEF)
+![engine](https://img.shields.io/badge/engine-2.1--alpha.33%2BConsole-5B9FEF)
 ![based on](https://img.shields.io/badge/based%20on-AutoHotkey%20v2.1--alpha-22D3EE)
 [![Build AutoHotkey](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml/badge.svg)](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml)
 ![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/TrueCrimeDev/AutoHotkey/badges/coverage.json)
@@ -60,8 +60,10 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 | **stdout helper** | `FileOpen("*","w")` boilerplate | `Print(fmt, args*)` — UTF-8, `Format`-aware |
 | **Debugger** | DBGp (desktop-oriented) | Same DBGp, wired to an MCP server for LLM-driven debugging |
 
-None of this touches the language. Scripts that run on upstream `v2.1-alpha.33` run here
-unchanged; the additions are flags, subcommands, and a few opt-in built-ins.
+None of this touches the language. The engine is upstream `v2.1-alpha.33` plus the upstream
+`alpha` commits through `47eabd41` (see [`docs/alpha/v2.1-alpha.33.md`](docs/alpha/v2.1-alpha.33.md)),
+so scripts that run on that upstream code run here unchanged; the additions are flags,
+subcommands, and a few opt-in built-ins.
 
 ---
 
@@ -274,7 +276,7 @@ Print("{ok: true}")                 ; single-arg form is literal — braces surv
 ### `Eval(expr)` — evaluate an expression in live scope *(opt-in)*
 
 Runs any AHK expression string against the caller's variables — reads and writes locals, calls
-methods, supports alpha.31 expression features. Gated behind `#EnableEval` (or the `/Eval`
+methods, supports v2.1-alpha expression features (maybe operator, unset propagation). Gated behind `#EnableEval` (or the `/Eval`
 flag) so it can never run unless you ask for it.
 
 ```ahk
@@ -301,7 +303,8 @@ Returns the parsed lines around a position as an Array of `{File, Number, Text}`
 primitive the debugger tooling uses to show surrounding code. `Text` is the engine's rendering
 of the line, and comments and blank lines are skipped. A negative or omitted `Range` returns
 only the given line. A line with no code returns no Array (an empty string, or no value under
-`#Requires AutoHotkey v2.1-...`), so guard the call:
+a `#Requires AutoHotkey v2.1-...` at the top level of the calling module's own file; one in an
+`#Include` file or a function no longer sets the mode), so guard the call:
 
 ```ahk
 for line in (_ScriptGetLines(A_LineFile, A_LineNumber, 3) ?? "") || []   ; up to 3 parsed lines either side

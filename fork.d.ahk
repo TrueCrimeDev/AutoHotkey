@@ -75,7 +75,10 @@
  * throws UnsetError ("No value was returned."), so write
  * `Eval(...) ?? Default`. A built-in function inside the expression that
  * returns no value gives "" in the default v2.0 mode, as it would in the
- * script itself, and unset under `#Requires AutoHotkey v2.1-...`.
+ * script itself, and unset under a `#Requires AutoHotkey v2.1-...` at the top
+ * level of the calling module's own file. Since upstream 47eabd41 and
+ * 08beacf1, one in an #Include file or inside a function no longer sets the
+ * mode.
  * @param {String} Expression A single expression of at most 16,384 characters.
  * Statements and control flow are not accepted.
  * @returns {Any|unset} The expression's value, or unset.
@@ -188,7 +191,7 @@ Check(Source) => Object
  * list per node, at least 1.
  * @example
  * Print(Inspect(Map("a", [1, 2]), 3))
- * @since 2.1-alpha.33+Console
+ * @since 2.1-alpha.31+Console
  */
 Inspect(Value, Depth := 2, MaxItems := 100) => String
 
@@ -230,8 +233,10 @@ TSParse(Source) => Object
  *
  * When LineNumber holds no code (blank, comment-only, past the end or in a
  * file the script did not load), no Array is returned. In the default v2.0
- * mode the result is an empty string; under `#Requires AutoHotkey v2.1-...`
- * it is unset. Guard with `(_ScriptGetLines(...) ?? "") || []`.
+ * mode the result is an empty string; under a `#Requires AutoHotkey v2.1-...`
+ * at the top level of the calling module's own file it is unset (one in an
+ * #Include file or inside a function no longer sets the mode, as of upstream
+ * 47eabd41 and 08beacf1). Guard with `(_ScriptGetLines(...) ?? "") || []`.
  *
  * This comes from Lexikos's linecontext branch, which the fork has carried
  * since it was based on v2.1-alpha.18. It is not in upstream releases.
@@ -592,7 +597,7 @@ class JSON extends Object {
  * p := ProcessPipe(A_ComSpec, ["/c", "echo hello"])
  * Print(p.ReadLine(10))   ; hello
  * Print(p.Wait(10))       ; 0
- * @since 2.1-alpha.33+Console
+ * @since 2.1-alpha.31+Console
  */
 class ProcessPipe extends Object {
 	/**

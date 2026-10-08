@@ -41,9 +41,12 @@ before changing it.
   `mcp__ahk-mcp__check`, `run` and `test` for this repo's scripts; they run the
   fork engine. If `tools/list` lacks `check`, `run` and `test`, the server is
   running an older engine: it was started from an earlier `.mcp.json` (which
-  launched the stale GUI `bin/AutoHotkey64.exe`), or `bin/` holds a
-  pre-a551fcd4 build. Reconnect it (`/mcp`) and compare `--version`; rebuild
-  only if `bin/AutoHotkey64Console.exe` itself lacks them.
+  launched the GUI `bin/AutoHotkey64.exe`, then older than the console build),
+  or `bin/` holds a pre-a551fcd4 build. A server started before `bin/` was
+  rebuilt keeps the engine it loaded: its `server_status` `ahkVersion` says
+  which (on 2026-10-08 a session server still reported `2.1-alpha.31+Console`
+  after `bin/` became alpha.33). Reconnect it (`/mcp`) and compare `--version`;
+  rebuild only if `bin/AutoHotkey64Console.exe` itself lacks them.
 - `ahk` (user-wide, if connected) is a separate Node server. Its `AHK_Check`,
   `AHK_Run` and `AHK_Eval` use the engine its `AHK_PATH` names, normally stock
   AutoHotkey, which rejects fork directives such as `#EnableEval` and lacks the
@@ -132,9 +135,14 @@ unattended. `/Headless` and `check` are not sandboxes: loading can perform
 operations such as `#DllLoad`. Do not execute arbitrary untrusted scripts
 merely to validate them.
 
-From the MCP server, prefer the `launch_script` tool: it spawns the engine over
-`/Debug=stdio`, so no port 9000 listener is involved. A generated snippet can run
-from stdin without a temp file: `echo 'Print("hi")' | $engine /ErrorStdOut *`.
+`launch_script` (spawns `bin/AutoHotkey64.exe /Debug=stdio`, no port 9000)
+exists only in the legacy `debugger-tool/mcp-server` adapter, which `.mcp.json`
+does not register (see `debugger-tool/mcp-server/CLAUDE.md`); here use
+`mcp__ahk-mcp__run` and `test`. A generated snippet can run from stdin with `*`
+as the script name: PowerShell `'Print("hi")' | & $engine *`; Git Bash
+`echo 'Print("hi")' | "$engine" '*'` (quote `*`, which Bash otherwise expands
+to file names). `check '*'` validates a snippet the same way, and its
+diagnostics name the file `*`. The Console exe needs no `/ErrorStdOut` for this.
 
 ## Key directories
 
@@ -159,7 +167,7 @@ live server's registry and counters.
 | Tools | Purpose |
 | --- | --- |
 | `ast_outline` | Tree-sitter structure and spans; needs the x64 `tree-sitter-ahk.dll` beside the engine |
-| `source_outline`, `workspace_symbols` | Lightweight source/symbol scans |
+| `source_outline`, `workspace_symbols` | Lightweight line-regex scans (`source/mcp_server.cpp:930`): they miss functions whose default parameters contain parentheses and every fat-arrow (`=>`) function, so use `ast_outline` for a complete list |
 | `get_source_context` | Source lines around a location |
 | `check`, `run`, `test` | Child-engine execution with diagnostics and captured streams |
 | `server_status` | Engine identity, health, and counters |
@@ -193,10 +201,14 @@ parsed line, not the raw source: trailing comments are dropped, and
 entry with the same `Number`. Those brace entries count toward `Range`. A
 negative or omitted range returns just the given line. A line number with no
 code (blank, comment-only or past the end) returns no Array, and what you get
-depends on the script's compatibility mode: by default (v2.0 mode) an empty
-string, which `for` rejects with `TypeError`; under
-`#Requires AutoHotkey v2.1-...` no value, so even a plain assignment throws
-`UnsetError`. Neither `?? []` nor `|| []` alone covers both modes; guard with
+depends on the calling module's compatibility mode: by default (v2.0 mode) an
+empty string, which `for` rejects with `TypeError`; under a
+`#Requires AutoHotkey v2.1-...` at the top level of the module's own file (the
+main script, or the file that declares the `#Module`) no value, so even a plain
+assignment throws `UnsetError`. Since upstream `47eabd41`/`08beacf1` a
+`#Requires` in an `#Include`d file or inside a function no longer sets the
+mode (so `tests/Test.ahk`'s line-1 `#Requires` is inert when included).
+Neither `?? []` nor `|| []` alone covers both modes; guard with
 `(... ?? "") || []` as above. Merged from lexikos' `linecontext` branch.
 
 ## CloudAHK Error Handlers
@@ -233,8 +245,8 @@ These do not exist in upstream AutoHotkey, so stock engines (including one a
 user-wide `ahk` server may run) lack them. Use them directly — no `#include`,
 no helpers. `Inspect`, `ProcessPipe` and `/Coverage` need an engine whose
 `--capabilities` `features` lists `inspect`, `processPipe` and `coverage`
-(built from a551fcd4 or later); an older build, such as a stale
-`bin/AutoHotkey64.exe`, lacks them. `features` does not cover the other BIFs
+(built from a551fcd4 or later); an older build (any exe whose `--capabilities`
+lacks them) does not have them. `features` does not cover the other BIFs
 (its `check` is the CLI verb, not `Check()`). To probe one, run `check` on a
 one-line script that calls it. A missing function does not fail `check`: the
 exit code stays 0, and a warning, `This global variable appears to never be
@@ -384,11 +396,13 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
 
 ---
 
-# Current State & Open Items (updated 2026-10-07)
+# Current State & Open Items (updated 2026-10-08)
 
 - Target language version: `2.1-alpha.33+Console`, based on upstream
-  `v2.1-alpha.33`. Always verify the actual executable's `--version` and hash;
-  historical files in `bin/` or `bin_harness/` may be stale.
+  `v2.1-alpha.33` plus the upstream `alpha` commits through `47eabd41`
+  (`docs/alpha/v2.1-alpha.33.md`). Always verify the actual executable's
+  `--version` and hash; historical files in `bin/` or `bin_harness/` may be
+  stale.
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.
@@ -402,37 +416,90 @@ Open items:
   `UInt32`/`UInt8`/`IntPtr`) fixed 2026-09-10 across 14 example files; no
   `UInt64`/`UIntPtr` class exists, so `u64`/`uptr` became `Int64`/`IntPtr`.
   `examples/struct_at_showcase.ahk` also had its clobbered `POINT` definition
-  restored. Every file under `examples/` passes `check` on the alpha.31 harness.
+  restored. Every file under `examples/` passes `check` on the alpha.31
+  harness, and on alpha.33 (47/47, 2026-10-08).
 - [x] Stale `export` module examples fixed 2026-09-10: keyword dropped, and the
   `#Import {X} from M` / bare `#Import "file.ahk"` forms (never valid on this
   engine) rewritten as `#Import M {X}` / `#Import "file.ahk" {*}`.
-- [ ] **`&Module.Var` corrupts the heap on alpha.33 (upstream bug)**: any script that takes a reference to a module variable (`r := &Mod.X`) exits with 0xC0000374/0xC0000005 after the auto-execute section, and passing it ByRef (`Bump(&Mod.X)`) leaves the variable reported as unassigned. Reproduced on the official `AutoHotkey_2.1-alpha.33.zip` GUI build on 2026-10-08, so it is upstream's `ScriptModule::__Ref` (commit `9f4df71b`), not the merge. Reading and writing through `%r%` works until exit. Avoid `&Module.Var` until upstream fixes it; `#Import Mod {X}` plus `&X` is the safe form.
-- [ ] **Module init is not lazy on alpha.31**: a `#Module` nothing imports still
-  runs, before `__Main`'s auto-execute section (`examples/alpha21/05_lazy_module_init.ahk`
-  documents the observation). alpha.21 notes promised first-reference init —
-  decide whether this is an upstream change or a fork regression, then pin it.
-- [ ] `/Headless` does **not** suppress `MsgBox` — a headless run of any
-  MsgBox-driven example blocks on a real dialog. Verify such scripts via a
-  scratch copy with `MsgBox` → `Print`, or extend `/Headless`.
+- [ ] **`&Module.Var` corrupts the heap (upstream alpha.33 bug)**:
+  `source/script_module.cpp:42`-`44` (`ScriptModule::__Ref`, upstream
+  `9f4df71b`) returns `Var::GetRef()`'s uncounted reference
+  (`source/var.cpp:245`-`248`) through `_o_return` without an `AddRef`.
+  `r := &Mod.X` reads and writes through `%r%`, then the process exits
+  0xC0000374 after auto-execute; `Bump(&Mod.X)` leaves `Mod.X` unset
+  (`UnsetError`) and exits the same way. One `ObjAddRef(ObjPtr(r))` prevents
+  both (rechecked 2026-10-08 on `f7712ec15171`). Also reproduced on the
+  official `AutoHotkey_2.1-alpha.33.zip` GUI build (2026-10-08), so it is not
+  the merge. Use `#Import Mod {X}` plus `&X`. Engine fix: `AddRef` before
+  `_o_return(ref)`, then report it upstream. No suite pins it yet.
+- [ ] **Module init is not lazy, by upstream design** (rechecked on alpha.33,
+  2026-10-08): every module runs at startup in reverse order of creation
+  (`source/script.cpp:1042`-`1048`, `Script::AutoExecSection`), so a
+  `#Module` nothing imports still runs before `__Main`; since alpha.21
+  (`c0ab7108`) a first reference only runs a module early
+  (`source/var.cpp:1444`). The `v2.1-alpha.21` tag already has the run-all
+  loop, so this is not a fork regression. `docs/alpha/v2.1-alpha.21.md` is
+  corrected; still open: `examples/alpha21/README.md:25` ("Lazy
+  initialization"), the comment at `examples/alpha21/05_lazy_module_init.ahk:57`
+  ("Observed on the alpha.31 engine"), and a qa test pinning the order.
+- [ ] `/Headless` does **not** suppress `MsgBox` (`source/script2.cpp:1257` ->
+  `source/window.cpp:932`), `InputBox` (`source/lib/InputBox.cpp:75`) or
+  `Gui`: `mHeadless` is read only at `source/error.cpp:1151`/`:1165` and
+  `source/AutoHotkey.cpp:556`/`:596` (read from source, not run). Verify such
+  scripts via a scratch copy with `MsgBox` → `Print`, or extend `/Headless`.
 - [ ] Faster tree-sitter path: build `tree-sitter-ahk.wasm` + `web-tree-sitter`
   for in-process, incremental parsing in a Node host. Needs the grammar
-  **source** — only the `.dll` is vendored.
-- [ ] `FileRead` on a zero-byte file returns **no value** on this alpha
-  (see WORKLOG 2026-08-26) — pin intended behavior with a qa test.
+  **source**: only `bin/tree-sitter-ahk.dll` (loaded by `source/ts_api.cpp:41`
+  and `:45`) is vendored.
+- [ ] `FileRead` of a zero-byte file returns no value (`source/lib/file.cpp:228`
+  returns `OK` without one; upstream alpha.33 has the same line): `""` in v2.0
+  mode, but under a top-level `#Requires AutoHotkey v2.1-...` it throws
+  `UnsetError` "No value was returned." (`source/script_expression.cpp:452`);
+  `FileRead(f, "RAW")` returns an empty Buffer (rechecked 2026-10-08). Pin it
+  with a qa test and report it upstream.
 
-Engine bugs found 2026-10-07 (WORKLOG Sessions 12-13; none fixed yet):
-- [ ] `JSON()` is callable (`source/json.cpp:1969`: JSON class built on `JsonObject::sPrototype` with no constructor); `Set`/`Keys`/`Count` on the result read or write invalid memory (exit 11 or heap corruption).
-- [ ] `JSON.True`/`JSON.False`/`JSON.Null` are writable value properties (`json.cpp:1995` `SetOwnProp`; its comment says getter-only): `JSON.True := 5` sticks.
-- [ ] JSON `MaxDepth` counts differently: the parser (`json.cpp:954`, `:999`, root at depth 0) accepts MaxDepth+1 nested containers, the writer (`json.cpp:1108`) MaxDepth, so a parsed document can fail to re-serialize.
-- [ ] With `AllowTopLevelScalar: false`, `Parse`/`ParseAt` (`json.cpp:1464`, `:1875`) always report line 1, col 1, pos 1 (ParseAt leaves `Pos`), and `Validate` (`json.cpp:1780`) the position after the value.
-- [ ] `Check()` builds its diagnostic from the first record of any severity (`source/console_check.cpp:262`), so a warning can replace the error; its field extraction (`:110`, `:137`) can also read past that record.
-- [ ] DBGp `WritePropertyData` (upstream code too): `source/Debugger.cpp:1508`/`:1514` base64-encodes from the tail of the same buffer and can overwrite unread UTF-8 (long values arrive corrupted); `:1476` counts a surrogate pair as 7 bytes (no `++i`), skewing `size` and `-m` truncation and splitting pairs.
-- [ ] `Debugger::FatalError` (`Debugger.cpp:2786`) shows a modal Yes/No box even under `/Headless` (failed connect, lost connection); only `/Debug=stdio` prints it instead.
-- [ ] `source/error.cpp:1797` passes `TokenToString(t)` (Extra or Message) to `GetLine` instead of `file`, so the uncaught-error report and `--diag=json` name the throw line, not `Error.Line` (fork-only, from d8217d1a).
-- [ ] `error.cpp:1778` `ExprTokenType t` reaches `:1797` uninitialized when the thrown object has own `File`/`Line` but neither `Message` nor `Extra`.
-- [ ] The headless/`/ErrorStdOut` error report goes through a fixed `DIAG_JSON_BUF_SIZE` buffer (`error.cpp:1167`, defined `:294`) and is silently truncated (long `Message`/`Extra`).
-- [ ] The crash log writes `Stack:` text raw (`source/crashlog.cpp:190`): not indented and CRLF-terminated, unlike every other LF line.
-- [ ] An `Eval` `SyntaxError` lacks the standard Error properties (`source/console_eval.cpp:59`-`64` sets only `Message`/`File`/`Line`/`Column`), so reading `What`/`Extra`/`Stack` throws.
-- [ ] An `Eval` assignment inside a function permanently adds a local to it (`console_eval.cpp:28` parses in the caller's scope); decide if intended (`updates.md` §1 documents it).
-- [ ] `--coverage=` into a missing directory writes nothing, prints nothing and exits 0 (`source/coverage.cpp:92`); `qa/tests/test_coverage_missing_dir.ahk` pins it.
-- [ ] DBGp has no `eval` command (`source/Debugger.cpp:47` command table) and `breakpoint_set` rejects conditions (`Debugger.cpp:771`): clients read paths with `property_get`.
+Engine bugs found 2026-10-07 (WORKLOG Sessions 12-14), all rechecked on
+alpha.33 (`f7712ec15171`) on 2026-10-08 and still present (the
+`Debugger::FatalError` item from source only); none fixed yet:
+- [ ] `JSON()` is callable (`source/json.cpp:1969`: the class is built on `JsonObject::sPrototype` with no factory) and returns a plain Object posing as `JSON.Object`: `.Set("a", 1)` corrupts memory (exit 11 "Invalid memory read/write." or 0xC0000374), `.Count` reads garbage and enumerating `.Keys` is nondeterministic and often crashes.
+- [ ] `JSON.True`/`False`/`Null` are writable value properties (`source/json.cpp:1995` `SetOwnProp`; the comment at `:1983` says getter-only): `JSON.True := 5` and `JSON.Null := ""` stick.
+- [ ] JSON `MaxDepth`: the parser checks each value's depth with the root at 0 (`source/json.cpp:954`, `:999`), the writer counts containers (`:1108`), so an innermost empty container one level deeper parses (and `Validate` accepts it) but cannot re-serialize: `[[]]` with `MaxDepth: 1`, or 257 nested `[]` by default (`[[1]]` is rejected).
+- [ ] With `AllowTopLevelScalar: false`, `Parse`/`ParseAt` (`source/json.cpp:1464`, `:1875`) report `(line 1, col 1, pos 1)` wherever the scalar is, and `ParseAt` leaves `Pos` on it, so a catch-and-continue loop never advances; `Validate` (`:1780`) reports the position after the value (Line 3, Col 6, Pos 8 for "\n\n   42").
+- [ ] `Check()` builds its single diagnostic from the first record of any severity (`source/console_check.cpp:262`): a VarUnset warning on line 2 plus a missing `Goto` label on line 3 gives `Ok=0` with only the warning; field extraction (`:110`, `:137`) searches to the end of the captured output, so a key missing from that record would be read from a later one (from source).
+- [ ] DBGp `WritePropertyData` (same in upstream alpha.33): `source/Debugger.cpp:1508` stages UTF-8 at the buffer tail and `:1514` base64-encodes it forward over unread bytes (one 196000-byte value via `property_get -m 0` arrived 192142 bytes wrong from offset 1953 while a 140000-byte one arrived intact; the damage depends on the value's size and content); `:1476` counts a surrogate pair as 7 bytes (three emoji: `size="21"` for 12 bytes) and `-m 5` splits the pair into U+FFFD.
+- [ ] `Debugger::FatalError` (`source/Debugger.cpp:2786`, MessageBox at `:2798`) shows a modal Yes/No box even under `/Headless` on a failed connect (`:2725`, `:2751`) or lost connection (`:2418`, `:2425`, `:2463`); only `/Debug=stdio` prints it (`:2790`). Upstream alpha.33 always shows the box. Read from source, not run.
+- [ ] `source/error.cpp:1803`, in the uncaught-exception `Script::ShowError` overload (`:1775`), passes `TokenToString(t)` (Extra, else Message) to `GetLine` instead of `file`, so the uncaught-error report and `--diag=json` name the throw line, not `Error.Line` (created on line 3, thrown on line 6: reported as 6, `OnError` sees 3). Fork-only, from lexikos' linecontext commit `d8217d1a`; upstream alpha.33 matches by file index.
+- [ ] `source/error.cpp:1784` `ExprTokenType t` reaches `:1803` uninitialized when the thrown object has own `File` and nonzero `Line` but neither `Message` nor `Extra`: `throw {File: A_LineFile, Line: 1}` on any line but the first exits 0xC0000409 with no report (alpha.33 and alpha.31, text and `--diag=json`). Engine fix: pass `file` to `GetLine` (this also fixes the item above).
+- [ ] Headless error reports truncate silently: the text report is cut at `DIAG_JSON_BUF_SIZE`-1 = 87298 chars (`source/error.cpp:1167`, defined `:294`), mid-message and without `Specifically:`, source or stack; `--diag=json` stays valid but caps `message`/`extra` at 16384 chars each (`:439`-`:440`, `:450`-`:451`).
+- [ ] The crash log writes `Error.Stack` raw after `  Stack:` (`source/crashlog.cpp:190`): its lines are not indented and end in CRLF, unlike every other LF line.
+- [ ] An `Eval` `SyntaxError` is built by hand (`source/console_eval.cpp:59`-`64`: own `Message`, `File` `_Eval`, `Line` 0, `Column` 0 only), so reading `What`, `Extra` or `Stack` throws `PropertyError`.
+- [ ] An `Eval` assignment inside a function adds a local to it for good (`source/console_eval.cpp:28` parses in the caller's scope): a later call's `Eval("qq")` reports a *local* unset, and `Eval("gv := 5")` leaves global `gv` unchanged. Documented in `updates.md:106`-`119`; close as intended or change it.
+- [ ] `--coverage=` into a missing directory writes nothing, prints nothing and exits 0 (`source/coverage.cpp:92` returns on `INVALID_HANDLE_VALUE`); `qa/tests/test_coverage_missing_dir.ahk` pins it.
+- [ ] DBGp has no `eval` command (`source/Debugger.cpp:47` command table; `eval` answers error 4) and `breakpoint_set` rejects `--` conditions (`:771`, error 3), as upstream alpha.33 does: clients read paths with `property_get`.
+- [ ] Native `source_outline`/`workspace_symbols` match functions with one line regex (`source/mcp_server.cpp:930`-`931`, `MatchFuncDecl`), so they miss a function whose default parameters contain parentheses and every fat-arrow function: on `qa/Harness.ahk` they skip `RunQaChild` (line 25) and `SnippetOut` (line 118), which `ast_outline` finds (same on alpha.31). Engine fix: balance nested parentheses and accept `=>` bodies.
+- [ ] `--help` (`source/AutoHotkey.cpp:86`-`111`) lists only slash options: not `/Debug[=host:port|stdio]`, and none of the Git Bash aliases (`--headless`, `--diag=`, `--eval`, `--trace`, `--crashlog=`, `--stderrfile=`, `--coverage=`) that `:353`-`:429` accept.
+
+Follow-ups from the alpha.33 re-verification (2026-10-08), outside that pass's
+docs-only scope:
+- [ ] No suite covers an alpha.32/alpha.33 change. Add `qa/tests/test_alpha33.ahk`
+  in the `test_alpha31.ahk` style: `Object.Prototype.DefineProp.Call` on a Struct
+  throws `TypeError` (guards `a020f5b0`), `ObjSetCapacity` on a Struct throws
+  `TypeError`, `a.b[1]` with `b => unset` throws `UnsetError`, `#Import` inside a
+  function, `NumPut(Int32, ...)`/`NumGet(buf, Int32)`, `#Requires` scoping in an
+  `#Include`, and `&Module.Var` as a KNOWN-BUG `RunSnippet` pin.
+- [ ] `tests/test_powershell_cli.py:56` and
+  `debugger-tool/mcp-ahk/tests/conformance_native.py:235` hard-code
+  `2.1-alpha.33`; derive it from `source/ahkversion.h` as
+  `tests/test_console_cli.py` does. `conformance_native.py:109`-`110` also
+  writes fixtures into the repo's `temp/`.
+- [ ] `python tools/check_all.py` walks dot-directories that only the local
+  `.git/info/exclude` hides: a stale nested worktree under `.kilo/worktrees/`
+  fails it locally (CI never has one). Skip dot-directories, or any directory holding a `.git` file, next to
+  `SKIP_DIRS` (`tools/check_all.py:23`).
+- [ ] The b44b48e3 merge brought in upstream's `.github/FUNDING.yml` (Lexikos)
+  and `.github/ISSUE_TEMPLATE/config.yml` (bug reports to the autohotkey.com
+  forum, wrong for fork features): replace with fork links or delete
+  (maintainer decision).
+- [ ] `.vscode/launch.json:54`-`56` still says `bin\AutoHotkey64.exe` lacks
+  inspect, processPipe and coverage; both `bin/` exes now report alpha.33
+  `f7712ec15171` with all three (`docs/VSCODE_SETUP.md` is corrected).
