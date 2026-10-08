@@ -26,3 +26,18 @@ test('invalid framing fails explicitly and resets parser', () => {
     assert.deepEqual(reader.push(frame('next')), ['next']);
   }
 });
+
+test('lenient mode diverts raw output between frames and resyncs on junk headers', () => {
+  const reader = new DBGpFramer(10, { divertRaw: true });
+  const packet = Buffer.concat([Buffer.from('Print line\n'), frame('one'), Buffer.from('12x\0junk'), frame('two')]);
+  const messages = [];
+  for (const byte of packet) messages.push(...reader.push(Buffer.from([byte])));
+  assert.deepEqual(messages, ['one', 'two']);
+  assert.equal(reader.drainRaw(), 'Print line\n12x\0junk');
+  assert.equal(reader.drainRaw(), '');
+  // A well-formed header with an incomplete frame is buffered, never diverted.
+  assert.deepEqual(reader.push(Buffer.from('5\0')), []);
+  assert.equal(reader.drainRaw(), '');
+  reader.reset();
+  assert.deepEqual(reader.push(frame('next')), ['next']);
+});

@@ -9,10 +9,10 @@
     "mcp-autohotkey-debug": "./build/index.js"
   },
   "scripts": {
-    "test": "npm run build && node --test tests/*.test.mjs",
     "build": "tsc",
     "watch": "tsc --watch",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "test": "npm run build && node --test tests/*.test.mjs test/*.test.js"
   },
   "keywords": [
     "mcp",
