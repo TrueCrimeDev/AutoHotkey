@@ -7,6 +7,16 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# A Python suite that exits 77 did not run, e.g. test_debugger_fatal.py on an engine without the
+# fix it checks. (Engine suites are not read this way: qa/run.ahk exits with its failure count.)
+# That is a skip locally, but under CI (CI=true) the engine was just built from this tree, so a
+# skip means the suite's guard no longer recognizes it, and the gate fails.
+SKIPPED = 77
+
+
+def suite_name(command):
+    return next((Path(part).name for part in command[1:] if part.endswith((".py", ".ahk"))),
+                Path(command[0]).name)
 
 
 def main():
@@ -34,6 +44,8 @@ def main():
         suites.append([sys.executable, str(ROOT / "tests/test_powershell_cli.py"),
                        "--wrapper", str(ROOT / "tools/ahk.ps1"), "--engine", str(engine)])
     failures = 0
+    skipped = []
+    strict = os.environ.get("CI", "").lower() == "true"
     for command in suites:
         print("Running: " + subprocess.list2cmdline(command), flush=True)
         child = subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -52,10 +64,22 @@ def main():
             failures += 1
             continue
         print(output.decode("utf-8", "replace"), end="", flush=True)
-        if code:
+        skip = code == SKIPPED and command[0] == sys.executable
+        if skip and not strict:
+            print(f"SKIP: {suite_name(command)} did not run (exit {SKIPPED}); its reason is above",
+                  flush=True)
+            skipped.append(suite_name(command))
+        elif skip:
+            print(f"FAIL: {suite_name(command)} skipped under CI (exit {SKIPPED}); the engine built "
+                  "here must carry what the suite checks", file=sys.stderr)
+            failures += 1
+        elif code:
             print(f"FAIL: suite exited {code}", file=sys.stderr)
             failures += 1
-    print(f"Console gate: {len(suites) - failures}/{len(suites)} suites passed", flush=True)
+    summary = f"Console gate: {len(suites) - failures - len(skipped)}/{len(suites)} suites passed"
+    if skipped:
+        summary += f", {len(skipped)} skipped ({', '.join(skipped)})"
+    print(summary, flush=True)
     return 1 if failures else 0
 
 
