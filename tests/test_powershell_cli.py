@@ -8,6 +8,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -20,6 +21,18 @@ options, remaining = parser.parse_known_args()
 if options.engine and not options.wrapper:
     parser.error("--engine requires --wrapper")
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def expected_version():
+    """RAW_AHK_VERSION from source/ahkversion.h, read as tests/test_console_cli.py
+    reads it, so a version bump needs no test edit. The +Console metadata is kept:
+    the `ahk` profile must resolve to this fork's console build, not a plain engine
+    of the same upstream version."""
+    text = (ROOT / "source/ahkversion.h").read_text(encoding="utf-8")
+    return re.search(r'#define RAW_AHK_VERSION "([^"]+)"', text).group(1)
+
+
+EXPECTED_VERSION = expected_version()
 SHELLS = [p for p in (shutil.which("pwsh"),
     str(Path(os.environ["WINDIR"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"))
     if p and Path(p).is_file()]
@@ -53,7 +66,7 @@ class PowerShellCliTests(unittest.TestCase):
                 self.assertIn(expected, out + err)
 
     def test_bare_command(self):
-        self.check_all("ahk", "2.1-alpha.33+Console")
+        self.check_all("ahk", "AutoHotkey v" + EXPECTED_VERSION)
 
     def test_help_spellings(self):
         for spelling in ("help", "-h", "--h", "-help", "--help"):

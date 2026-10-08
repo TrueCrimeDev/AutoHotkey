@@ -227,7 +227,7 @@ cat <<'EOF'
 ### DBGp debug loop (AHK_Debug_DBGp, debug toolset)
 EOF
 cat <<EOF
-- Call action start first and use the port it reports (9001+ when 9000 is busy); the user then launches with that port and headless. PowerShell: & $ps /Debug=localhost:<port> /Headless script.ahk. Git Bash: $cli //Debug=localhost:<port> --headless script.ahk. A bare /Debug always means 9000. With no listener on the port the engine shows a modal "continue without the debugger?" box, even headless.
+- Call action start first and use the port it reports (9001+ when 9000 is busy); the user then launches with that port and headless. PowerShell: & $ps /Debug=localhost:<port> /Headless script.ahk. Git Bash: $cli //Debug=localhost:<port> --headless script.ahk. A bare /Debug always means 9000. With no listener on the port the engine prints "Debugger error: Could not connect to localhost:<port>; continuing without the debugger." on stderr and the script runs without it (engines older than f14d7427 show a modal box instead): check status first.
 EOF
 cat <<'EOF'
 - capture_error and analyze_error work only on an ahk server with the ahk-mcp capture fix, restarted since (action status lists error_capture). An older server's capture_error always times out with captured:false: run the script with mcp__ahk-mcp__run / mcp__ahk-mcp__test and read the diagnostics.

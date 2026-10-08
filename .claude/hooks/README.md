@@ -83,8 +83,9 @@ The rest is static reference material:
 - the `/Headless` limits
 - the fork BIFs
 - both MCP servers
-- a three-line DBGp summary: the launch commands, which server build captures errors,
-  and a pointer to `CLAUDE.md` (DBGp Protocol) for the loop. The DBGp hooks below carry
+- a three-line DBGp summary: the launch commands and what a launch with no listener
+  prints, which server build captures errors, and a pointer to `CLAUDE.md` (DBGp
+  Protocol) for the loop. The DBGp hooks below carry
   the details, and they fire only once the debug toolset is in use.
 - the hooks
 - AHK v2 syntax reminders
@@ -168,12 +169,17 @@ Then it says:
   name `./bin/AutoHotkey64Console.exe` and add why: `AHK_CUSTOM_EXE` does not exist or is
   not this fork's engine ("fix or unset AHK_CUSTOM_EXE"), or no fork engine was found
   ("build one per BUILD.md").
-- With no listener on that port the engine shows a modal "continue without the
-  debugger?" box, even headless. `/Headless` turns the engine's other prompts into
-  stderr text. A relaunch of a script whose previous run is still alive (attached,
-  paused or running) meets the default `#SingleInstance` prompt: headless, it prints
-  `Another instance is already running` and exits 64 without connecting, so send `run`
-  (or `stop`) and let the old run exit first.
+- With no listener on that port the engine prints `Debugger error: Could not connect to
+  localhost:<port>; continuing without the debugger.` on stderr after about 2 s and runs
+  the script without the debugger, so nothing is captured: check `status` before each
+  launch (an engine older than `f14d7427` shows a modal box instead). A listener that
+  goes away mid-run without detaching gets `Connection to localhost:<port> lost;
+  continuing without the debugger.`, and the script runs on.
+- `/Headless` turns the engine's own prompts into stderr text. A relaunch of a script
+  whose previous run is still alive (attached, paused or running) meets the default
+  `#SingleInstance` prompt: headless, it prints `Another instance is already running`
+  and exits 64 without connecting, so send `run` (or `stop`) and let the old run exit
+  first.
 - Once connected, the script is paused at its first line until you send `run` or a step
   (on a fixed build, `capture_error` also starts it).
 - A bare `/Debug` always connects to localhost:9000. The listener uses 9000 by default
@@ -193,7 +199,7 @@ Every other action gets no output. The hook never blocks.
 | `capture_error` returns `"reason":"session_ended"` | The script ended or detached with no further error to return; `exit` holds its final status and reason (`ok`: no unhandled error; `error`: it ended on one, usually the error already returned), and a script that ended while nobody waited is reported this way once, unless a `run` reply already said it stopped, one of its errors was returned, or `clear_errors` ran after it ended (a script that ends after `clear_errors` is still reported once). If an error was expected, run it with `mcp__ahk-mcp__run`, or set a breakpoint; to retry, have the user relaunch with `/Debug=localhost:<port>` and call `capture_error`, which waits for the new run. With `waiting_connections`, it adds that the next script is attached now, paused at its first line: call `capture_error` or `run`. |
 | `capture_error` returns `"reason":"not_listening"` | Call `start`, have the user launch with `/Debug=localhost:<port>`, then call `capture_error` again. |
 | `capture_error` returns `{"captured":true,...}` | Call `analyze_error` with `error` set to the captured object. It returns a Markdown prompt for Claude to analyze; there is no confidence score. `error.session` older than `status`'s `session` marks a leftover (`clear_errors` drops those). `error.line` is AutoHotkey's `Error.Line`, and `stack_trace[0]` is where the throw ran (the line this fork's own error report names); `detected_by:"stderr"` has no stack or variables, `unconfirmed:true` can be OutputDebug text, and `unverified_fields` names fields the engine may have garbled. A script that a step stopped at the throw is still paused: send `run` and let it exit before the relaunch (`#SingleInstance` refuses a relaunch of the same script while it is alive). Show the diagnosis, then call `apply_fix` with `file`, `line`, the exact current line as `original`, and `replacement`. |
-| `apply_fix` returns `Fix applied at F:L` | Ask the user to re-run with `/Debug=localhost:<port>` while the listener still runs (with none on that port the engine shows a modal "continue without the debugger?" box), then call `capture_error`. The relaunched script waits paused until `run` or `capture_error`, and a fixed server reports a clean finish as `session_ended` with `exit.reason` `ok`. The old run must have exited first: while it is alive (paused, running or persistent), `#SingleInstance` refuses the relaunch (headless: `Another instance is already running...`, exit 64, never connects), and `capture_error` then times out or returns the old run's `session_ended`. So send `run` (or `stop`, then `start` again) and let it exit. Errors still queued come first (`clear_errors` drops them). `apply_fix` rewrites the whole file with LF line endings. |
+| `apply_fix` returns `Fix applied at F:L` | Ask the user to re-run with `/Debug=localhost:<port>` while the listener still runs (with none on that port the engine prints `Could not connect to localhost:<port>; continuing without the debugger.` and runs the script without the debugger, so nothing is captured), then call `capture_error`. The relaunched script waits paused until `run` or `capture_error`, and a fixed server reports a clean finish as `session_ended` with `exit.reason` `ok`. The old run must have exited first: while it is alive (paused, running or persistent), `#SingleInstance` refuses the relaunch (headless: `Another instance is already running...`, exit 64, never connects), and `capture_error` then times out or returns the old run's `session_ended`. So send `run` (or `stop`, then `start` again) and let it exit. Errors still queued come first (`clear_errors` drops them). `apply_fix` rewrites the whole file with LF line endings. |
 | `apply_fix` fails | Re-read the line with `get_source` or the Read tool, then retry with the exact text. The failure arrives as PostToolUseFailure, or as an `Error: ...` result. |
 | `evaluate`, or `breakpoint_set` with a `condition`, fails with `Command timeout` | An older server sends an `eval` command, or the condition, which AutoHotkey's debugger does not have, and never matches the reply. Read values with `variables_get`; set the breakpoint with `file` and `line` only. A fixed server reads variable and property paths and rejects a condition at once. |
 | `start` replies with the old `/Debug your_script.ahk` hint, or `status` has `errors_queued` but no `error_capture` | The server predates the capture fix: `capture_error` never captures, `evaluate` (and a conditional `breakpoint_set`) fails with `Command timeout`, and `start` ignores `port`. Use `variables_get`, breakpoints and stepping or `mcp__ahk-mcp__run`, and launch with the port `start` reported. |
@@ -356,8 +362,11 @@ one delivered after the connection was lost without an exit notice.
    ```
    A bare `/Debug` always means localhost:9000, which another program may hold. With no
    listener on the port (never started, stopped, or the server restarted), the engine
-   shows a modal `Failed to connect to an active debugger client. Continue running the
-   script without the debugger?` box, even headless: check `status` before each launch.
+   waits about 2 s, prints `Debugger error: Could not connect to localhost:<port>;
+   continuing without the debugger.` on stderr (one warning record under `--diag=json`)
+   and runs the script to the end without the debugger, so `capture_error` sees nothing:
+   check `status` before each launch. An engine older than `f14d7427` shows a modal
+   `Failed to connect to an active debugger client` box instead.
 3. Once connected, the engine is paused at the script's first line. Set breakpoints then
    with `breakpoint_set` (`file`, `line`, no `condition`); before the script connects
    the call fails with `Not connected`.
@@ -393,9 +402,10 @@ attached waits, paused at its first line, until the first one ends (`status` sho
 `session_ended` result). A relaunch of the same script never gets that far while its
 previous run is alive: `#SingleInstance` refuses it before it connects. On a fixed
 build, `stop` and the server shutting down detach every script first, so it keeps
-running without the engine's "continue without the debugger?" prompt; a server that is
-killed cannot detach, and the script then shows that prompt. There are no watch
-expressions.
+running with no notice; a server that is killed cannot detach, and the engine then
+prints `Debugger error: Connection to localhost:<port> lost; continuing without the
+debugger.` on stderr and keeps running the script (an engine older than `76973889`
+shows a modal prompt instead). There are no watch expressions.
 
 ## Running the tests
 

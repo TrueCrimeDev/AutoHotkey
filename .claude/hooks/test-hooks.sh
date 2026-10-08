@@ -539,6 +539,23 @@ else
 fi
 t_end
 
+# Since f14d7427 a /Debug launch with no listener, or a listener lost mid-run,
+# prints one of these stderr notices and the script runs on without the
+# debugger; only older engines show the modal "Continue running the script
+# without the debugger?" box, which used to appear even with /Headless.
+DBG_NOTICE="Could not connect to localhost:<port>; continuing without the debugger."
+DBG_LOST="Connection to localhost:<port> lost; continuing without the debugger."
+DBG_STALE=("continue without the debugger?" "Continue running the script without the debugger?"
+           "even headless" "even with /Headless")
+
+t_begin "README.md describes the debugger notices, not the old modal box"
+if [[ -f $HOOKS_DIR/README.md ]]; then
+    readme=$(tr -s ' \n' '  ' < "$HOOKS_DIR/README.md")   # the notices wrap across lines
+    for n in "$DBG_NOTICE" "$DBG_LOST"; do [[ $readme == *"$n"* ]] || bad "README.md lacks \"$n\""; done
+    for n in "${DBG_STALE[@]}"; do [[ $readme != *"$n"* ]] || bad "README.md still says \"$n\""; done
+fi
+t_end
+
 # =================================================================================
 section "ahk-debug-context.sh (SessionStart)"
 # =================================================================================
@@ -547,11 +564,11 @@ SS_REQUIRED=(mcp__ahk-mcp__check AHK_Debug_DBGp enable_toolset --diag=json //Deb
              "#EnableEval" Print Inspect ProcessPipe TSParse _ScriptGetLines SyntaxError
              PowerShell "Git Bash" "capture fix" error_capture "captured:false"
              "//Debug=localhost:<port> --headless script.ahk"
-             "/Debug=localhost:<port> /Headless script.ahk" "continue without the debugger"
+             "/Debug=localhost:<port> /Headless script.ahk" "$DBG_NOTICE"
              "CLAUDE.md, DBGp Protocol")
 SS_STALE=(AHK_Lint AHK_Diagnostics wslpath /mnt/ alpha.30 "suppress all dialogs" debug_run watch_add
           use_api ANTHROPIC_API_KEY autohotkey-debug tool_output "nothing queues" "expect captured:false"
-          "modal error box" fix/dbgp-capture-error)
+          "modal error box" fix/dbgp-capture-error "${DBG_STALE[@]}")
 ss_common() {
     want_rc 0; want_no_err; want_ascii; want_fast 3000
     count_lines "$OUT"; (( REPLY <= 50 )) || bad "stdout has $REPLY lines, want at most 50"
@@ -1085,9 +1102,10 @@ for a in capture_error run step_into step_over step_out variables_get evaluate s
     t_begin "action $a: launch and port reminder"
     dbgp PreToolUse "$a"; run check-ahk-connection.sh "$REPLY"
     want_rc 0; want_no_err; want_ascii; want_hso PreToolUse
-    want_has ctx start /Debug "continue without the debugger" "#SingleInstance" \
+    want_has ctx start /Debug "$DBG_NOTICE" "$DBG_LOST" "#SingleInstance" \
         "Another instance is already running" "exits 64 without connecting"
-    want_lacks ctx "nothing queues" "expect captured:false" "modal error box" fix/dbgp-capture-error
+    want_lacks ctx "nothing queues" "expect captured:false" "modal error box" fix/dbgp-capture-error \
+        "${DBG_STALE[@]}"
     if [[ $a == run || $a == capture_error ]]; then
         want_has ctx "//Debug" "AutoHotkey64Console.exe" 9000 9001 status PowerShell "Git Bash" "VS Code" \
             "./bin/AutoHotkey64Console.exe //Debug=localhost:<port> --headless script.ahk" \
@@ -1228,9 +1246,9 @@ shapes $'Fix applied at C:\\Scripts\\demo.ahk:3\n- Old: x := Abs(\n+ New: x := A
 for s in "${SHAPES[@]}"; do
     guidance "apply_fix \"Fix applied\" (${s%%$'\t'*}): ask for a /Debug re-run" PostToolUse apply_fix "${s#*$'\t'}"
     want_hasi ctx "re-run"; want_has ctx "/Debug=localhost:<port>" capture_error CRLF LF clear_errors "send run" \
-        "continue without the debugger" "The old run must have exited first" "#SingleInstance refuses the relaunch" \
+        "$DBG_NOTICE" "The old run must have exited first" "#SingleInstance refuses the relaunch" \
         "Another instance is already running" "exits 64 without connecting" "call start again"
-    want_lacks ctx "waits behind" "send run first"
+    want_lacks ctx "waits behind" "send run first" "${DBG_STALE[@]}"
     t_end
 done
 shapes $'Error: Line mismatch at 3.\nExpected: "x := Abs("\nFound: "y := 2"'

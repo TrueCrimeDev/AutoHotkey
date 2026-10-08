@@ -4,9 +4,11 @@
 Usage: conformance_native.py <path-to-engine-exe-with-mcp-verb>
 
 Run directly on Windows or from WSL with a Windows-accessible checkout.
-Fixtures are created under the repo's temp/ dir and removed afterwards. Both
+Fixtures are created in a fresh tempfile directory (under WSL, in the Windows
+user's %TEMP%) and removed afterwards; nothing is written into the repo. Both
 implementations run on the supplied engine, without a shell launcher or a
-second, possibly stale executable from bin/.
+second, possibly stale executable from bin/. The expected engine version is
+read from source/ahkversion.h.
 
 - Protocol conformance: initialize/ping/tools-list/notifications/error codes,
   LF framing, exit 0 on EOF, -32700 recovery, concurrent instances.
@@ -14,7 +16,7 @@ second, possibly stale executable from bin/.
   implementation (debugger-tool/mcp-ahk/cli.ahk). Native-only execution tools
   are checked separately from the shared reference capabilities.
 """
-import base64, json, os, subprocess, sys, tempfile, shutil
+import base64, json, os, re, subprocess, sys, tempfile, shutil
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 CLI = os.path.join(REPO, "debugger-tool/mcp-ahk/cli.ahk")
@@ -26,6 +28,13 @@ SHARED_TOOLS = {"ast_outline", "get_source_context", "server_status", "source_ou
 NATIVE_ONLY_TOOLS = {"check", "run", "test"}
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
+
+def expected_version():
+    """RAW_AHK_VERSION from source/ahkversion.h without its +metadata suffix, read as
+    tests/test_console_cli.py reads it, so a version bump needs no test edit."""
+    with open(os.path.join(REPO, "source", "ahkversion.h"), encoding="utf-8") as f:
+        return re.search(r'#define RAW_AHK_VERSION "([^"]+)"', f.read()).group(1).split("+")[0]
+EXPECTED_VERSION = expected_version()
 
 passed = failed = 0
 def check(label, ok, detail=""):
@@ -105,9 +114,20 @@ def remove_junction(path):
         subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
                        check=True, capture_output=True, timeout=10)
 
+def fixture_parent():
+    """None (tempfile's default) on Windows; under WSL the Windows user's %TEMP%,
+    seen through its /mnt mount, so the Windows engine can read the fixtures."""
+    if os.name == "nt":
+        return None
+    win_temp = subprocess.run(["cmd.exe", "/d", "/c", "echo %TEMP%"], capture_output=True,
+                              text=True, check=True, timeout=10).stdout.strip()
+    return subprocess.run(["wslpath", "-u", win_temp], capture_output=True, text=True,
+                          check=True, timeout=5).stdout.strip()
+
 # ---- fixtures on the Windows filesystem ----
-os.makedirs(os.path.join(REPO, "temp"), exist_ok=True)
-fixdir = tempfile.mkdtemp(prefix="mcp-native-qa-", dir=os.path.join(REPO, "temp"))
+# realpath expands a short (8.3) temp path such as C:/Users/RUNNER~1/..., so
+# both implementations are handed the same long-form paths.
+fixdir = os.path.realpath(tempfile.mkdtemp(prefix="mcp-native-qa-", dir=fixture_parent()))
 FIXTURE = """; conformance fixture
 class Foo {
     __New() {
@@ -232,7 +252,8 @@ try:
     # server_status
     s = tool_payload(by_id[19])
     check("status.identity", s.get("name") == "ahk-mcp" and s.get("version") == "0.1.0", str(s)[:200])
-    check("status.ahkVersion", "2.1-alpha.33" in s.get("ahkVersion", ""), str(s.get("ahkVersion")))
+    check("status.ahkVersion", EXPECTED_VERSION in s.get("ahkVersion", ""),
+          f"{s.get('ahkVersion')!r} lacks {EXPECTED_VERSION!r} (source/ahkversion.h)")
     check("status.pid", isinstance(s.get("pid"), int) and s["pid"] > 0)
     check("status.toolsRegistered", s.get("toolsRegistered") == len(tools), str(s.get("toolsRegistered")))
     # 21 method-bearing messages were sent (19 with ids + 2 notifications)
