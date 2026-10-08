@@ -21,8 +21,8 @@ when the folder is opened (or search `@recommended` in the Extensions view).
 `AutoHotkey2.InterpreterPath` points at `bin\AutoHotkey64.exe`, the GUI build,
 so the language server can start it without opening a console window. It can
 lag `bin\AutoHotkey64Console.exe` when only one of them is rebuilt, so compare
-their `--version` and `--capabilities` (both report `2.1-alpha.33+Console`,
-revision `f7712ec15171`, as of 2026-10-08). The extension's own Run command uses it and shows output in the
+their `--version` and `--capabilities` (since 2026-10-08 both are the CI build of
+`f14d7427`, `2.1-alpha.33+Console` revision `f14d74270a2b`). The extension's own Run command uses it and shows output in the
 OUTPUT panel without ANSI colour; use the `Run AHK (fork, color)` task for the
 console engine.
 
@@ -66,7 +66,10 @@ If a pre-launch build fails, do not choose "Debug Anyway".
 The DBGp configuration has not been tried here, because the debug extension is
 not installed on the machine where it was written. If each launch opens an
 extra console window, set its `runtime` to `${workspaceFolder}/bin/AutoHotkey64.exe`
-(the GUI build; see the caveat under Extensions).
+(the GUI build; see the caveat under Extensions). Neither exe prompts when the
+adapter is not listening or goes away: the script runs on without the debugger
+and only stderr says so (`Debugger error: ... continuing without the
+debugger.`), which the GUI exe has nowhere to show.
 
 Port notes: the zero-plusplus adapter listens on 9002 by default, and thqby
 merges its `AutoHotkey2.DebugConfiguration` port range (`9002-9100`) into the

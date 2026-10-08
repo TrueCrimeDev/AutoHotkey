@@ -139,7 +139,7 @@ One executable, selected into different modes by its first arguments:
 | Invocation | Mode |
 |---|---|
 | `AutoHotkey64Console.exe script.ahk` | Normal run; runtime errors → `stderr` as text |
-| `AutoHotkey64Console.exe /Debug script.ahk` | Connect to a DBGp debugger (default `localhost:9000`; `/Debug=host:port` for another) |
+| `AutoHotkey64Console.exe /Debug script.ahk` | Connect to a DBGp debugger (default `localhost:9000`; `/Debug=host:port` for another). With no listener, or when it goes away, the script runs on and `stderr` says `Debugger error: ... continuing without the debugger.` |
 | `AutoHotkey64Console.exe /ErrorStdOut script.ahk` | Runtime errors → `stderr` as text (the console engine's default) |
 | `AutoHotkey64Console.exe /ErrorStdOut:color script.ahk` | …with ANSI color |
 | `AutoHotkey64Console.exe /ErrorStdOut=UTF-8 script.ahk` | …with an explicit encoding |
@@ -325,7 +325,9 @@ Print(JSON.Stringify(values)) ; ["edited",false,null]
 
 Parsed arrays preserve untouched boolean/null types through edits, insertion,
 removal, resizing, and cloning. Assignment clears the original element's type tag;
-use `JSON.True`, `JSON.False`, or `JSON.Null` when explicitly assigning those types.
+use `JSON.True`, `JSON.False`, or `JSON.Null` (read-only singletons) when explicitly
+assigning those types. `JSON` itself is not a constructor: `JSON()` throws `TypeError`;
+create objects with `JSON.Parse`.
 String values support embedded NUL characters. Object keys containing NUL are
 rejected with `UnsupportedKey` to prevent truncation and key collisions.
 
@@ -412,14 +414,14 @@ parser supplies the executable lines, the interpreter's per-line dispatch counts
 and alpha-only syntax is counted correctly because the engine itself is the source of truth.
 
 ```powershell
-New-Item -ItemType Directory -Force coverage | Out-Null
 bin\AutoHotkey64Console.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
 python tools\lcov_summary.py "coverage/**/*.lcov" --include "^Lib/" --badge coverage\badge.json
 ```
 
-Create the report's directory first. The engine does not create it, and when it is
-missing the run still exits normally but writes no report and prints no diagnostic
-(`qa/tests/test_coverage_missing_dir.ahk` pins this current behavior).
+The engine creates a missing report directory, every level of it. If the report still
+cannot be written (say, the path runs through an existing file), one stderr line names
+the report and the Win32 error (a warning record under `/Diag=json`), and the exit code
+is the script's own ([`updates.md` §17](updates.md)).
 
 ```text
 SF:C:\lib\Async.ahk
@@ -548,7 +550,8 @@ The MCP server speaks DBGp on port 9000 and surfaces ~22 tools:
 | Error loop | `capture_error`, `analyze_error`, `apply_fix` |
 | Queue | `list_errors`, `clear_errors` |
 
-**Start it** (the server must be listening before the script connects):
+**Start it** (the server must be listening before the script connects; otherwise the
+script runs without the debugger and says so on `stderr`):
 
 ```powershell
 cd debugger-tool\mcp-server

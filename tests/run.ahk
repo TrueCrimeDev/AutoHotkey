@@ -5,17 +5,17 @@
 ;
 ; PowerShell:
 ;   bin\AutoHotkey64Console.exe /Headless /Diag=json test tests\run.ahk
-;   New-Item -ItemType Directory -Force coverage | Out-Null
 ;   bin\AutoHotkey64Console.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
 ;
 ; Git Bash rewrites arguments that start with "/" into paths, so use the aliases:
 ;   ./bin/AutoHotkey64Console.exe --headless --diag=json test tests/run.ahk
-;   mkdir -p coverage
 ;   ./bin/AutoHotkey64Console.exe --headless --coverage=coverage/tests.lcov test tests/run.ahk
 ;
-; Create the coverage directory first: when it is missing, --coverage (/Coverage)
-; writes nothing and the run still exits 0 with no diagnostic
-; (qa/tests/test_coverage_missing_dir.ahk pins that behavior).
+; --coverage (/Coverage) creates a missing coverage directory. If the report
+; still cannot be written, one stderr line names it and the Win32 error, and
+; the exit code is unchanged (qa/tests/test_coverage_missing_dir.ahk pins both).
+; An engine older than ec684fd0 writes nothing there, so create the directory
+; first for one of those.
 ;
 ; Exit codes: 0 all passed, 14 any failure (or a test file not listed below).
 ; Every tests/*.test.ahk must be #Included here; the check below fails the run

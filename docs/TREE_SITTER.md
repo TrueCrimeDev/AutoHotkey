@@ -64,7 +64,7 @@ Implementation: `source/ts_api.cpp`, registered in `source/lib/functions.h`.
 
 ## Validity: Check(Source)
 
-`TSParse().HasError` is not a validity signal. Use the native `Check(Source)` BIF — it spawns this exe in check mode against a temp file in a child process (oracle-parity with the CLI, host state untouched). The child runs validate-then-exit mode (parses but never executes), so a Check() inside the source cannot recurse. Returns `Ok` (1 valid / 0 invalid), `Diagnostics` (Array, empty when Ok=1, items `{Severity,Type,Code,Message,Extra,File,Line,Column}`), and `Raw`. On spawn failure returns Ok=0 with a synthetic diagnostic (no throw).
+`TSParse().HasError` is not a validity signal. Use the native `Check(Source)` BIF — it spawns this exe in check mode against a temp file in a child process (oracle-parity with the CLI, host state untouched). The child runs validate-then-exit mode (parses but never executes), so a Check() inside the source cannot recurse. Returns `Ok` (1 valid / 0 invalid), `Diagnostics` (Array, empty when Ok=1, items `{Severity,Type,Code,Message,Extra,File,Line,Column}`; when Ok=0 it holds one item built from the first error record, so a warning printed before the error does not replace it), and `Raw` (every record, warnings included). On spawn failure returns Ok=0 with a synthetic diagnostic (no throw).
 
 ## Raw `DllCall` surface
 

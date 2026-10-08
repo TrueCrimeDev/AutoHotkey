@@ -327,7 +327,7 @@ From Git Bash, write `--headless`, `--diag=json`, `//Debug` and `//Debug=127.0.0
 
 - Some docs under `debugger-tool/` describe stock AHK behavior where `/ErrorStdOut` only catches load-time errors. This fork changes runtime behavior in `source/error.cpp`.
 - DBGp stream packets (`<stream>`) are separate from normal `<response>` packets; tools need explicit handling if they want live stdout/stderr over debugger transport.
-- `/Debug` requires the debugger server to be listening first, otherwise connect will fail.
+- `/Debug` requires the debugger server to be listening first, otherwise connect will fail. The script then runs without the debugger and prints `Debugger error: Could not connect to localhost:PORT; continuing without the debugger.` on stderr (a lost connection prints `Connection to localhost:PORT lost; ...`; under `/Diag=json` either is one warning record with `what` "Debugger"). Engines before `f14d7427` showed a modal prompt instead, even with `/Headless`.
 - `/Headless` covers the engine's own prompts only; a script that calls `MsgBox`, `InputBox` or `Gui` still blocks on a real window.
 
 ## Quick Mental Model

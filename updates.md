@@ -22,6 +22,7 @@ This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.
 | Engine tools in the native MCP server | `check`, `run`, `test` tools of the `mcp` verb (see §21) | n/a |
 | External-signal exit code | `code=130` for Ctrl+C / close | Always on (gate is whether crash log is on) |
 | Interactive / pipe-driven REPL | `repl` subcommand (see §16) | n/a — explicit mode |
+| Debugger connection notices | `Debugger error: ...` line or JSON warning instead of a modal prompt (see §22) | Always on |
 
 Everything else inherited from upstream `v2.1-alpha.33` works as documented upstream (implicit `export` for names defined inside a `#Module`, tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc.). The per-release notes are in `docs/alpha/`; `v2.1-alpha.32.md` and `v2.1-alpha.33.md` cover the latest merge, including the post-tag commits. `examples/Alpha31_Example.ahk` remains the runnable showcase of the alpha.31 changes.
 
@@ -525,6 +526,10 @@ bin\AutoHotkey64Console.exe /Headless tests\crashlog_check.ahk C:\temp\se.log "[
 | `qa/tests/test_inspect.ahk` | `Inspect`: primitives, depth/MaxItems clamps, arrays/maps/JSON.Object, class getters and methods, native Gui controls, cycles, 60-deep chains, 500-property objects. |
 | `qa/tests/test_processpipe.ahk` | `ProcessPipe`: UTF-8 round trip, timeouts, Kill, stderr separation, 2 MB producer without deadlock, 200 KB line across chunk boundaries, argument quoting, kill-on-release, error paths. |
 | `tests/test_console_coverage.py` | `/Coverage=`: DA/LF/LH consistency, structural lines excluded, per-iteration `while` counts, relative path resolution, report survives uncaught errors and `ExitApp(14)`. |
+| `qa/tests/test_coverage_missing_dir.ahk` | `/Coverage=` creates a missing directory (absolute, relative, forward slashes) and reports an unwritable path on stderr, as text and under `/Diag=json` (§17). |
+| `qa/tests/test_json_class.ahk` | `JSON()` and the generic constructor paths are refused; `JSON.True`/`False`/`Null` are read-only (§22). |
+| `qa/tests/test_check_severity.ahk` | `Check()` reports the error record when warnings come first (§22). |
+| `tests/test_debugger_fatal.py` | Refused and dropped `/Debug` connections print the stderr notice and the script continues (§22). Exits 77 without starting an engine that lacks the notice text; the gate counts that as a skip, or as a failure under `CI=true`. |
 | `tests/test_repl.sh` | `repl` subcommand end-to-end (bash under WSL; pipes stdin): values, cross-line state, error resilience, JSON mode, `ExitApp` passthrough, script-hosted session. Pass the engine as its argument. It writes `/Diag=json` and calls `wslpath`, so under Git Bash its JSON-mode and script-hosted checks fail for path reasons; the gate covers the REPL with `tests/test_console_repl.py`. |
 | `tests/manual_*.ahk` | Manual verification scripts (SEH, recursion, long-running for Ctrl+C). Not run automatically. |
 
@@ -788,21 +793,31 @@ connects the two and writes a standard LCOV tracefile at exit.
 ### Enabling it
 
 ```powershell
-New-Item -ItemType Directory -Force coverage | Out-Null
 bin\AutoHotkey64Console.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
 ```
 
 From Git Bash:
 
 ```bash
-mkdir -p coverage
 ./bin/AutoHotkey64Console.exe --headless --coverage=coverage/tests.lcov test tests/run.ahk
 ```
 
-Create the report's directory first. The engine does not create it: with a
-missing directory the run still exits with its normal code (0 for a passing
-`test`) and prints nothing on stderr, but no report is written.
-`qa/tests/test_coverage_missing_dir.ahk` pins this current behavior.
+A missing report directory is created first, every level of it, for an
+absolute or relative path with either separator, so no `mkdir` step is
+needed. When the report still cannot be written (a path under an existing
+file, or one that names a directory), one line on stderr names the report and
+the Win32 error:
+
+```text
+Coverage report "C:\work\blocker.txt\sub\tests.lcov" not written: could not create its directory (Win32 error 183: Cannot create a file when that file already exists.)
+Coverage report "C:\work\isdir" not written (Win32 error 5: Access is denied.)
+```
+
+Under `/Diag=json` that line is a schema-2 record with `"severity":"warning"`,
+`"type":"OSError"`, `"code":0` and the report path in `extra`, and
+`/StdErrFile` mirrors it. The exit code is the script's own either way (0 for
+a passing `test`). `qa/tests/test_coverage_missing_dir.ahk` pins both cases.
+Engines before `ec684fd0` (§22) wrote nothing and printed nothing here.
 
 `--coverage=<path>` is accepted too. A relative path is resolved against the
 working directory at launch, before the script can `SetWorkingDir`. When the
@@ -975,3 +990,87 @@ stderr line that parses as a diagnostic:
 `diagnostics[]` items are the engine's schema-2 diagnostic objects (`type`,
 `message`, `file`, `line`, `column`, `stack`, …). A persistent script under
 `run` is reported with `timedOut: true` rather than hanging the server.
+
+---
+
+## 22. Engine fixes of 2026-10-08
+
+Four behavior changes from `fix/engine-bugs`, merged at `4e9349b5` (CI runs
+37801628398 and 37807040408). Engines built before them, such as revision
+`f7712ec15171` (`bin/*.alpha33.bak`), behave as each "Before" line says.
+
+### Debugger connection notices (`76973889`, `f14d7427`)
+
+A `/Debug` session that cannot connect, or whose client goes away, no longer
+opens a modal box. The script continues without the debugger and prints one
+line on stderr:
+
+```text
+Debugger error: Could not connect to localhost:9001; continuing without the debugger.
+Debugger error: Connection to localhost:9001 lost; continuing without the debugger.
+```
+
+The client is the `host:port` passed to `/Debug`, or `stdio` under
+`/Debug=stdio` (for example when stdin closes). A DBGp `detach` prints
+nothing. Under `/Diag=json` the line is one schema-2 warning record instead:
+
+```json
+{"kind":"diagnostic","format":"json","schema":2,"severity":"warning","type":"Warning","code":0,"message":"Could not connect to localhost:9001; continuing without the debugger.","extra":"localhost:9001","what":"Debugger","file":"","line":0,"column":0,"source":"","stack":""}
+```
+
+The notice goes out like other diagnostics: in the `/ErrorStdOut` encoding,
+ending in LF, and mirrored by `/StdErrFile`. It does not change the exit code.
+A refused localhost port is reported after about 2 seconds.
+
+Before: when nothing listened, `SocketTransport::Connect` showed an
+Abort/Retry/Ignore box, and `Debugger::FatalError` then showed a Yes/No
+"Continue running the script without the debugger?" box; a lost connection
+showed the Yes/No box. Both appeared even under `/Headless`; only
+`/Debug=stdio` printed the text.
+
+Both boxes are now reached only when errors do not go to stderr
+(`/Debug=stdio`, `/ErrorStdOut` and `/Headless` each send them there). This
+fork turns `/ErrorStdOut` on by default in both builds, so in practice no
+build prompts: a GUI `AutoHotkey64.exe` session whose debugger is missing or
+dies continues silently, and only `/StdErrFile` shows the notice. Test:
+`tests/test_debugger_fatal.py`.
+
+### `JSON` cannot be constructed; `JSON.True`/`False`/`Null` are read-only (`7b1a23b6`)
+
+| Expression | Now | Before |
+|---|---|---|
+| `JSON()`, `JSON(1, 2, 3)`, `X()` for `class X extends JSON` | `TypeError` "JSON cannot be constructed. Use JSON.Parse() to create a JSON.Object." | A fake `JSON.Object` whose `Set`, `Count` and `Keys` could crash the process |
+| `(Object.Call)(JSON)`, `(Object.Call)({Prototype: JSON.Prototype})` | `ValueError` "Invalid base." | The same fake object |
+| `JSON.True := 5` (also `False` and `Null`, and on a subclass) | `Error` "Property is read-only." | Replaced the singleton, so native-mode values no longer matched it |
+
+`v is JSON` still identifies a parsed `JSON.Object`. The singletons are now
+getter properties (`JSON.True.Get` and so on), so `Inspect(JSON)` lists them
+under `getters`, `JSON.Stringify(JSON)` skips them, and `JSON.OwnProps()`
+calls the getters. `DefineProp` and `DeleteProp` can still replace or remove
+them, as with any built-in member; Parse and Stringify keep using the
+originals. Test: `qa/tests/test_json_class.ahk`.
+
+### `/Coverage=` creates the report directory (`ec684fd0`)
+
+A missing directory is created, and a report that still cannot be written is
+named on stderr with its Win32 error (a warning record under `/Diag=json`);
+§17 has the text and the record. The exit code is unchanged. Before: nothing
+was written and nothing was printed. Test:
+`qa/tests/test_coverage_missing_dir.ahk`.
+
+### `Check()` reports the error, not an earlier warning (`47bc3fcb`)
+
+`Diagnostics[1]` is built from the first `error` or `critical` record in
+`Raw`; the first record of any severity is used only when none is an error.
+`Raw` still holds every record.
+
+```autohotkey
+r := Check("x := neverAssigned`nGoto NoSuchLabel`n")
+d := r.Diagnostics[1]
+Print("{} {} line {}: {}", d.Severity, d.Code, d.Line, d.Message)
+; error 13 line 2: Label not found in current scope.
+```
+
+Before: the first record won, so the VarUnset warning that load prints before
+a missing `Goto` label or a `break` outside a loop came back as
+`Severity` "warning", `Code` 0. Test: `qa/tests/test_check_severity.ahk`.

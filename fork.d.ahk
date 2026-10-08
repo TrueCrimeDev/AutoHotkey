@@ -134,12 +134,12 @@ Print(Fmt?, Values*) => void
  * - `Diagnostics`: an Array that is empty when `Ok` is 1, even if the child
  *   printed warnings. Otherwise it holds one
  *   `{Severity, Type, Code, Message, Extra, File, Line, Column}` object built
- *   from the first diagnostic record in `Raw`, whatever its severity. A
- *   load-time warning on stderr that comes before the error (VarUnset
- *   warnings are on by default) therefore takes the place of the error, so
- *   check `Severity`. `#Warn ..., StdOut` sends warnings to stdout, which
- *   follows every stderr record in `Raw`, so then the error is picked even
- *   when the child printed a warning first. `File` names the temporary file.
+ *   from the first "error" or "critical" record in `Raw`, so a load-time
+ *   warning printed before the error (VarUnset warnings are on by default)
+ *   does not take its place. Only when no record is an error does it use the
+ *   first record of any severity. `File` names the temporary file. Before
+ *   2.1-alpha.33+Console revision 47bc3fcb the first record was used
+ *   whatever its severity.
  * - `Raw`: all of the child's stderr followed by all of its stdout, normally
  *   one JSON object per line: the diagnostic records, then
  *   `{"kind":"check","status":"pass"}` when the source parses. It does not
@@ -159,11 +159,11 @@ Print(Fmt?, Values*) => void
  * r := Check("y := undefinedQ`nG() {`n    Goto Nope`n}")
  * d := r.Diagnostics[1]
  * Print("{} at line {}: {}", d.Severity, d.Line, d.Message)
- * ; warning at line 1: This global variable appears to never be assigned a value.
+ * ; error at line 3: Label not found in current scope.
  * for line in StrSplit(Trim(r.Raw, "`r`n"), "`n", "`r")
- *     if (rec := JSON.Parse(line)).Get("severity", "") = "error"
+ *     if (rec := JSON.Parse(line)).Get("severity", "") = "warning"
  *         Print("line {}: {}", rec["line"], rec["message"])
- * ; line 3: Label not found in current scope.
+ * ; line 1: This global variable appears to never be assigned a value.
  * @since 2.1-alpha.30+Console
  */
 Check(Source) => Object
@@ -312,14 +312,12 @@ class JSONError extends ValueError {
  * case-insensitive.
  *
  * JSON is a namespace: create objects with Parse, not by calling `JSON()`.
- * The `static Call() => throw` below marks that, as in the bundled
- * declarations for classes such as File. As of 2.1-alpha.33+Console the
- * engine does not block the call. It returns an object that reports `Type`
- * "JSON.Object" and `is JSON` but is not a real JSON.Object. `Count` reads
- * garbage. `Keys` sometimes returns an empty Array, but `Keys` or `Set` can
- * also fail with "Invalid memory read/write." (exit 11) or corrupt the heap
- * and end the process with no diagnostic at all (exit code 0xC0000374,
- * STATUS_HEAP_CORRUPTION). The outcome varies from run to run.
+ * `JSON()`, with any arguments, and `X()` for `class X extends JSON` throw
+ * TypeError "JSON cannot be constructed. Use JSON.Parse() to create a
+ * JSON.Object."; `(Object.Call)(JSON)` throws ValueError "Invalid base.".
+ * `v is JSON` is true for a parsed JSON.Object, but not for a JSON.Array or a
+ * `Container: "Map"` result. (Engines before revision 7b1a23b6 returned a
+ * fake JSON.Object from `JSON()` that could crash the process.)
  *
  * Parse options (Parse, Load, ParseAt, ParseFile and Validate) are passed as
  * an object literal. A Map, or a second options object, throws JSONError.
@@ -357,28 +355,31 @@ class JSONError extends ValueError {
  */
 class JSON extends Object {
 	/**
-	 * Do not call `JSON()`. JSON is a namespace; see the class description.
+	 * Not callable: throws TypeError "JSON cannot be constructed. Use
+	 * JSON.Parse() to create a JSON.Object." JSON is a namespace; see the
+	 * class description.
+	 * @throws {TypeError} Always.
 	 */
-	static Call() => throw
+	static Call(Params*) => throw
 
 	/**
 	 * The JSON `true` singleton, used for parsed values when the
 	 * `Booleans` option is "native". Stringify writes it as `true`.
-	 * This is a plain value property, so do not assign to it.
+	 * Read-only: assigning to it throws Error "Property is read-only.".
 	 */
 	static True => Object
 
 	/**
 	 * The JSON `false` singleton, used for parsed values when the
 	 * `Booleans` option is "native". Stringify writes it as `false`.
-	 * This is a plain value property, so do not assign to it.
+	 * Read-only: assigning to it throws Error "Property is read-only.".
 	 */
 	static False => Object
 
 	/**
 	 * The JSON `null` singleton, used for parsed values when the `Null`
 	 * option is "native". Stringify writes it as `null`.
-	 * This is a plain value property, so do not assign to it.
+	 * Read-only: assigning to it throws Error "Property is read-only.".
 	 */
 	static Null => Object
 
@@ -490,7 +491,8 @@ class JSON extends Object {
 	 * The type of objects parsed from JSON (`Type(v)` = "JSON.Object"). It is
 	 * Map-like, with case-sensitive string keys kept in document order.
 	 * This is a type name only: `JSON.Object` is not a property at run time.
-	 * Test values with `Type(v) = "JSON.Object"` or `v is JSON`.
+	 * Test values with `Type(v) = "JSON.Object"` or `v is JSON` (JSON's
+	 * Prototype is the JSON.Object prototype).
 	 * @since 2.1-alpha.30+Console
 	 */
 	class Object {

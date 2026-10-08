@@ -588,3 +588,74 @@ unlogged loop session between 3 and now.)
   and follow-ups outside this pass's scope (`test_alpha33.ahk`, hard-coded
   version pins, `check_all` walking `.kilo/`, upstream `.github` files,
   `.vscode/launch.json:54`).
+
+### Session 15 (2026-10-08) — engine fixes via CI
+- Five commits on `fix/engine-bugs`, merged into
+  `feat/console-cleanup-20260919` at `4e9349b5`. No local C++ toolchain, so CI
+  was the first compile of each:
+  - `7b1a23b6` json: `JSON()` and subclass calls throw `TypeError`, the generic
+    `(Object.Call)` paths `ValueError` "Invalid base.", and
+    `JSON.True`/`False`/`Null` are getter-only. Test
+    `qa/tests/test_json_class.ahk`.
+  - `76973889` debugger: a lost DBGp connection is reported on stderr instead
+    of the Yes/No prompt. Test `tests/test_debugger_fatal.py`, added to the
+    console gate.
+  - `ec684fd0` coverage: a missing report directory is created and a failed
+    write prints one stderr line (a warning record under `/Diag=json`); the
+    exit code is unchanged. Test `qa/tests/test_coverage_missing_dir.ahk`
+    rewritten.
+  - `47bc3fcb` check: `Check()` builds its diagnostic from the first error
+    record. Test `qa/tests/test_check_severity.ahk`.
+  - `f14d7427` debugger: no Abort/Retry/Ignore box on a refused connect; the
+    notice names the client and goes through `PrintErrorStdOut`.
+    `test_debugger_fatal.py` exits 77 without starting an engine that lacks
+    the notice text; the gate counts that as a skip, or a failure under
+    `CI=true`.
+- CI (workflow_dispatch): run 37801628398 (head `47bc3fcb`) and run
+  37807040408 (head `f14d7427`) both succeeded: build (x64), build (Win32),
+  build-mingw, debugger-clients and test green, badge and release skipped,
+  console gate 15/15 on all three compilers.
+- `bin/` now holds run 37807040408's artifacts: the four `bin/` exes match the
+  run's sha256 files, and `AutoHotkey64Console.exe --version` reports revision
+  `f14d74270a2b`. The previous `f7712ec15171` engines and capabilities files
+  are `bin/*.alpha33.bak`.
+- Local results on the new engines (the lead's run, on the merge `4e9349b5`):
+  console gate 15/15 on the x64 and x86 Console exes and `test-hooks.sh` 170
+  passed. After this docs pass, the same engine gives qa 862 passed, 0 failed,
+  0 crashed across 15 files and `test-hooks.sh` 171 passed (the merge's
+  `test_alpha31.ahk` pins and a new hooks README check).
+- Docs pass, rechecked on `bin/AutoHotkey64Console.exe` (`f14d74270a2b`):
+  `test_json_class` 48, `test_coverage_missing_dir` 41 and
+  `test_check_severity` 22 passed, `test_debugger_fatal.py` 3/3 OK, and
+  `check fork.d.ahk` passes. Probes on ports bound and then closed (never
+  9000) gave `Debugger error: Could not connect to localhost:PORT; continuing
+  without the debugger.` with no flags, `/Headless` and `/ErrorStdOut=UTF-16`,
+  byte-identical in `/StdErrFile`; an RST after the init packet gave
+  `Connection to localhost:PORT lost; ...`, stdin EOF under `/Debug=stdio`
+  `Connection to stdio lost; ...`, and `--diag=json` one warning record
+  (`what` "Debugger", `extra` the client); `detach` printed nothing, and every
+  run printed its output and exited 0. Construction-only probes show `File`,
+  `Func`, `BoundFunc`, `Closure`, `Enumerator` and `RegExMatchInfo` still
+  build a plain Object on their native prototype from `X()` and
+  `(Object.Call)(X)` (no method called).
+- Docs updated: CLAUDE.md (Running and testing, `Check()` and `JSON`
+  bullets, DBGp section, open items: five fixed, new ones added, the
+  debugger-prompt trade-off recorded), `fork.d.ahk`, `updates.md` §17 and new
+  §22, README, `docs/TREE_SITTER.md`, `docs/AHK_V2_WORKFLOW_TECHNICAL.md`,
+  `tests/run.ahk`, the coverage test header, `.vscode/launch.json`,
+  `examples/alpha21/README.md` and the example 05 comments (a Print copy runs
+  `NeverUsed`, `Formatter`, `Logger`, then `__Main`). The coverage note in
+  Session 11 and the debugger-dialog note in Session 12 describe engines
+  before these fixes.
+- Still open (CLAUDE.md): two notices when the init packet cannot be sent;
+  an out-of-memory `ReceiveCommand` reported as a lost connection; the
+  hand-copied JSON escapers in `Debugger.cpp` and `coverage.cpp`; the latent
+  factory bug in `File`/`Func`/`RegExMatchInfo` and kin; a test guard that
+  cannot see a reverted connect break; `Check()` field extraction reading past
+  its record; and the earlier engine items (`&Module.Var`, JSON `MaxDepth`
+  and `AllowTopLevelScalar` positions, `WritePropertyData`, the `error.cpp`
+  `GetLine` and uninitialized-token pair, report truncation, crash-log
+  `Stack`, Eval's `SyntaxError` and scope, `--help`, the outline regex, a qa
+  pin for module order, zero-byte `FileRead`). By design, no build shows a
+  debugger prompt now, because `mErrorStdOut` defaults to true (a GUI session
+  continues silently).

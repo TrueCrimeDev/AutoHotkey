@@ -51,9 +51,14 @@
             // which has no console, this console-subsystem engine opens its own
             // console window on each launch. To avoid that, set "runtime" to
             // ${workspaceFolder}/bin/AutoHotkey64.exe, the GUI build that
-            // AutoHotkey2.InterpreterPath uses. That exe is currently older than
-            // the console build (its --capabilities lists no inspect, processPipe
-            // or coverage) until both are rebuilt.
+            // AutoHotkey2.InterpreterPath uses. Both bin\ exes now come from the
+            // same CI build (f14d7427, run 37807040408), so the GUI one has the
+            // same features (inspect, processPipe, coverage).
+            // No prompt on a missing or lost debugger: with either exe, if
+            // nothing listens on the port, or the adapter goes away, the script
+            // runs on without the debugger and only stderr says so ("Debugger
+            // error: ... continuing without the debugger."); the GUI exe has no
+            // console to show it.
             // Port: zero-plusplus listens on 9002 by default. Unless the active
             // editor is an AHK v1 file, thqby merges its AutoHotkey2.DebugConfiguration
             // setting (default port "9002-9100") into this configuration. The

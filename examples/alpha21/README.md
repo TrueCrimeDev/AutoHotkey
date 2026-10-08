@@ -22,14 +22,14 @@ The `#Module` / `#Import` system received major improvements:
 | **Error detection** | Repeated `#Module` via `#Include` and hotkey-before-`#Module` are now errors |
 | **Removed `Import` statement** | Only the `#Import` directive remains (not the bare `Import` keyword) |
 | **`#Import "file:mod"`** | Import a specific named module from a multi-module file |
-| **Lazy initialization** | Modules execute on first reference, not at load time |
+| **Early initialization** | Every module still runs at startup, in reverse order of creation, before `__Main`'s auto-execute section (even a module nothing imports); a first reference to a module's name only runs that module earlier (upstream design, `source/script.cpp` `Script::AutoExecSection`) |
 | **Forward references** | `#Import` recognizes imported names regardless of declaration order |
 
 **Examples:**
 - `02_module_basics.ahk` — Defining modules, exports, and imports
 - `03_import_from_file.ahk` — Importing from external `.ahk` files
 - `04_import_selective.ahk` — Selective imports, renaming with `as`, wildcard `*`
-- `05_lazy_module_init.ahk` — Lazy initialization and forward references
+- `05_lazy_module_init.ahk` — Module initialization order and forward references (the file name predates the correction: init is not lazy)
 - `06_module_file_scoping.ahk` — File-scoped modules and name privacy
 
 ## Running

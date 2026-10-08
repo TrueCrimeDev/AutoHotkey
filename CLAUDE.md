@@ -100,8 +100,7 @@ $engine = (Get-Item out/msvc/x64/AutoHotkey64Console.exe, bin/AutoHotkey64Consol
 & $engine run ScriptName.ahk
 & $engine check --diag=json ScriptName.ahk
 & $engine test tests/run.ahk
-New-Item -ItemType Directory -Force coverage | Out-Null   # --coverage writes nothing into a missing directory
-& $engine --coverage=coverage/tests.lcov test tests/run.ahk
+& $engine --coverage=coverage/tests.lcov test tests/run.ahk   # creates coverage/ if missing
 & $engine mcp
 python tests/run_console_gate.py $engine
 python tools/check_all.py $engine
@@ -114,7 +113,7 @@ From Git Bash (the Bash tool):
 engine=out/msvc/x64/AutoHotkey64Console.exe; [ -f "$engine" ] || engine=./bin/AutoHotkey64Console.exe
 "$engine" check --diag=json ScriptName.ahk
 "$engine" test tests/run.ahk
-mkdir -p coverage && "$engine" --coverage=coverage/tests.lcov test tests/run.ahk
+"$engine" --coverage=coverage/tests.lcov test tests/run.ahk
 python tests/run_console_gate.py "$engine"
 ```
 
@@ -129,7 +128,15 @@ still returns 10. Diagnostics go to stderr (one flat JSON object per line with
 `--diag=json`), but `#Warn ..., StdOut` sends warnings to stdout, so read both
 streams. `/ErrorStdOut` only selects encoding and color here; it does not move
 diagnostics to stdout. Read `--capabilities` for the complete exit-code
-contract. `/Headless` only routes error and warning dialogs to stderr; `MsgBox`,
+contract. `--coverage=` creates every missing level of the report's directory
+(relative or absolute, either separator). When the report still cannot be
+written (a path under an existing file, or one naming a directory) it prints
+one stderr line, `Coverage report "<path>" not written: ... (Win32 error N:
+...)`, or a schema-2 `"severity":"warning"`, `"type":"OSError"` record with the
+path in `extra` under `--diag=json`, and the exit code stays the script's own.
+An engine before `ec684fd0` (such as `bin/*.alpha33.bak`) writes nothing and
+says nothing there, so create the directory first for one of those.
+`/Headless` only routes error and warning dialogs to stderr; `MsgBox`,
 `InputBox` and `Gui` still block, so do not run dialog-driven scripts
 unattended. `/Headless` and `check` are not sandboxes: loading can perform
 operations such as `#DllLoad`. Do not execute arbitrary untrusted scripts
@@ -260,7 +267,7 @@ assigned a value.`, names it.
   - Writes to an attached console or redirected stdout when available.
 - **`Eval(Expression)`** — runtime expression eval. Gated by `#EnableEval` directive or `/Eval` CLI flag (`--eval` from Git Bash). Throws `SyntaxError` on parse failure and a catchable `ValueError` above 16,384 UTF-16 code units. The REPL uses the same limit and continues after an oversized expression. Compiled Eval storage still has process lifetime to preserve closures. See `updates.md` section 1.
 - **`SyntaxError`** — exception class for parse errors (`is Error`). One thrown by `Eval` has only the own properties `Message`, `File` (`"_Eval"`), `Line` (0) and `Column` (0); reading its `What`, `Extra` or `Stack` throws `PropertyError`, so a generic `catch as e` logger must guard them. One built with `SyntaxError(Message, What?, Extra?)` has the usual Error properties (`What`, `Extra`, `File`, `Line`, `Stack`) and no `Column`.
-- **`Check(Source)`** — validate AHK source with automatic oracle parity: spawns this exe in check mode (`/Diag=json /Check`) against a temp file in a child process, so host state is untouched and the verdict matches the CLI. Returns `{ Ok, Diagnostics, Raw }`: `Ok` is 1 when the child exits 0 (warnings allowed) and 0 otherwise (13 for a syntax error); `Diagnostics` is an Array of `{ Severity, Type, Code, Message, Extra, File, Line, Column }` that is empty when Ok=1, even after warnings, and otherwise holds one record: the first diagnostic record in `Raw`, whatever its severity. A load-time warning printed before the error (VarUnset warnings are on by default) therefore takes the error's place, so check `Diagnostics[1].Severity` and read `Raw` for the rest. `Raw` is the captured child output. Its shared child runner has a 30-second timeout and 8 MiB combined output budget; a spawn failure, a timeout, an output-limit failure, or a nonzero exit with no diagnostic record returns Ok=0 with one synthetic diagnostic (`Severity` "error", `Code` 0, `Line` 0, a `Message` starting "Check:"). `Raw` combines stderr then stdout, preserving each stream's order without promising cross-stream chronology. Temporary-file and process-tree cleanup are automatic. The check-mode child skips ordinary script execution, but load-time directives such as `#DllLoad` can still have side effects; it is not a sandbox. This — not `TSParse(...).HasError` — is the correct 'does it parse?' check.
+- **`Check(Source)`** — validate AHK source with automatic oracle parity: spawns this exe in check mode (`/Diag=json /Check`) against a temp file in a child process, so host state is untouched and the verdict matches the CLI. Returns `{ Ok, Diagnostics, Raw }`: `Ok` is 1 when the child exits 0 (warnings allowed) and 0 otherwise (13 for a syntax error); `Diagnostics` is an Array of `{ Severity, Type, Code, Message, Extra, File, Line, Column }` that is empty when Ok=1, even after warnings, and otherwise holds one record: the first `error` or `critical` record in `Raw`, falling back to the first record of any severity only when none is an error (`47bc3fcb`). A load-time warning printed before the error (VarUnset warnings are on by default) no longer takes its place; `Raw` still holds every record, warnings included. (An engine before `47bc3fcb` returned the first record whatever its severity.) `Raw` is the captured child output. Its shared child runner has a 30-second timeout and 8 MiB combined output budget; a spawn failure, a timeout, an output-limit failure, or a nonzero exit with no diagnostic record returns Ok=0 with one synthetic diagnostic (`Severity` "error", `Code` 0, `Line` 0, a `Message` starting "Check:"). `Raw` combines stderr then stdout, preserving each stream's order without promising cross-stream chronology. Temporary-file and process-tree cleanup are automatic. The check-mode child skips ordinary script execution, but load-time directives such as `#DllLoad` can still have side effects; it is not a sandbox. This — not `TSParse(...).HasError` — is the correct 'does it parse?' check.
 - **`JSON`** — native JSON class, no include. `JSON.Parse(Text, Reviver?, Options?)`
   and `JSON.Stringify(Value, Replacer?, Space?, Options?)`, aliased `Load`/`Dump`;
   `JSON.ParseAt(Text, &Pos, Options?)` parses one value from `Pos` and advances it
@@ -279,7 +286,16 @@ assigned a value.`, names it.
   never revives the source keyword. Options: `Container` ("JSON.Object"|"Map"),
   `Booleans`/`Null` ("integer"/"empty"|"native" for `JSON.True/False/Null`
   singletons, which round-trip inside arrays too), `MaxDepth`, `AllowComments`,
-  `AllowTrailingCommas`, `EnsureAscii`, `EscapeSlash`. Plain object literals
+  `AllowTrailingCommas`, `EnsureAscii`, `EscapeSlash`. `JSON.True`/`False`/`Null`
+  are getter-only: assigning one throws `Error` "Property is read-only."
+  (`DefineProp`/`DeleteProp` can still replace or remove them, as for any
+  built-in member; Parse and Stringify keep using the originals). `JSON` is a
+  namespace, not a constructor: `JSON()`, and `X()` for `class X extends JSON`,
+  throw `TypeError` "JSON cannot be constructed. Use JSON.Parse() to create a
+  JSON.Object.", and `(Object.Call)(JSON)` throws `ValueError` "Invalid base."
+  (`7b1a23b6`). `JSON.Object()`/`JSON.Array()` throw `MethodError`. `v is JSON`
+  is true for a parsed `JSON.Object` only (not a `JSON.Array` or a
+  `Container: "Map"` result). Plain object literals
   (`{a: 1}`) serialize via their own value properties — dynamic properties are
   skipped, since producing one means invoking script. Errors are `JSONError`
   (a `ValueError` subclass) carrying line/col/pos and a `[Code]`; depth and
@@ -302,11 +318,24 @@ Full reference: `updates.md` in the repo root.
 listener first and put the switch before the script path. Name the port the
 listener reports: a bare `/Debug` always means 9000, which another program may
 hold. With no listener on that port (never started, stopped, or its server
-restarted) the engine opens a modal "Failed to connect to an active debugger
-client. Continue running the script without the debugger?" box, even with
-`/Headless`; a script still attached when its listener goes away without
-detaching it gets a similar one (a fixed build's `stop` detaches). `/Headless`
-turns the engine's other prompts into stderr text. That includes the default
+restarted) the script runs on without the debugger after printing
+`Debugger error: Could not connect to localhost:PORT; continuing without the
+debugger.` on stderr (about 2 s for a refused localhost port). A script still
+attached when its listener goes away without detaching it prints
+`Debugger error: Connection to localhost:PORT lost; continuing without the
+debugger.` and keeps running (`stdio` names the client under `/Debug=stdio`;
+a DBGp `detach`, which a fixed ahk-mcp build's `stop` sends, prints nothing).
+Under `--diag=json` each notice is one schema-2 record instead:
+`"severity":"warning"`, `"type":"Warning"`, `"code":0`, `"what":"Debugger"`,
+`"extra":"localhost:PORT"`, and the sentence (without `Debugger error: `) as
+`message`. `/StdErrFile` mirrors it, and the exit code is the script's own.
+No engine built from `f14d7427` on prompts here, with or without `/Headless`,
+and that includes the GUI exe (`mErrorStdOut` defaults to true in both builds,
+`source/script.cpp:327`), so a GUI session whose debugger is missing or dies
+just continues. An older engine (such as `bin/*.alpha33.bak`) opens modal
+Abort/Retry/Ignore and Yes/No boxes instead, even with `/Headless`, so never
+point one at a port nobody listens on. `/Headless` turns the engine's other
+prompts into stderr text. That includes the default
 `#SingleInstance Prompt`, which runs before the debugger connects: a relaunch
 of a script whose previous run is still alive (attached, paused or running)
 prints `Another instance is already running. Use #SingleInstance Force or
@@ -402,7 +431,10 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   `v2.1-alpha.33` plus the upstream `alpha` commits through `47eabd41`
   (`docs/alpha/v2.1-alpha.33.md`). Always verify the actual executable's
   `--version` and hash; historical files in `bin/` or `bin_harness/` may be
-  stale.
+  stale. Since 2026-10-08 `bin/` holds the CI build of `f14d7427` (run
+  37807040408; `--version` revision `f14d74270a2b`, sha256 matching the run's
+  artifacts); `bin/*.alpha33.bak` are the previous `f7712ec15171` engines,
+  which lack that day's fixes.
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.
@@ -438,10 +470,11 @@ Open items:
   `#Module` nothing imports still runs before `__Main`; since alpha.21
   (`c0ab7108`) a first reference only runs a module early
   (`source/var.cpp:1444`). The `v2.1-alpha.21` tag already has the run-all
-  loop, so this is not a fork regression. `docs/alpha/v2.1-alpha.21.md` is
-  corrected; still open: `examples/alpha21/README.md:25` ("Lazy
-  initialization"), the comment at `examples/alpha21/05_lazy_module_init.ahk:57`
-  ("Observed on the alpha.31 engine"), and a qa test pinning the order.
+  loop, so this is not a fork regression. `docs/alpha/v2.1-alpha.21.md`,
+  `examples/alpha21/README.md` and the comments in
+  `examples/alpha21/05_lazy_module_init.ahk` are corrected (2026-10-08; a
+  Print copy of that example on `f14d74270a2b` runs `NeverUsed`, `Formatter`,
+  `Logger`, then `__Main`). Still open: a qa test pinning the order.
 - [ ] `/Headless` does **not** suppress `MsgBox` (`source/script2.cpp:1257` ->
   `source/window.cpp:932`), `InputBox` (`source/lib/InputBox.cpp:75`) or
   `Gui`: `mHeadless` is read only at `source/error.cpp:1151`/`:1165` and
@@ -459,22 +492,32 @@ Open items:
   with a qa test and report it upstream.
 
 Engine bugs found 2026-10-07 (WORKLOG Sessions 12-14), all rechecked on
-alpha.33 (`f7712ec15171`) on 2026-10-08 and still present (the
-`Debugger::FatalError` item from source only); none fixed yet:
-- [ ] `JSON()` is callable (`source/json.cpp:1969`: the class is built on `JsonObject::sPrototype` with no factory) and returns a plain Object posing as `JSON.Object`: `.Set("a", 1)` corrupts memory (exit 11 "Invalid memory read/write." or 0xC0000374), `.Count` reads garbage and enumerating `.Keys` is nondeterministic and often crashes.
-- [ ] `JSON.True`/`False`/`Null` are writable value properties (`source/json.cpp:1995` `SetOwnProp`; the comment at `:1983` says getter-only): `JSON.True := 5` and `JSON.Null := ""` stick.
+alpha.33 (`f7712ec15171`) on 2026-10-08. Five were fixed that day on
+`fix/engine-bugs` (merged at `4e9349b5`; CI runs 37801628398 and 37807040408
+passed every build, test and debugger-clients job; release and badge were
+skipped, as on any non-tag run) and are marked [x] below with how they were verified on the
+`bin/` engine (`f14d74270a2b`, WORKLOG Session 15); the rest are still open:
+- [x] FIXED 2026-10-08 (`7b1a23b6`): `JSON()` was callable (the class was built on `JsonObject::sPrototype` with no factory) and returned a plain Object posing as `JSON.Object`, whose `Set`, `Count` and `Keys` read and wrote past its end (exit 11 or 0xC0000374). `source/json.cpp` now records a `JsonObject` factory and defines `JSON.Call`. Verified: `qa/tests/test_json_class.ahk` 48/48; probes give `TypeError` "JSON cannot be constructed. Use JSON.Parse() to create a JSON.Object." for `JSON()`, `JSON(1, 2, 3)` and a subclass `X()`, and `ValueError` "Invalid base." for `(Object.Call)(JSON)`, `(Object.Call)(X)` and `(Object.Call)({Prototype: JSON.Prototype})`.
+- [x] FIXED 2026-10-08 (`7b1a23b6`): `JSON.True`/`False`/`Null` were writable value properties, so `JSON.True := 5` replaced the singleton. They are getter-only now (`JSON.True.Get` etc.). Verified: assigning on `JSON` or a subclass throws `Error` "Property is read-only.", the singletons stay identical, and native-mode `Stringify` still writes `[true,false,null]`. `DefineProp`/`DeleteProp` can still replace or remove them (standard for built-in members; Parse and Stringify are unaffected).
 - [ ] JSON `MaxDepth`: the parser checks each value's depth with the root at 0 (`source/json.cpp:954`, `:999`), the writer counts containers (`:1108`), so an innermost empty container one level deeper parses (and `Validate` accepts it) but cannot re-serialize: `[[]]` with `MaxDepth: 1`, or 257 nested `[]` by default (`[[1]]` is rejected).
 - [ ] With `AllowTopLevelScalar: false`, `Parse`/`ParseAt` (`source/json.cpp:1464`, `:1875`) report `(line 1, col 1, pos 1)` wherever the scalar is, and `ParseAt` leaves `Pos` on it, so a catch-and-continue loop never advances; `Validate` (`:1780`) reports the position after the value (Line 3, Col 6, Pos 8 for "\n\n   42").
-- [ ] `Check()` builds its single diagnostic from the first record of any severity (`source/console_check.cpp:262`): a VarUnset warning on line 2 plus a missing `Goto` label on line 3 gives `Ok=0` with only the warning; field extraction (`:110`, `:137`) searches to the end of the captured output, so a key missing from that record would be read from a later one (from source).
+- [x] FIXED 2026-10-08 (`47bc3fcb`): `Check()` built its single diagnostic from the first record of any severity, so a VarUnset warning printed before a missing `Goto` label gave `Ok=0` with only the warning. `CheckFindDiagRecord` (`source/console_check.cpp:206`) now takes the first `error` or `critical` record, and the first record of any severity only when none is an error. Verified: `qa/tests/test_check_severity.ahk` 22/22; on `x := neverAssigned` + `Goto NoSuchLabel`, `Diagnostics[1]` is Severity "error", Code 13, Line 2, "Label not found in current scope."; after two warnings, `break` on line 3 is reported; a warning-only source gives `Ok=1` and no diagnostics.
+- [ ] `Check()` field extraction (`source/console_check.cpp:111`, `:138`) still searches from the chosen record to the end of the captured output, so a key missing from that record would be read from a later one. Both emitters write every field today (from source).
 - [ ] DBGp `WritePropertyData` (same in upstream alpha.33): `source/Debugger.cpp:1508` stages UTF-8 at the buffer tail and `:1514` base64-encodes it forward over unread bytes (one 196000-byte value via `property_get -m 0` arrived 192142 bytes wrong from offset 1953 while a 140000-byte one arrived intact; the damage depends on the value's size and content); `:1476` counts a surrogate pair as 7 bytes (three emoji: `size="21"` for 12 bytes) and `-m 5` splits the pair into U+FFFD.
-- [ ] `Debugger::FatalError` (`source/Debugger.cpp:2786`, MessageBox at `:2798`) shows a modal Yes/No box even under `/Headless` on a failed connect (`:2725`, `:2751`) or lost connection (`:2418`, `:2425`, `:2463`); only `/Debug=stdio` prints it (`:2790`). Upstream alpha.33 always shows the box. Read from source, not run.
+- [x] FIXED 2026-10-08 (`76973889` lost connection, `f14d7427` refused connect): `Debugger::FatalError` showed a modal Yes/No box even under `/Headless` on a failed connect or a lost connection (only `/Debug=stdio` printed it). The refused-connect Abort/Retry/Ignore box in `SocketTransport::Connect`, which comes before FatalError, was folded into this item's "failed connect" case; `76973889` fixed only the lost connection, and `f14d7427` fixed the refused connect. Both now take `DebuggerErrorsToStdErr()` (`source/Debugger.cpp:2481`: `g_DebugStdio || mErrorStdOut || mHeadless`, Script::ShowError's test) and print one notice through `PrintErrorStdOut` (`ReportContinuingWithoutDebugger`, `:2506`). Verified: `tests/test_debugger_fatal.py` 3/3 on `bin/AutoHotkey64Console.exe`; probes on bound-then-closed ports print `Debugger error: Could not connect to localhost:PORT; continuing without the debugger.` (no flags, `/Headless`, `/StdErrFile` byte-identical), an RST after the init packet prints `Connection to localhost:PORT lost; ...`, `/Debug=stdio` with stdin closed prints `Connection to stdio lost; ...`, `--diag=json` gives one warning record (`what` "Debugger", `extra` the client); each run printed `after` and exited 0, and `detach` printed nothing.
+- Trade-off, by design (`76973889`, `f14d7427`): `mErrorStdOut` defaults to true in both builds (`source/script.cpp:327`; only an invalid `/ErrorStdOut` encoding clears it, `source/error.cpp:222`), so `DebuggerErrorsToStdErr()` holds in every normal run and neither debugger prompt appears in any build. A GUI `AutoHotkey64.exe` session (an IDE, or Explorer, with no visible stderr) whose debugger is missing or dies now continues silently without the "Continue running the script without the debugger?" choice, and the old Retry workflow is gone; use `/StdErrFile` to see the notice. To restore the GUI prompt, narrow `DebuggerErrorsToStdErr()` to `g_DebugStdio || g_script.mHeadless`.
+- [ ] Two notices when the init packet cannot be sent: `SendResponse` calls `FatalError()` itself (`source/Debugger.cpp:2463`, "Connection ... lost"), then `Debugger::Connect` calls `FatalError(DEBUGGER_ERR_FAILEDTOCONNECT ...)` again (`:2812`, "Could not connect ..."), so stderr gets both lines (two warning records under `--diag=json`). From source; not triggered. Fix: return `DEBUGGER_E_INTERNAL_ERROR` from Connect without a second FatalError once SendResponse has reported.
+- [ ] `ReceiveCommand` reports a failed `mCommandBuf.Expand()` (out of memory, `source/Debugger.cpp:2417`-`2418`) through the default `FatalError()`, so the notice says "Connection to ... lost". From source. Fix: pass a distinct message for internal errors.
+- [ ] `DebuggerJsonEscape` and the hand-built record in `ReportContinuingWithoutDebugger` (`source/Debugger.cpp:2487`, `:2506`) duplicate `error.cpp`'s `EscapeJsonText` (`source/error.cpp:238`) and its schema-2 diagnostic format, as `coverage.cpp`'s `AppendJsonString` and `ReportWriteFailure` do; the copies can drift if the schema changes (every field matches today). Fix: one shared warning-record helper in `error.cpp`.
+- [ ] `tests/test_debugger_fatal.py`'s guard only looks for the two notice strings in the engine file; the `SocketTransport::Connect` break has no unique string, so a build that kept the strings but reverted the break would pass the guard, open the Abort/Retry/Ignore box and be killed at the 20-s deadline. The suite also has no no-flags refused case and no `/Debug=stdio` EOF case (both checked by hand), and `tests/run_console_gate.py:48` turns a skip into a failure only when `CI` is `true` in any case, so `CI=1` still allows the skip (GitHub Actions sets `true`).
 - [ ] `source/error.cpp:1803`, in the uncaught-exception `Script::ShowError` overload (`:1775`), passes `TokenToString(t)` (Extra, else Message) to `GetLine` instead of `file`, so the uncaught-error report and `--diag=json` name the throw line, not `Error.Line` (created on line 3, thrown on line 6: reported as 6, `OnError` sees 3). Fork-only, from lexikos' linecontext commit `d8217d1a`; upstream alpha.33 matches by file index.
 - [ ] `source/error.cpp:1784` `ExprTokenType t` reaches `:1803` uninitialized when the thrown object has own `File` and nonzero `Line` but neither `Message` nor `Extra`: `throw {File: A_LineFile, Line: 1}` on any line but the first exits 0xC0000409 with no report (alpha.33 and alpha.31, text and `--diag=json`). Engine fix: pass `file` to `GetLine` (this also fixes the item above).
 - [ ] Headless error reports truncate silently: the text report is cut at `DIAG_JSON_BUF_SIZE`-1 = 87298 chars (`source/error.cpp:1167`, defined `:294`), mid-message and without `Specifically:`, source or stack; `--diag=json` stays valid but caps `message`/`extra` at 16384 chars each (`:439`-`:440`, `:450`-`:451`).
 - [ ] The crash log writes `Error.Stack` raw after `  Stack:` (`source/crashlog.cpp:190`): its lines are not indented and end in CRLF, unlike every other LF line.
 - [ ] An `Eval` `SyntaxError` is built by hand (`source/console_eval.cpp:59`-`64`: own `Message`, `File` `_Eval`, `Line` 0, `Column` 0 only), so reading `What`, `Extra` or `Stack` throws `PropertyError`.
-- [ ] An `Eval` assignment inside a function adds a local to it for good (`source/console_eval.cpp:28` parses in the caller's scope): a later call's `Eval("qq")` reports a *local* unset, and `Eval("gv := 5")` leaves global `gv` unchanged. Documented in `updates.md:106`-`119`; close as intended or change it.
-- [ ] `--coverage=` into a missing directory writes nothing, prints nothing and exits 0 (`source/coverage.cpp:92` returns on `INVALID_HANDLE_VALUE`); `qa/tests/test_coverage_missing_dir.ahk` pins it.
+- [ ] An `Eval` assignment inside a function adds a local to it for good (`source/console_eval.cpp:28` parses in the caller's scope): a later call's `Eval("qq")` reports a *local* unset, and `Eval("gv := 5")` leaves global `gv` unchanged. Documented in `updates.md:107`-`120`; close as intended or change it.
+- [x] FIXED 2026-10-08 (`ec684fd0`): `--coverage=` into a missing directory wrote nothing, printed nothing and exited 0. `WriteWholeFile` (`source/coverage.cpp`) now creates every missing level (`FileCreateDir`) and `ReportWriteFailure` prints one stderr line when the report still cannot be written, leaving the exit code alone. Verified: `qa/tests/test_coverage_missing_dir.ahk` 41/41; `out/a/b/probe.lcov` (relative, forward slashes) was created under `run` and `test`, also on an uncaught-error exit 10; a path under a file printed `Coverage report "<path>" not written: could not create its directory (Win32 error 183: ...)`, a directory path `... not written (Win32 error 5: Access is denied.)`, `--diag=json` one `"type":"OSError"` warning record with the path in `extra`, `/StdErrFile` mirrored it, and exit codes stayed 0 and 3 (`ExitApp(3)`).
+- [ ] Latent factory bug, same class as the `JSON()` one: `File`, `Func`, `BoundFunc`, `Closure`, `Enumerator` and `RegExMatchInfo` are created without a factory of their own (`source/TextIO.cpp:1024`; `no_ctor` in `source/script_object.cpp:4372`-`4384`), so `X()` and `(Object.Call)(X)` build a plain Object on the native prototype (`Type` reports the class and `is X` is true; probed by construction only on `f14d74270a2b`). Calling a native method or property on it would read past its end as JSON's did; not run, on purpose. For `VarRef`, `Module`, `Menu`, `MenuBar`, `ComValue`, `ComObjArray`, `ComValueRef`, `Struct`, `JSON` and the primitive classes, `(Object.Call)(X)` throws "Invalid base." (their direct `X()` calls behave in their own ways); classes whose prototype has `__New` (`Buffer`, `Map`, `Array`, `Gui`, `InputHook`, `ProcessPipe`, the Error classes) were not probed. Fix: record a factory or a throwing `Call`, as `7b1a23b6` did for JSON, and report it upstream.
 - [ ] DBGp has no `eval` command (`source/Debugger.cpp:47` command table; `eval` answers error 4) and `breakpoint_set` rejects `--` conditions (`:771`, error 3), as upstream alpha.33 does: clients read paths with `property_get`.
 - [ ] Native `source_outline`/`workspace_symbols` match functions with one line regex (`source/mcp_server.cpp:930`-`931`, `MatchFuncDecl`), so they miss a function whose default parameters contain parentheses and every fat-arrow function: on `qa/Harness.ahk` they skip `RunQaChild` (line 25) and `SnippetOut` (line 118), which `ast_outline` finds (same on alpha.31). Engine fix: balance nested parentheses and accept `=>` bodies.
 - [ ] `--help` (`source/AutoHotkey.cpp:86`-`111`) lists only slash options: not `/Debug[=host:port|stdio]`, and none of the Git Bash aliases (`--headless`, `--diag=`, `--eval`, `--trace`, `--crashlog=`, `--stderrfile=`, `--coverage=`) that `:353`-`:429` accept.
@@ -487,19 +530,19 @@ docs-only scope:
   `TypeError`, `a.b[1]` with `b => unset` throws `UnsetError`, `#Import` inside a
   function, `NumPut(Int32, ...)`/`NumGet(buf, Int32)`, `#Requires` scoping in an
   `#Include`, and `&Module.Var` as a KNOWN-BUG `RunSnippet` pin.
-- [ ] `tests/test_powershell_cli.py:56` and
-  `debugger-tool/mcp-ahk/tests/conformance_native.py:235` hard-code
-  `2.1-alpha.33`; derive it from `source/ahkversion.h` as
-  `tests/test_console_cli.py` does. `conformance_native.py:109`-`110` also
-  writes fixtures into the repo's `temp/`.
-- [ ] `python tools/check_all.py` walks dot-directories that only the local
-  `.git/info/exclude` hides: a stale nested worktree under `.kilo/worktrees/`
-  fails it locally (CI never has one). Skip dot-directories, or any directory holding a `.git` file, next to
-  `SKIP_DIRS` (`tools/check_all.py:23`).
+- [x] FIXED 2026-10-08: `tests/test_powershell_cli.py` and
+  `debugger-tool/mcp-ahk/tests/conformance_native.py` read the version from
+  `source/ahkversion.h` instead of hard-coding `2.1-alpha.33`, and
+  `conformance_native.py` writes its fixtures to a temp directory instead of
+  the repo's `temp/`.
+- [x] FIXED 2026-10-08: `python tools/check_all.py` skips dot-directories and
+  any directory with its own `.git` (a nested worktree such as
+  `.kilo/worktrees/`), so it passes locally (103/103) and still checks exactly
+  the files a fresh CI checkout has.
 - [ ] The b44b48e3 merge brought in upstream's `.github/FUNDING.yml` (Lexikos)
   and `.github/ISSUE_TEMPLATE/config.yml` (bug reports to the autohotkey.com
   forum, wrong for fork features): replace with fork links or delete
   (maintainer decision).
-- [ ] `.vscode/launch.json:54`-`56` still says `bin\AutoHotkey64.exe` lacks
-  inspect, processPipe and coverage; both `bin/` exes now report alpha.33
-  `f7712ec15171` with all three (`docs/VSCODE_SETUP.md` is corrected).
+- [x] `.vscode/launch.json` no longer calls `bin\AutoHotkey64.exe` older than
+  the console build (fixed 2026-10-08): both `bin/` exes are now the CI build
+  of `f14d7427`, and their sha256 match run 37807040408's artifacts.

@@ -11,8 +11,9 @@
 ;     report path and the Win32 error (a JSON diagnostic under /Diag=json);
 ;   * the exit code is left alone either way: coverage observes the run, so a
 ;     passing test still exits 0 and prints TEST PASS.
-; Before the fix the engine wrote nothing, printed nothing and exited 0, so a
-; CI step that forgot to create its coverage directory lost its coverage.
+; Engines before ec684fd0 wrote nothing, printed nothing and exited 0 here, so
+; a CI step that forgot to create its coverage directory lost its coverage;
+; this test fails on them.
 ;
 ; Each case starts its own child engine through ProcessPipe, because the
 ; harness's RunQaChild/RunSnippet place extra arguments after the script path
