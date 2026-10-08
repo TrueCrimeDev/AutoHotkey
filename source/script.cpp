@@ -1514,7 +1514,7 @@ UINT Script::LoadFromFile(LPCTSTR aFileSpec)
 
 	// Do some processing of local variables to support closures.
 	// This must be done after PreparseExpressions() has resolved all variable references.
-	if (!PreprocessLocalVars(mFuncs))
+	if (!FinalizeFuncs(mFuncs))
 		return LOADING_FAILED;
 
 	// Set the working directory to the script's directory.  This must be done after the above
@@ -4035,7 +4035,7 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 					{
 						if (set_bc_mode)
 						{
-							if (!mCurrentModule->mBackCompatModeWasSet)
+							if (!mCurrentModule->mBackCompatModeWasSet && !g->CurrentFunc && mCurrentModule->IsFileMain(mCurrFileIndex))
 							{
 								mCurrentModule->mBackCompatModeWasSet = true;
 								mCurrentModule->mBackCompatMode = bc_mode;
@@ -4078,7 +4078,7 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 
 	if (IS_DIRECTIVE_MATCH(_T("#Import")))
 	{
-		if (mLineParent || mClassObjectCount)
+		if (mLineParent ? !mLineParent->mAttribute : mClassObjectCount)
 			return ScriptError(ERR_UNEXPECTED_DIRECTIVE, aBuf);
 		if (!ParseImportDirective(parameter))
 			return ScriptError(_T("Invalid import"), aBuf);
@@ -6226,6 +6226,8 @@ ResultType Script::DefineFunc(LPTSTR aBuf, bool aStatic, FuncDefType aIsInExpres
 				return ConflictingDeclarationError(_T("parameter"), this_param.var);
 			if (   !(this_param.var = AddVar(param_start, param_length, varlist, insert_pos, VAR_DECLARE_LOCAL | VAR_LOCAL_FUNCPARAM))   )	// Pass VAR_LOCAL_FUNCPARAM as last parameter to mean "it's a local but more specifically a function's parameter".
 				return FAIL; // It already displayed the error, including attempts to have reserved names as parameter names.
+			if (this_param.is_byref)
+				this_param.var->Scope() |= VAR_BYREF;
 			param_start = omit_leading_whitespace(param_end);
 		}
 		else
@@ -7939,21 +7941,6 @@ ResultType Script::PreparseExpressions(FuncList &aFuncs)
 		g->CurrentFunc = &func;
 		if (!PreparseExpressions(func.mJumpToLine)) // Preparse this function's body.
 			return FAIL;
-		// Now that expressions have been preparsed, remove any parameter default expressions
-		// from the normal flow of execution by adjusting the function's mJumpToLine.  (This
-		// wasn't done earlier because the original value is needed above.)
-		if (mLastParamInitializer)
-		{
-			// Search to back to 0 even if mMinParams > 0, for cases like F(a:=b(), c).
-			for (int i = func.mParamCount; --i >= 0; )
-			{
-				if (func.mParam[i].default_type == PARAM_DEFAULT_EXPR)
-				{
-					func.mJumpToLine = func.mParam[i].default_expr->mNextLine;
-					break;
-				}
-			}
-		}
 		// Nested functions will be preparsed next, due to the fact that they immediately
 		// follow the outer function in aFuncs.
 	}
@@ -7981,11 +7968,11 @@ ResultType Script::PreparseCommands(ScriptModule *aModule)
 {
 	// Terminate each module with a Line so that all labels have a target and
 	// all control flow statements that need it have a non-null mRelatedLine.
-	if (aModule->mLastLine)
+	if (mLastLine = aModule->mLastLine)
 	{
-		mPendingRelatedLine = aModule->mLastLine->mParentLine;
-		mCombinedLineNumber = aModule->mLastLine->mLineNumber + 1; // +1 to distinguish it from the last executable line when debugging.
-		mCurrFileIndex = aModule->mLastLine->mFileIndex;
+		mPendingRelatedLine = mLastLine->mActionType == ACT_UNTIL ? mLastLine : mLastLine->mParentLine;
+		mCombinedLineNumber = mLastLine->mLineNumber + 1; // +1 to distinguish it from the last executable line when debugging.
+		mCurrFileIndex = mLastLine->mFileIndex;
 	}
 	if (!AddLine(ACT_END_MODULE))
 		return FAIL;
@@ -12968,13 +12955,27 @@ void PauseCurrentThread()
 
 
 
-ResultType Script::PreprocessLocalVars(FuncList &aFuncs)
+ResultType Script::FinalizeFuncs(FuncList &aFuncs)
 {
 	for (int i = 0; i < aFuncs.mCount; ++i)
 	{
 		UserFunc &func = *aFuncs.mItem[i];
 		if (!PreprocessLocalVars(func))
 			return FAIL;
+		// Now that the preparsing stages have completed, mJumpToLine can be adjusted to
+		// exclude the parameter default expressions.
+		if (mLastParamInitializer)
+		{
+			// Search to back to 0 even if mMinParams > 0, for cases like F(a:=b(), c).
+			for (int i = func.mParamCount; --i >= 0; )
+			{
+				if (func.mParam[i].default_type == PARAM_DEFAULT_EXPR)
+				{
+					func.mJumpToLine = func.mParam[i].default_expr->mNextLine;
+					break;
+				}
+			}
+		}
 		// Nested functions will be preparsed next, due to the fact that they immediately
 		// follow the outer function in aFuncs.
 	}
@@ -13098,10 +13099,23 @@ ResultType Script::PreprocessLocalVars(UserFunc &aFunc)
 
 ResultType Script::PreparseVarRefs()
 {
+	// Preparse local variables, with innermost nested functions first.
+	// This ordering was implemented in v2.1 to ensure consistency with respect to
+	// variable references above/below a function. Without this change, unassigned refs
+	// above a function would take precedence over #Import {*} within the function.
+	for (int i = mFuncs.mCount; i > 0; --i)
+	{
+		g->CurrentFunc = mFuncs.mItem[i - 1];
+		if (!PreparseVarRefs(g->CurrentFunc->mJumpToLine))
+			return FAIL;
+	}
+	g->CurrentFunc = nullptr;
+
 	for (mCurrentModule = mLastModule; mCurrentModule; mCurrentModule = mCurrentModule->mPrev)
 	{
 		ResolveIndirectImports();
 
+		// Preparse global variables.
 		if (!PreparseVarRefs(mCurrentModule->mFirstLine))
 			return FAIL;
 
@@ -13132,10 +13146,26 @@ ResultType Script::PreparseVarRefs(Line *aStartingLine)
 {
 	for (Line *line = aStartingLine; line; line = line->mNextLine)
 	{
+		// Process only the direct body of the current module or function.
 		switch (line->mActionType)
-		{ // Establish context for FindOrAddVar:
-		case ACT_BLOCK_BEGIN: if (line->mAttribute) g->CurrentFunc = (UserFunc *)line->mAttribute; break;
-		case ACT_BLOCK_END: if (line->mAttribute) g->CurrentFunc = g->CurrentFunc->mOuterFunc; break;
+		{
+		case ACT_BLOCK_BEGIN:
+			if (line->mAttribute)
+			{
+				if (!line->mRelatedLine)
+					return OK;
+				line = line->mRelatedLine->mPrevLine;
+				ASSERT(line->mActionType == ACT_BLOCK_END);
+				continue;
+			}
+			break;
+		case ACT_BLOCK_END:
+			if (line->mAttribute)
+			{
+				ASSERT(line->mAttribute == g->CurrentFunc);
+				return OK;
+			}
+			break;
 		}
 		
 		mCurrLine = line; // For error-reporting.
@@ -13183,7 +13213,7 @@ ResultType Script::PreparseVarRefs(Line *aStartingLine)
 			}
 			if (arg.type == ARG_TYPE_INPUT_VAR)
 			{
-				if (arg.postfix->symbol != SYM_VAR || arg.postfix->var->Type() != VAR_NORMAL)
+				if (arg.postfix->symbol != SYM_VAR || arg.postfix->var->Type() != VAR_NORMAL || arg.postfix->var->IsByRefParam())
 				{
 					// Can't be ARG_TYPE_INPUT_VAR after all, as VAR_VIRTUAL and VAR_CONSTANT require ExpandExpression
 					// (unless it's a constant which was converted to SYM_OBJECT above).

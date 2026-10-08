@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A native AutoHotkey `2.1-alpha.31+Console` fork. The engine supplies shell
+A native AutoHotkey `2.1-alpha.33+Console` fork. The engine supplies shell
 commands, structured diagnostics, Eval, JSON, Inspect, ProcessPipe, source
 introspection, coverage, and an MCP server. The TypeScript debugger integrations
 under `debugger-tool/` are separate consumers of the engine's DBGp protocol.
@@ -386,8 +386,8 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
 
 # Current State & Open Items (updated 2026-10-07)
 
-- Target language version: `2.1-alpha.31+Console`, based on upstream
-  `v2.1-alpha.31`. Always verify the actual executable's `--version` and hash;
+- Target language version: `2.1-alpha.33+Console`, based on upstream
+  `v2.1-alpha.33`. Always verify the actual executable's `--version` and hash;
   historical files in `bin/` or `bin_harness/` may be stale.
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,

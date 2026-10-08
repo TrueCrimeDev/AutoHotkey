@@ -789,6 +789,8 @@ ResultType Object::GetProperty(ResultToken &aResultToken, int aFlags, name_t aNa
 			auto result = GetFieldValue(aResultToken, aFlags | flag, *field, aThisToken);
 			if (!aParamCount || result != OK)
 				return result;
+			if (aResultToken.symbol == SYM_MISSING) // Property getter returned unset.
+				return aResultToken.UnsetError(ERR_RETURNED_UNSET, aName);
 			return ApplyParams(aResultToken, aFlags, aParam, aParamCount);
 		}
 		else if (auto getter = field->prop->Getter())
@@ -926,6 +928,8 @@ ResultType Object::SetProperty(ResultToken &aResultToken, int aFlags, name_t aNa
 		auto result = GetFieldValue(aResultToken, (aFlags & ~IT_BITMASK) | IF_BYPASS___VALUE, *field, aThisToken);
 		if (result != OK)
 			return result;
+		if (aResultToken.symbol == SYM_MISSING) // Property getter returned unset.
+			return aResultToken.UnsetError(ERR_RETURNED_UNSET, aName);
 		return ApplyParams(aResultToken, aFlags, aParam, aParamCount);
 	}
 
@@ -2319,8 +2323,8 @@ ResultType FillPropertyFlags(IObject *aObj, bool aSetter, Property &aProp, Resul
 
 void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
 {
-	if (mFlags & CannotOwnProps)
-		{ ExprTokenType _et(this); _o_throw_type(_T("Object"), _et); }
+	if (!CanOwnProps())
+		_o_throw_type(_T("Object"), ExprTokenType(this));
 	auto name = ParamIndexToString(0, _f_number_buf);
 	if (!*name)
 		_o_throw_param(0 + aID);
@@ -4260,6 +4264,12 @@ ObjectMember Object::sCArrayMembers[]
 };
 
 
+ObjectMember ScriptModule::sMembers[]
+{
+	Object_Method1(__Ref, 1, 1)
+};
+
+
 
 struct ClassDef
 {
@@ -4393,7 +4403,7 @@ void Object::CreateRootPrototypes()
 			}},
 			{_T("String"), &Object::sStringPrototype, {BIF_String, 2, 2}}
 		}},
-		{_T("Module"), &ScriptModule::sPrototype},
+		{_T("Module"), &ScriptModule::sPrototype, no_ctor, ScriptModule::sMembers},
 		{_T("PropRef"), &PropRef::sPrototype, {PropRef_Call, 3, 3}, PropRef::sMembers},
 		{_T("Struct"), &sStructPrototype, NewStruct, sStructMembers},
 		{_T("VarRef"), &sVarRefPrototype, no_ctor, VarRef::sMembers}

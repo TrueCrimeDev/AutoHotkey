@@ -6,10 +6,13 @@ struct ScriptImport
 	LPTSTR names = nullptr, mod_path = nullptr, mod_name = nullptr, var_name = nullptr;
 	ScriptModule *mod = nullptr;
 	ScriptImport *next = nullptr;
+	UserFunc *scope = nullptr;
 	LineNumberType line_number = 0;
 	FileIndexType file_index = 0;
 	bool wildcard = false;
 	bool is_export = false;
+
+	bool IsInScope();
 
 	ScriptImport() {}
 	ScriptImport(ScriptModule *aMod) : mod(aMod), names(_T("*")), wildcard(true) {}
@@ -48,6 +51,7 @@ public:
 	WarnMode Warn_VarUnset = WARNMODE_ON;
 
 	bool IsFileModule() const { return mSelfFileIndex != ABSOLUTE_MAX_SOURCE_FILES; }
+	bool IsFileMain(FileIndexType aFile) const { return mSelfFileIndex == aFile || mDirectiveFileIndex == aFile; }
 
 	bool HasFileIndex(FileIndexType aFile);
 	ResultType AddFileIndex(FileIndexType aFile);
@@ -55,7 +59,7 @@ public:
 	IObject *FindGlobalObject(LPCTSTR aName);
 	Var *FindImportedVar(LPCTSTR aName);
 	Var *FindImportableVar(LPCTSTR aName, bool aAllowCreate = false);
-	Var *AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, bool aExport);
+	Var *AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, ScriptImport &aImp);
 
 	ScriptModule() {}
 	ScriptModule(LPCTSTR aName) : mName(aName) {}
@@ -67,8 +71,10 @@ public:
 
 	IObject_Type_Impl("Module");
 	ResultType Invoke(IObject_Invoke_PARAMS_DECL) override;
+	void __Ref(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 	Object *Base() override { return sPrototype; }
 	static Object *sPrototype;
+	static ObjectMember sMembers[];
 };
 
 typedef ScriptItemList<ScriptModule, 16> ScriptModuleList;

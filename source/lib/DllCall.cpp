@@ -141,7 +141,7 @@ void DynaCall(void *aFunction, DYNAPARM aParam[], int aParamCount, DWORD &aExcep
 		if (this_param.type == DLL_ARG_STRUCT)
 		{
 			int size = this_param.struct_size;
-			ASSERT(!(size % 4));
+			ASSERT(size == -1 || !(size % 4));
 			if (size == -1) // -1 is in lieu of passed_by_address == true.
 				*--our_stack = this_param.value_uintptr;
 			else
@@ -729,7 +729,7 @@ has_valid_return_type:
 							if (value_param.symbol == SYM_MISSING)
 							{
 								this_dyna_param.struct_size = 0; // Zero the union.
-								this_dyna_param.type = Exp32or64(DLL_ARG_INT64, DLL_ARG_INT);
+								this_dyna_param.type = Exp32or64(DLL_ARG_INT, DLL_ARG_INT64);
 								this_dyna_param.value_uintptr = 0;
 								continue;
 							}
@@ -878,9 +878,12 @@ has_valid_return_type:
 			if (size == 8 || size == 4 || size == 2 || size == 1)
 				this_dyna_param.value_int64 = *(__int64*)this_dyna_param.ptr;
 #else
-			size = (size + 3) & -4;
-			if (size > 8)
-				struct_extra_size += size - 8;
+			if (size != -1)
+			{
+				size = (size + 3) & -4;
+				if (size > 8)
+					struct_extra_size += size - 8;
+			}
 #endif // _WIN64
 			break;
 		}

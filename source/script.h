@@ -197,6 +197,7 @@ enum CommandIDs {CONTROL_ID_FIRST = IDCANCEL + 1
 #define ERR_NOT_ENUMERABLE _T("Value not enumerable.")
 #define ERR_PROPERTY_READONLY _T("Property is read-only.")
 #define ERR_ITEM_UNSET _T("Item has no value.")
+#define ERR_RETURNED_UNSET _T("No value was returned.")
 #define ERR_NO_PROCESS _T("Target process not found.")
 #define ERR_NO_WINDOW _T("Target window not found.")
 #define ERR_NO_CONTROL _T("Target control not found.")
@@ -568,6 +569,8 @@ enum DllArgTypes {
 	, DLL_ARG_STR  = UorA(DLL_ARG_WSTR, DLL_ARG_ASTR)
 	, DLL_ARG_xSTR = UorA(DLL_ARG_ASTR, DLL_ARG_WSTR) // To simplify some sections.
 };  // Some sections might rely on DLL_ARG_INVALID being 0.
+#define DLLARGTYPE_IS_NUMERIC(A) ((A) >= DLL_ARG_INT && (A) <= DLL_ARG_DOUBLE)
+#define DLLARGTYPE_IS_INTEGER(A) ((A) <= DLL_ARG_INT64 && (A) >= DLL_ARG_INT)
 
 
 // Note that currently this value must fit into a sc_type variable because that is how TextToKey()
@@ -2510,7 +2513,7 @@ public:
 	void WarnUnassignedVar(Var *aVar, Line *aLine);
 	void WarnLocalSameAsGlobal(LPCTSTR aVarName);
 
-	ResultType PreprocessLocalVars(FuncList &aFuncs);
+	ResultType FinalizeFuncs(FuncList &aFuncs);
 	ResultType PreprocessLocalVars(UserFunc &aFunc);
 	ResultType PreparseVarRefs();
 	ResultType PreparseVarRefs(Line *aStartingLine);

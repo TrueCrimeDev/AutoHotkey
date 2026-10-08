@@ -1,7 +1,7 @@
 ;
 ; fork.d.ahk: declarations for thqby's vscode-autohotkey2-lsp covering this
-; fork's additions on top of AutoHotkey v2.1-alpha.31. The engine reports
-; A_AhkVersion = "2.1-alpha.31+Console".
+; fork's additions on top of AutoHotkey v2.1-alpha.33. The engine reports
+; A_AhkVersion = "2.1-alpha.33+Console".
 ;
 ; This file holds declarations only, not code. Do not #Include it: the engine
 ; would load each entry as a script definition that shadows the built-in, and
@@ -188,7 +188,7 @@ Check(Source) => Object
  * list per node, at least 1.
  * @example
  * Print(Inspect(Map("a", [1, 2]), 3))
- * @since 2.1-alpha.31+Console
+ * @since 2.1-alpha.33+Console
  */
 Inspect(Value, Depth := 2, MaxItems := 100) => String
 
@@ -308,7 +308,7 @@ class JSONError extends ValueError {
  *
  * JSON is a namespace: create objects with Parse, not by calling `JSON()`.
  * The `static Call() => throw` below marks that, as in the bundled
- * declarations for classes such as File. As of 2.1-alpha.31+Console the
+ * declarations for classes such as File. As of 2.1-alpha.33+Console the
  * engine does not block the call. It returns an object that reports `Type`
  * "JSON.Object" and `is JSON` but is not a real JSON.Object. `Count` reads
  * garbage. `Keys` sometimes returns an empty Array, but `Keys` or `Set` can
@@ -592,7 +592,7 @@ class JSON extends Object {
  * p := ProcessPipe(A_ComSpec, ["/c", "echo hello"])
  * Print(p.ReadLine(10))   ; hello
  * Print(p.Wait(10))       ; 0
- * @since 2.1-alpha.31+Console
+ * @since 2.1-alpha.33+Console
  */
 class ProcessPipe extends Object {
 	/**

@@ -60,7 +60,7 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 | **stdout helper** | `FileOpen("*","w")` boilerplate | `Print(fmt, args*)` — UTF-8, `Format`-aware |
 | **Debugger** | DBGp (desktop-oriented) | Same DBGp, wired to an MCP server for LLM-driven debugging |
 
-None of this touches the language. Scripts that run on upstream `v2.1-alpha.31` run here
+None of this touches the language. Scripts that run on upstream `v2.1-alpha.33` run here
 unchanged; the additions are flags, subcommands, and a few opt-in built-ins.
 
 ---
@@ -340,7 +340,7 @@ live.
 
 ```text
 $ bin\AutoHotkey64Console.exe repl
-AutoHotkey v2.1-alpha.31+Console REPL - one expression per line; .help for commands
+AutoHotkey v2.1-alpha.33+Console REPL - one expression per line; .help for commands
 >>> x := 10
 10
 >>> x * 4
@@ -381,7 +381,7 @@ last events survive even a hard crash. It works regardless of how the script was
 including launchers that discard `stderr`.
 
 ```text
-[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.31+Console script=C:\app\app.ahk ...
+[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.33+Console script=C:\app\app.ahk ...
 [2026-05-13 21:43:22] [ERROR] pid=12345 type=MethodError mode=Return
   Message: This value of type "String" has no method named "DoStuff".
   File: C:\app\Lib\Clip.ahk

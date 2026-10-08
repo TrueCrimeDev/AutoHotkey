@@ -492,6 +492,7 @@ public:
 		return true;
 	}
 
+	bool CanOwnProps() { return (mFlags & CannotOwnProps) == 0; }
 	bool HasOwnProps() { return mFields.Length(); }
 	bool HasOwnProp(name_t aName)
 	{
@@ -611,6 +612,7 @@ public:
 	UINT_PTR LockStructSize() { auto si = GetStructInfo(); return si ? si->size : 0; }
 
 	bool GetStructArgInfo(DYNAPARM &aType, Object *&aPointedClass);
+	bool GetNumGetArgInfo(size_t &aSize, BOOL &aIsInt, BOOL &aIsSigned);
 	MdType GetStructMdType();
 
 	bool CanSetBase(); // Can Base be changed for this Object?

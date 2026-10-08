@@ -53,7 +53,7 @@ class PowerShellCliTests(unittest.TestCase):
                 self.assertIn(expected, out + err)
 
     def test_bare_command(self):
-        self.check_all("ahk", "2.1-alpha.31+Console")
+        self.check_all("ahk", "2.1-alpha.33+Console")
 
     def test_help_spellings(self):
         for spelling in ("help", "-h", "--h", "-help", "--help"):
