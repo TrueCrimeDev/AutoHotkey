@@ -117,6 +117,19 @@ engine=out/msvc/x64/AutoHotkey64Console.exe; [ -f "$engine" ] || engine=./bin/Au
 python tests/run_console_gate.py "$engine"
 ```
 
+Run suites, and anything that might open a window, through
+`python tools/run_hidden.py [--timeout SECONDS] COMMAND...`. It starts the
+command on a hidden Win32 desktop that its child processes inherit, so a
+`MsgBox`, an error or `#Warn` dialog, a `Gui` or a console window never reaches
+the user's screen or takes focus, and `Send` cannot type into the user's
+windows. Each window that opens is reported on stderr (`[run_hidden] window
+opened: ...` plus its text). After `--timeout` the process tree is killed
+(exit 124), leftover processes are killed when the command exits, and
+otherwise the exit code and streams are the command's own:
+`python tools/run_hidden.py --timeout 1500 python tests/run_console_gate.py "$engine"`.
+A Task View virtual desktop cannot do this, because new windows open on the
+one in view. The clipboard is still shared with the user's session.
+
 `check` and `test` already run headless. `check` prints `CHECK PASS` (or
 `{"kind":"check","status":"pass"}` with `--diag=json`) on stdout and returns 0;
 it returns 13 for a syntax failure and also when the script file is missing
@@ -138,7 +151,7 @@ An engine before `ec684fd0` (such as `bin/*.alpha33.bak`) writes nothing and
 says nothing there, so create the directory first for one of those.
 `/Headless` only routes error and warning dialogs to stderr; `MsgBox`,
 `InputBox` and `Gui` still block, so do not run dialog-driven scripts
-unattended. `/Headless` and `check` are not sandboxes: loading can perform
+unattended except through `tools/run_hidden.py --timeout`. `/Headless` and `check` are not sandboxes: loading can perform
 operations such as `#DllLoad`. Do not execute arbitrary untrusted scripts
 merely to validate them.
 

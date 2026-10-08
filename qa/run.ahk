@@ -74,8 +74,7 @@ for file in files {
         totalFailed += f
         status := f ? "FAIL" : "PASS"
         Print("  [{}] {}  ({} passed, {} failed)", status, name, p, f)
-        if f
-            EchoFailLines(out)
+        EchoFailLines(out)
     } else {
         crashes += 1
         Print("  [CRASH] {}  (exit {}, no summary line)", name, code)
@@ -93,10 +92,10 @@ ExitApp grandFail
 
 NameOf(path) => RegExReplace(path, "^.*[\\/]", "")
 
-; Echo only the "  FAIL ..." detail lines a failing test emitted.
+; Echo only the "  FAIL ..." and "  SKIP ..." detail lines a test emitted.
 EchoFailLines(out) {
     for line in StrSplit(out, "`n", "`r")
-        if RegExMatch(line, "^\s*FAIL ")
+        if RegExMatch(line, "^\s*(FAIL|SKIP) ")
             Print("    {}", Trim(line))
 }
 

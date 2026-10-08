@@ -170,18 +170,43 @@ Assert.eq(acc.vals ? acc.vals["QaSelf"] : "<threw>", "loc", "Props(local): value
 ;    (MdFunc.cpp:494 after the merge), which is the code that is live.
 ;    PixelSearch's FoundX/FoundY are ResultToken (Variant) outputs; an
 ;    off-screen region never matches, so the not-found path is deterministic.
-;    Needs a desktop: PixelSearch returns FR_E_WIN32 (an OSError here) when
-;    GetDC(NULL) fails (source/lib/pixel.cpp), so a session-0 / no-desktop run
-;    would throw instead of reporting not-found. Deliberately not guarded: a
-;    try/skip would also hide a real regression on the desktop runner in use.
+;    Needs a screen to copy from: PixelSearch returns FR_E_WIN32 (an OSError
+;    here) when GetDC(NULL) or its BitBlt from the screen fails
+;    (source/lib/pixel.cpp:196, :226), as in session 0, or on a desktop that is
+;    never displayed (tools/run_hidden.py), where BitBlt fails with error 6
+;    "The handle is invalid.". The pins run whenever ScreenCopyError() can make
+;    that same copy, so a regression on a runner with a screen still fails, and
+;    print a SKIP line otherwise. A try/catch around PixelSearch would hide
+;    such a regression instead.
 ; OLD: IsSet(px) = 0 (both outputs left unset).
 ; ============================================================================
-found := PixelSearch(&px, &py, -100000, -100000, -100000, -100000, 0x123456)
-Assert.eq(found, 0, "PixelSearch off-screen: not found")
-Assert.truthy(IsSet(px), "PixelSearch not found: FoundX is set (made blank)")
-Assert.truthy(IsSet(py), "PixelSearch not found: FoundY is set (made blank)")
-Assert.eq(px, "", "PixelSearch not found: FoundX is the empty string")
-Assert.eq(py, "", "PixelSearch not found: FoundY is the empty string")
+if !(screenError := ScreenCopyError()) {
+    found := PixelSearch(&px, &py, -100000, -100000, -100000, -100000, 0x123456)
+    Assert.eq(found, 0, "PixelSearch off-screen: not found")
+    Assert.truthy(IsSet(px), "PixelSearch not found: FoundX is set (made blank)")
+    Assert.truthy(IsSet(py), "PixelSearch not found: FoundY is set (made blank)")
+    Assert.eq(px, "", "PixelSearch not found: FoundX is the empty string")
+    Assert.eq(py, "", "PixelSearch not found: FoundY is the empty string")
+} else {
+    Print("  SKIP PixelSearch output pins (5): the screen cannot be copied (Win32 error {})", screenError)
+}
+
+; 0 when one pixel can be copied from the screen as PixelSearch copies it, else the Win32 error.
+ScreenCopyError() {
+    if !(screen := DllCall("GetDC", "Ptr", 0, "Ptr"))
+        return A_LastError || -1
+    mem := DllCall("CreateCompatibleDC", "Ptr", screen, "Ptr")
+    bitmap := DllCall("CreateCompatibleBitmap", "Ptr", screen, "Int", 1, "Int", 1, "Ptr")
+    prior := DllCall("SelectObject", "Ptr", mem, "Ptr", bitmap, "Ptr")
+    copied := DllCall("BitBlt", "Ptr", mem, "Int", 0, "Int", 0, "Int", 1, "Int", 1
+        , "Ptr", screen, "Int", 0, "Int", 0, "UInt", 0x00CC0020, "Int")  ; SRCCOPY
+    failure := copied ? 0 : (A_LastError || -1)
+    DllCall("SelectObject", "Ptr", mem, "Ptr", prior, "Ptr")
+    DllCall("DeleteObject", "Ptr", bitmap)
+    DllCall("DeleteDC", "Ptr", mem)
+    DllCall("ReleaseDC", "Ptr", 0, "Ptr", screen)
+    return failure
+}
 
 ; ============================================================================
 ; 6. RegExMatch's OutputVar is unset (not "") on no match in v2.1 mode.

@@ -39,7 +39,10 @@ each one's exit code + stdout. Because each test is isolated:
   is a normal, assertable outcome — it does not abort the rest of the suite;
 - the runner distinguishes **FAIL** (asserts failed, summary line present) from
   **CRASH** (process died before `Assert.Summary()`), echoing the child's error
-  context in the crash case;
+  context in the crash case, and its `  FAIL ` and `  SKIP ` lines otherwise. A
+  `SKIP` line marks assertions that need something the host lacks, such as
+  `test_alpha31.ahk`'s `PixelSearch` pins without a readable screen (session 0,
+  or `tools/run_hidden.py`); the skipped ones are not counted as passed;
 - a summary must agree with the actual child exit code; a passing-looking line
   cannot hide an unsuccessful process exit;
 - every child receives `/Headless /ErrorStdOut` and has a 30-second timeout.

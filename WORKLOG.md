@@ -659,3 +659,23 @@ unlogged loop session between 3 and now.)
   pin for module order, zero-byte `FileRead`). By design, no build shows a
   debugger prompt now, because `mErrorStdOut` defaults to true (a GUI session
   continues silently).
+
+### Session 16 (2026-10-08) — test runs on a hidden desktop
+
+- `tools/run_hidden.py` runs a command on a hidden Win32 desktop
+  (`CreateDesktop`, `STARTUPINFO.lpDesktop`) that every child inherits, in a
+  kill-on-close job, sharing the caller's stdio and exit code. It reports each
+  visible, non-minimized window its processes open, with the window's text.
+  Verified with a probe: `MsgBox(..., "T3")` opened there (reported, not shown)
+  and returned `Timeout`; a blocking `MsgBox` was killed at `--timeout` (exit
+  124); `SendInput` from there returns 0 with error 5. AutoHotkey minimizes its
+  hidden main window when there is no foreground window (`source/script.cpp:641`),
+  which is always the case on that desktop, so minimized windows are not reported.
+- `BitBlt` from the screen fails there (error 6), so `test_alpha31.ahk`'s five
+  `PixelSearch` output pins crashed the file. They now run only when
+  `ScreenCopyError()` can make the same 1x1 copy, and print a `SKIP` line
+  otherwise; `qa/run.ahk` echoes `SKIP` lines as it does `FAIL` lines.
+- Results under `run_hidden.py`: console gate 15/15 on the x64 and x86 Console
+  exes (qa 857 passed, 0 failed, 0 crashed, plus the `SKIP` line), `check_all`
+  103/103, native conformance 60/60, `test-hooks.sh` 171 passed. Run directly,
+  `test_alpha31.ahk` still gives 61 passed (the pins ran).
