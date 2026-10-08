@@ -1959,6 +1959,34 @@ BIF_DECL(JsonClass_Stringify)
 // Registration
 // ============================================================================
 
+// Instance factory for the JSON.Object prototype. Recording it on the prototype
+// keeps plain Objects off that prototype: Object.Call builds a plain Object for
+// any class whose prototype inherited Object's factory, and the JsonObject
+// methods then read and write past the end of it. With this factory recorded,
+// Object::NewInstance rejects (Object.Call)(JSON), (Object.Call)(Subclass) and
+// (Object.Call)({Prototype: JSON.Prototype}) with "Invalid base." JSON.Call
+// below replaces the Call that CreateClass defines from it.
+static JsonObject *NewJsonObject(size_t aSuffixSize)
+{
+	return new (aSuffixSize) JsonObject();
+}
+
+// JSON() — JSON is a namespace of static methods. Its Prototype is still the
+// JSON.Object prototype, so `v is JSON` identifies a parsed object; JSON.Parse
+// is the way to create one.
+BIF_DECL(JsonClass_Call)
+{
+	_f_throw(_T("JSON cannot be constructed. Use JSON.Parse() to create a JSON.Object."), ErrorPrototype::Type);
+}
+
+// Getter for JSON.True / JSON.False / JSON.Null; mData holds the singleton.
+BIF_DECL(JsonClass_GetSingleton)
+{
+	auto obj = (Object *)aResultToken.callee_id;
+	obj->AddRef();
+	aResultToken.SetValue(obj);
+}
+
 void DefineJsonClass()
 {
 	JsonObject::sPrototype = Object::CreatePrototype(_T("JSON.Object"), Object::sPrototype
@@ -1966,9 +1994,11 @@ void DefineJsonClass()
 
 	JsonArray::sPrototype = Object::CreatePrototype(_T("JSON.Array"), Array::sPrototype);
 
-	Object *jsonClass = Object::CreateClass(_T("JSON"), Object::sClass, JsonObject::sPrototype, nullptr);
+	Object *jsonClass = Object::CreateClass(_T("JSON"), Object::sClass, JsonObject::sPrototype, NewJsonObject);
 	if (!jsonClass)
 		return;
+
+	jsonClass->DefineMethod(_T("Call"), new BuiltInFunc{ _T("JSON.Call"), JsonClass_Call, 1, 1, true });
 
 	jsonClass->DefineMethod(_T("Parse"), new BuiltInFunc{ _T("JSON.Parse"), JsonClass_Parse, 2, 4 });
 	jsonClass->DefineMethod(_T("Stringify"), new BuiltInFunc{ _T("JSON.Stringify"), JsonClass_Stringify, 2, 5 });
@@ -1980,18 +2010,25 @@ void DefineJsonClass()
 	jsonClass->DefineMethod(_T("Load"), new BuiltInFunc{ _T("JSON.Load"), JsonClass_Parse, 2, 4 });
 	jsonClass->DefineMethod(_T("Dump"), new BuiltInFunc{ _T("JSON.Dump"), JsonClass_Stringify, 2, 5 });
 
-	// True / False / Null singletons. Getter-only, so they are genuinely
-	// read-only rather than merely conventional.
+	// True / False / Null singletons. Getter-only, so `JSON.True := x` throws
+	// rather than replacing the value that the identity tests in Parse and
+	// Stringify (g_JsonTrue etc.) compare against.
 	g_JsonTrue = Object::Create();
 	g_JsonFalse = Object::Create();
 	g_JsonNull = Object::Create();
-	struct { LPTSTR name; Object *obj; } singletons[] = {
-		{ _T("True"), g_JsonTrue }, { _T("False"), g_JsonFalse }, { _T("Null"), g_JsonNull },
+	struct { LPTSTR name; LPCTSTR getter; Object *obj; } singletons[] = {
+		{ _T("True"), _T("JSON.True.Get"), g_JsonTrue },
+		{ _T("False"), _T("JSON.False.Get"), g_JsonFalse },
+		{ _T("Null"), _T("JSON.Null.Get"), g_JsonNull },
 	};
 	for (auto &s : singletons)
 	{
 		if (!s.obj)
 			continue;
-		jsonClass->SetOwnProp(s.name, s.obj);
+		auto prop = jsonClass->DefineProperty(s.name);
+		if (!prop)
+			continue;
+		prop->NoParamGet = prop->NoParamSet = true; // As a value property: JSON.True[x] indexes the singleton.
+		prop->SetGetter(new BuiltInFunc{ s.getter, JsonClass_GetSingleton, 1, 1, false, s.obj });
 	}
 }
