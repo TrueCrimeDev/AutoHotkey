@@ -167,9 +167,32 @@ Global flags can precede a command: `/Headless /Diag=json check script.ahk`.
 Arguments after the script filename belong to the script. Use `--` before a script
 filename which would otherwise be interpreted as a command or flag.
 
+`--help` lists every spelling the parser accepts, with its value syntax. The same list:
+
+| Option | Effect |
+|---|---|
+| `/Headless`, `--headless` | Report the engine's prompts on `stderr` instead of dialogs |
+| `/Diag[=text\|json]`, `--diag[=text\|json]` | Diagnostic format on `stderr` (default `text`) |
+| `/ErrorStdOut[=encoding]` | Diagnostic text encoding: `UTF-8`, `UTF-16`, `CPnnn` or `nnn` |
+| `/ErrorStdOut:color\|nocolor` | Force ANSI color on or off (`nocolor` also `none`, `off`) |
+| `/Trace[=text\|json]`, `--trace[=text\|json]` | Stream executing statements to `stderr` (`json`: one event per line) |
+| `/Eval`, `--eval` | Enable `Eval()` in the script |
+| `/Debug[=host[:port]\|stdio]` | Connect to a DBGp debugger (default `localhost:9000`); `stdio` speaks DBGp over stdin/stdout |
+| `/CrashLog=path`, `--crashlog=path` | Append crash and process lifecycle events ([Crash logging](#crash-logging)) |
+| `/StdErrFile=path`, `--stderrfile=path` | Mirror diagnostics to a file |
+| `/Coverage=path`, `--coverage=path` | Write LCOV line coverage at exit ([Line coverage](#line-coverage)) |
+| `/include file` | Include one file before the script (at most once) |
+| `/CPnnn` | Script source code page |
+| `/force` | Replace an existing instance of the script |
+| `/restart` | Mark the launch as a restart (`Reload` uses it): an existing instance is closed instead of prompting |
+| `/script` | Run the script named on the command line even when the executable embeds one |
+| `--` | Treat the next argument as the script filename |
+| `/Check`, `--check`; `/Test`, `--test` | Switch forms of `check` and `test` (still one command per invocation) |
+| `/validate`; `/iLib file` (deprecated) | Load and parse only: exit `0`, or `12` on a parse error; nothing is printed on success |
+| `--help` (`help`, `-h`, `--h`, `-help`, `/help`, `/?`), `--version` (`/version`), `--capabilities` | Information; nothing is loaded |
+
 Git Bash rewrites any argument that starts with `/` into a path, so from Git Bash use
-the aliases `--headless`, `--diag=json`, `--coverage=`, `--trace`, `--eval`,
-`--crashlog=`, and `--stderrfile=`, or double the slash for other switches
+the `--` aliases above, or double the slash for a switch without one
 (`//Debug`, `//ErrorStdOut`, `//include`). PowerShell and cmd pass `/Flag` unchanged.
 
 ---

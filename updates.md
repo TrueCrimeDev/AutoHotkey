@@ -451,7 +451,7 @@ through. `--capabilities` lists these codes under `exitCodes`.
 
 ## 8. CLI flag reference (fork-added flags)
 
-All flags in this list are fork-only additions. Existing AHK flags (`/ErrorStdOut`, `/Headless`, `/Check`, `/Test`, `/Debug`, etc.) still work as documented.
+All flags in this list are fork-only additions. Existing AHK flags (`/ErrorStdOut`, `/Headless`, `/Check`, `/Test`, `/Debug`, etc.) still work as documented. `--help` lists every spelling the parser accepts with its value syntax: the slash forms, the `--` aliases below, `/Debug[=host[:port]|stdio]`, `/validate`, `/iLib file`, `/restart`, `/script`, `/CPnnn` and the information switches (`--help` and its aliases, `--version`/`/version`, `--capabilities`). `tests/test_console_cli.py` checks that text against the parser's own option literals, so an option added to `ParseCmdLineArgs` without help text fails the gate.
 
 | Flag | Effect |
 |---|---|
@@ -460,6 +460,7 @@ All flags in this list are fork-only additions. Existing AHK flags (`/ErrorStdOu
 | `/StdErrFile=<path>` (or `--stderrfile=<path>`) | Duplicate all stderr writes to `<path>`. Off by default. |
 | `/Coverage=<path>` (or `--coverage=<path>`) | Write an LCOV line-coverage report for every loaded script file to `<path>` at exit (§17). Off by default. |
 | `/Trace=json` (or `--trace=json`) | Like `/Trace`, but one JSON event per executed statement (§20). `/Trace=text` is the default text form. |
+| `--headless`, `--diag[=text\|json]`, `--check`, `--test` | Git Bash spellings of `/Headless`, `/Diag`, `/Check` and `/Test` (Git Bash turns a leading `/` into a path). `/Debug`, `/ErrorStdOut` and `/include` have no `--` form: double the slash there (`//Debug`). |
 
 ---
 
