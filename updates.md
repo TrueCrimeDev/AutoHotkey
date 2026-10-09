@@ -64,7 +64,7 @@ result := Eval(Expression)
 | When | Class | Notes |
 |---|---|---|
 | Gate not enabled | `Error` | Message: `"Eval is disabled (add #EnableEval to your script or pass /Eval)"` |
-| Input doesn't parse | `SyntaxError` | `.Message` carries the parser's diagnostic; `.File = "_Eval"`, `.Line = 0`, `.Column = 0` (column info is best-effort and currently always 0). It has no `What`, `Extra` or `Stack` property. |
+| Input doesn't parse | `SyntaxError` | `.Message` carries the parser's diagnostic, `.What` is `"Eval"`, `.Extra` is the offending token or fragment the parser reported (`""` when it reported none), `.Stack` is the script call stack at the `Eval` call; `.File = "_Eval"`, `.Line = 0`, `.Column = 0` (column info is best-effort and currently always 0). Before 2026-10-09 the object had no `What`, `Extra` or `Stack` (§23). |
 | Input longer than 16,384 UTF-16 code units | `ValueError` | `"Eval expression exceeds the 16384-character limit."`, raised before parsing |
 | Identifier missing in caller scope | `UnsetError` | Same as inline code |
 | Anything raised by the evaluated expression | unchanged | Propagated as-is |
@@ -138,6 +138,7 @@ unset, matching the inline expression. This formerly crashing case is tested in
 - F: alpha.29 features pass through (maybe operator, unset propagation)
 - G: `SyntaxError` with non-empty `Message` and a `Column` property on parse failure
 - H: reentrancy (nested `Eval`)
+- I: the `SyntaxError` carries `What` (`"Eval"`), `Extra` and `Stack` as Strings while `Message`, `File`, `Line` and `Column` are unchanged; a generic `catch Error as e` reads them; `Check("1 +")` records are unchanged
 
 Run it with `bin\AutoHotkey64Console.exe test tests\test_eval.ahk` (the `#EnableEval` directive at the top of the file enables the BIF; no CLI flag needed). It prints `all checks passed` and exits 0.
 
@@ -264,13 +265,20 @@ On instances thrown by `Eval`:
 | Property | Type | Value |
 |---|---|---|
 | `Message` | String | The parser's diagnostic text |
+| `What` | String | `"Eval"` (the throwing built-in function, as for any runtime error) |
+| `Extra` | String | The offending token or source fragment the parser reported, e.g. `"+"` for `Eval("1 + + +")`; `""` when it reported none |
 | `File` | String | `"_Eval"` |
 | `Line` | Integer | `0` |
 | `Column` | Integer | `0` (best-effort placeholder for v1) |
+| `Stack` | String | The script call stack at the `Eval` call, in the usual `Error.Stack` format |
 
-These four are the only properties; an `Eval` `SyntaxError` has no `What`,
-`Extra` or `Stack`, so reading `e.What` throws a `PropertyError`. Check with
-`e.HasProp("What")` in a handler that also sees other errors.
+The object is built through the engine's own runtime-error constructor
+(`Line::CreateRuntimeException` with the `SyntaxError` prototype), so `What`,
+`Extra` and `Stack` are filled exactly as they are for a `TypeError` or
+`ValueError` thrown by a built-in function; only `File`, `Line` and `Column`
+are then set to the values above. A generic `catch Error as e` handler can
+read all of them without guarding. Before 2026-10-09 the object had only the
+first four, so `e.What` threw a `PropertyError` (§23).
 
 Scripts can also throw their own:
 
@@ -512,7 +520,7 @@ bin\AutoHotkey64Console.exe /Headless tests\crashlog_check.ahk C:\temp\se.log "[
 
 | Test | Covers |
 |---|---|
-| `tests/test_eval.ahk` | `Eval` BIF: A–H sections (presence, SyntaxError class, basic expressions, scope read/write, alpha.29 passthrough, SyntaxError column, reentrancy). Uses `#EnableEval`. |
+| `tests/test_eval.ahk` | `Eval` BIF: A–I sections (presence, SyntaxError class, basic expressions, scope read/write, alpha.29 passthrough, SyntaxError column, reentrancy, SyntaxError `What`/`Extra`/`Stack` with unchanged `Check()` records). Uses `#EnableEval`. |
 | `tests/test_eval_gated.ahk` | `Eval` BIF disabled-message when no gate is set. |
 | `tests/test_crashlog_start_exit.ahk` | Clean run produces `[START]` + `[EXIT] reason=Normal`. |
 | `tests/test_crashlog_error.ahk` | Uncaught throw produces `[ERROR]` + `[EXIT] reason=Error`. |
@@ -1074,3 +1082,36 @@ Print("{} {} line {}: {}", d.Severity, d.Code, d.Line, d.Message)
 Before: the first record won, so the VarUnset warning that load prints before
 a missing `Goto` label or a `break` outside a loop came back as
 `Severity` "warning", `Code` 0. Test: `qa/tests/test_check_severity.ahk`.
+
+---
+
+## 23. Engine fixes of 2026-10-09
+
+### `Eval` `SyntaxError` carries `What`, `Extra` and `Stack` (roadmap Track C item 5)
+
+`ConsoleEval::Evaluate` (`source/console_eval.cpp`) used to build the
+`SyntaxError` by hand with only `Message`, `File`, `Line` and `Column`. It now
+takes the parser's `Message` and `Extra` and rebuilds the object through
+`Line::CreateRuntimeException` with the `SyntaxError` prototype, the path every
+built-in function's runtime error takes, so `Error.__New` fills `What`
+(`"Eval"`, the throwing built-in), `Extra` (the token or source fragment the
+parser reported) and `Stack` (the script call stack at the `Eval` call);
+`File` (`"_Eval"`), `Line` (0) and `Column` (0) are then set as before.
+
+```autohotkey
+#EnableEval
+try Eval("1 + + +")
+catch Error as e
+    Print("{} {}: {} near '{}'`n{}", Type(e), e.What, e.Message, e.Extra, e.Stack)
+; SyntaxError Eval: Missing operand. near '+'
+; C:\...\script.ahk (3) : [Eval] Eval("1 + + +")
+; C:\...\script.ahk (3) : [] Eval("1 + + +")
+; > Auto-execute
+```
+
+Before: `e.What`, `e.Extra` and `e.Stack` threw `PropertyError` (`This value
+of type "SyntaxError" has no property named "What".`), so a generic
+`catch Error as e` logger had to guard them with `HasProp`. Unchanged: the
+uncaught-error report of an `Eval` outside `try`, `Check()` records, and the
+REPL's `SyntaxError` line, which prints only the type and message. Test:
+`tests/test_eval.ahk` section I.

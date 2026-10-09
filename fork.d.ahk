@@ -82,8 +82,10 @@
  * @param {String} Expression A single expression of at most 16,384 characters.
  * Statements and control flow are not accepted.
  * @returns {Any|unset} The expression's value, or unset.
- * @throws {SyntaxError} The expression does not parse. The error's `File` is
- * "_Eval", and its `Line` and `Column` are 0.
+ * @throws {SyntaxError} The expression does not parse. The error's `What` is
+ * "Eval", its `Extra` is the token or fragment the parser reported, its
+ * `Stack` is the call stack at this call, its `File` is "_Eval", and its
+ * `Line` and `Column` are 0.
  * @throws {ValueError} The expression is longer than 16,384 characters.
  * @example
  * #EnableEval
@@ -264,15 +266,19 @@ _ScriptGetLines(Filename, LineNumber, Range := 0) => Array? | String
  * A parse failure. `Eval` throws this class when its expression does not
  * parse. Scripts can also throw it, as with any Error class.
  *
- * An instance thrown by `Eval` has only the own properties `Message`, `File`
- * ("_Eval"), `Line` (0) and `Column` (0). It has no `What`, `Extra` or `Stack`.
- * An instance built with `SyntaxError(Message, What?, Extra?)` has the usual
- * Error properties and no `Column`.
+ * An instance thrown by `Eval` has the usual Error properties, filled by the
+ * engine's runtime-error constructor: `Message` (the parser's diagnostic),
+ * `What` ("Eval"), `Extra` (the offending token or fragment the parser
+ * reported, or "") and `Stack` (the script call stack at the `Eval` call),
+ * plus `File` ("_Eval"), `Line` (0) and `Column` (0). A generic
+ * `catch Error as e` handler can read all of them. An instance built with
+ * `SyntaxError(Message, What?, Extra?)` has the usual Error properties and
+ * no `Column`.
  * @example
  * #EnableEval
  * try Eval("1 +* )")
  * catch SyntaxError as e
- *     Print("Eval parse error: {}", e.Message)
+ *     Print("Eval parse error: {} near {}", e.Message, e.Extra)
  * @since 2.1-alpha.29+Console
  */
 class SyntaxError extends Error {
