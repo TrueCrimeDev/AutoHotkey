@@ -530,6 +530,7 @@ bin\AutoHotkey64Console.exe /Headless tests\crashlog_check.ahk C:\temp\se.log "[
 | `qa/tests/test_json_class.ahk` | `JSON()` and the generic constructor paths are refused; `JSON.True`/`False`/`Null` are read-only (§22). |
 | `qa/tests/test_check_severity.ahk` | `Check()` reports the error record when warnings come first (§22). |
 | `tests/test_debugger_fatal.py` | Refused and dropped `/Debug` connections print the stderr notice and the script continues (§22). Exits 77 without starting an engine that lacks the notice text; the gate counts that as a skip, or as a failure under `CI=true`. |
+| `tests/test_debugger_property_data.py` | DBGp `property_get` over `/Debug=stdio`: 90000-, 100000- and 180000-byte ASCII values and a 20000-character emoji/CJK value arrive intact with `size` equal to the UTF-8 byte count, and `-m` limits never split a surrogate pair (§23). |
 | `tests/test_repl.sh` | `repl` subcommand end-to-end (bash under WSL; pipes stdin): values, cross-line state, error resilience, JSON mode, `ExitApp` passthrough, script-hosted session. Pass the engine as its argument. It writes `/Diag=json` and calls `wslpath`, so under Git Bash its JSON-mode and script-hosted checks fail for path reasons; the gate covers the REPL with `tests/test_console_repl.py`. |
 | `tests/manual_*.ahk` | Manual verification scripts (SEH, recursion, long-running for Ctrl+C). Not run automatically. |
 
@@ -1074,3 +1075,30 @@ Print("{} {} line {}: {}", d.Severity, d.Code, d.Line, d.Message)
 Before: the first record won, so the VarUnset warning that load prints before
 a missing `Goto` label or a `break` outside a loop came back as
 `Severity` "warning", `Code` 0. Test: `qa/tests/test_check_severity.ahk`.
+
+## 23. DBGp property data arrives intact (2026-10-09)
+
+`property_get` and `property_value` return long and non-BMP string values
+exactly, over sockets and `/Debug=stdio` alike. Two defects in
+`Debugger::WritePropertyData` (`source/Debugger.cpp`), both also in upstream
+alpha.33 and v2.0, are fixed:
+
+- The UTF-8 sizing loop tested each UTF-16 unit for a surrogate pair without
+  skipping the low surrogate, so a pair counted as 4 + 3 bytes: the `size`
+  attribute was wrong for any emoji or other non-BMP character (three emoji
+  reported `size="21"` for 12 bytes), and a `-m` limit that fell on a pair
+  cut it in half, which arrived as U+FFFD. The loop now steps past the low
+  surrogate it has counted, so `size` is the UTF-8 byte count and a limit
+  sends the longest prefix of whole characters that fits.
+- The UTF-8 scratch copy sat at the response buffer's tail only as far from
+  the write position as the buffer's doubling happened to leave, while
+  base64 encoding writes 4 bytes for every 3 it reads. When the buffer had
+  grown to just the reserved size the output overtook the input and the data
+  was corrupted from some offset on (a 90000-byte value from byte 32721, a
+  180000-byte one from 65925, while 100000 bytes arrived intact). The
+  reservation now includes the UTF-8 size, so the scratch copy lies beyond
+  the encoded data's end.
+
+Before: as described in each item. Test: `tests/test_debugger_property_data.py`,
+which drives `/Debug=stdio` with a breakpoint and checks each value's `size`
+and base64-decoded data against the same string built in Python.

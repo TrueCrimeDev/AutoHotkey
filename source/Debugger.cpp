@@ -1473,7 +1473,7 @@ int Debugger::WritePropertyData(LPCTSTR aData, size_t aDataSize, int aMaxEncoded
 			char_size = 1;
 		else if (wc <= 0x07FF)
 			char_size = 2;
-		else if (IS_SURROGATE_PAIR(wc, utf16_value[i+1]))
+		else if (i + 1 < total_utf16_size && IS_SURROGATE_PAIR(wc, utf16_value[i+1]))
 			char_size = 4;
 		else
 			char_size = 3;
@@ -1489,6 +1489,9 @@ int Debugger::WritePropertyData(LPCTSTR aData, size_t aDataSize, int aMaxEncoded
 				utf8_size = (int)(total_utf8_size - char_size);
 			}
 		}
+
+		if (char_size == 4)
+			++i; // Skip the low surrogate, which was counted above as part of this char.
 	}
 	if (utf8_size == -1) // Data was not limited by aMaxEncodedSize.
 		utf8_size = (int)total_utf8_size;
@@ -1496,16 +1499,19 @@ int Debugger::WritePropertyData(LPCTSTR aData, size_t aDataSize, int aMaxEncoded
 	// Calculate maximum length of base64-encoded data.
 	int space_needed = DEBUGGER_BASE64_ENCODED_SIZE(utf8_size);
 	
-	// Reserve enough space for the data's length, "> and encoded data.
-	if (err = mResponseBuf.ExpandIfNecessary(mResponseBuf.mDataUsed + space_needed + MAX_INTEGER_LENGTH + 2))
+	// Reserve enough space for the data's length, "> and encoded data, plus room beyond the
+	// encoded data for the UTF-8 data.  WriteEncodeBase64() writes forward from mDataUsed and
+	// produces 4 bytes for every 3 it reads, so the UTF-8 data must be placed entirely after
+	// the end of the encoded data or the encoder could overtake its own input.
+	if (err = mResponseBuf.ExpandIfNecessary(mResponseBuf.mDataUsed + space_needed + utf8_size + MAX_INTEGER_LENGTH + 2))
 		return err;
 	
 	// Complete the size attribute by writing the total size, in terms of UTF-8 bytes.
 	if (err = mResponseBuf.WriteF("%u\">", total_utf8_size))
 		return err;
 
-	// Convert to UTF-8, using mResponseBuf temporarily.
-	char *utf8_value = mResponseBuf.mData + mResponseBuf.mDataSize - space_needed;
+	// Convert to UTF-8, using the end of mResponseBuf temporarily.
+	char *utf8_value = mResponseBuf.mData + mResponseBuf.mDataSize - utf8_size;
 	utf8_size = WideCharToMultiByte(CP_UTF8, 0, utf16_value, utf16_size, utf8_value, utf8_size, NULL, NULL);
 	if (!utf8_size && utf16_size) // Conversion failed.
 		return DEBUGGER_E_INTERNAL_ERROR;
