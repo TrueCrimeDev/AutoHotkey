@@ -184,7 +184,7 @@ class ProblemMatcherTests(unittest.TestCase):
             captured = self.matcher.match(lines[0])
             self.assertIsNotNone(captured, lines[0])
             self.assertEqual(captured["severity"], "error")
-            self.assertEqual(captured["line"], "4")
+            self.assertEqual(captured["line"], "2")  # What=-1 attributes the error to Fn's call site
             self.assertNotIn("column", captured)
             self.assertEqual(decode(captured["message"]), 'boom "quoted" \\ slash')
             self.assertEqual(decode(captured["message"]), record["message"])
