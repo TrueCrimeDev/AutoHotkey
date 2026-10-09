@@ -3,6 +3,7 @@ import ctypes
 import json
 import os
 from pathlib import Path
+import re
 import struct
 import subprocess
 import sys
@@ -20,13 +21,45 @@ def expected_version():
     """RAW_AHK_VERSION and AHK_VERSION_N as pinned in source/ahkversion.h, so this
     suite follows the fork's version bump instead of hard-coding an alpha number."""
     text = (ROOT / "source/ahkversion.h").read_text(encoding="utf-8")
-    import re
     raw = re.search(r'#define RAW_AHK_VERSION "([^"]+)"', text).group(1)
     nums = re.search(r"#define AHK_VERSION_N (\d+),(\d+),(\d+),(\d+)", text).groups()
     return raw.split("+")[0], tuple(int(n) for n in nums)
 
 
 EXPECTED_VERSION, EXPECTED_VERSION_N = expected_version()
+
+# Every option spelling ParseCmdLineArgs (source/AutoHotkey.cpp) accepts, written with
+# the value syntax --help shows for it. Derived from the parser by hand: a spelling the
+# parser gains belongs here and in the help text. parser_option_literals() reads the
+# parser itself, so one that reaches the parser without help text still fails.
+HELP_SPELLINGS = (
+    "run", "check", "test", "repl", "mcp",
+    "--help", "help", "-h", "--h", "-help", "/help", "/?",
+    "--version", "/version", "--capabilities",
+    "/Headless", "--headless",
+    "/Diag[=text|json]", "--diag[=text|json]",
+    "/ErrorStdOut[=encoding]", "/ErrorStdOut:color", "nocolor",
+    "/Trace[=text|json]", "--trace[=text|json]",
+    "/Eval", "--eval",
+    "/Debug[=host[:port]|stdio]",
+    "/CrashLog=path", "--crashlog=path",
+    "/StdErrFile=path", "--stderrfile=path",
+    "/Coverage=path", "--coverage=path",
+    "/include file", "/CPnnn", "/force", "/restart", "/script", "--",
+    "/Check", "--check", "/Test", "--test", "/validate", "/iLib file",
+)
+
+
+def parser_option_literals():
+    """Every /switch and --option literal that ParseCmdLineArgs compares an argument
+    against, read from source/AutoHotkey.cpp, so an option added to the parser without
+    help text fails test_help_covers_every_parser_literal."""
+    text = (ROOT / "source/AutoHotkey.cpp").read_text(encoding="utf-8")
+    # The definition (signature, then "{" on its own line), not the prototype near the top.
+    definition = re.search(r"^ResultType ParseCmdLineArgs\(.*\)\n\{", text, re.M)
+    body = text[definition.start():]
+    body = body[:body.index("\n}\n")]
+    return sorted(set(re.findall(r'_tcsn?i?cmp\(param, _T\("([/-][^"]*)"\)', body)))
 
 
 class ConsoleCliTests(unittest.TestCase):
@@ -42,6 +75,20 @@ class ConsoleCliTests(unittest.TestCase):
         for word in ("Usage:", "check", "test", "repl", "mcp", "--version", "--capabilities"):
             self.assertIn(word, r.stdout)
         self.assertEqual(r.stderr, "")
+
+    def test_help_lists_every_parser_option(self):
+        r = self.run_cli("--help")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        missing = [spelling for spelling in HELP_SPELLINGS if spelling not in r.stdout]
+        self.assertEqual(missing, [], "--help omits option spellings the parser accepts")
+
+    def test_help_covers_every_parser_literal(self):
+        literals = parser_option_literals()
+        self.assertGreaterEqual(len(literals), 30, literals)
+        r = self.run_cli("--help")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        missing = [literal for literal in literals if literal not in r.stdout]
+        self.assertEqual(missing, [], "ParseCmdLineArgs accepts these but --help does not list them")
 
     def test_version_reports_build_identity(self):
         r = self.run_cli("--version")
