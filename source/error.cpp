@@ -1791,17 +1791,11 @@ ResultType Script::ShowError(Line* aLine, ResultType aErrorType, ExprTokenType *
 		if (file && *file && line_no)
 		{
 			// Locate the line by number and file index, then display that line instead
-			// of the caller supplied one since it's probably more relevant.
-			int file_index;
-			for (file_index = 0; file_index < Line::sSourceFileCount; ++file_index)
-				if (!_tcsicmp(file, Line::sSourceFile[file_index]))
-					break;
-			if (!aLine || aLine->mFileIndex != file_index || aLine->mLineNumber != line_no) // Keep aLine if it matches, in case of multiple Lines with the same number.
-			{
-				// Locate the line by number and file index, then display that line instead
-				// of the caller supplied one since it's probably more relevant.
-				aLine = GetLine(TokenToString(t), line_no, aLine);
-			}
+			// of the caller supplied one since it's probably more relevant.  GetLine keeps
+			// aLine when it already matches (in case of multiple Lines with the same number)
+			// and when the file or line is not loaded, so the throw site is the fallback.
+			// `t` must not be used here: it holds Message or Extra, or nothing at all.
+			aLine = GetLine(file, line_no, aLine);
 		}
 	}
 	else

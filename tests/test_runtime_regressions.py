@@ -246,6 +246,69 @@ Print(JSON.Stringify({{ok:valid.Ok, validDiagnostics:valid.Diagnostics.Length,
         self.assertEqual(record["sentinel"], 42)
         self.assertFalse(marker.exists())
 
+    def uncaught_report(self, source):
+        result = self.run_script(source)
+        self.assertEqual(result.returncode, 10, result.stderr)
+        return result.stderr.decode("utf-8", "replace")
+
+    def uncaught_diagnostic(self, source):
+        result = self.run_script(source, "/Diag=json")
+        self.assertEqual(result.returncode, 10, result.stderr)
+        lines = result.stderr.decode("utf-8", "replace").splitlines()
+        record = json.loads(next(line for line in lines if line.startswith("{")))
+        self.assertEqual(record["kind"], "diagnostic")
+        self.assertEqual(Path(record["file"]).name, "sample.ahk")
+        return record
+
+    def test_uncaught_plain_object_with_file_and_line_but_no_message_is_reported(self):
+        # Script::ShowError read an uninitialized token as the file name when the thrown
+        # object had own File and Line but neither Message nor Extra: the process died with
+        # 0xC0000409 and printed nothing.
+        source = 'x := 1\nthrow {File: "nonexistent.ahk", Line: 7}\n'
+        self.assertIn("sample.ahk (2) : ==> Unhandled exception.", self.uncaught_report(source))
+        record = self.uncaught_diagnostic(source)
+        self.assertEqual((record["message"], record["line"]), ("Unhandled exception.", 2))
+        self.assertEqual(record["source"], 'throw {File: "nonexistent.ahk", Line: 7}')
+        # A File and Line that name a loaded line are reported instead of the throw site.
+        source = 'x := 1\nthrow {File: A_LineFile, Line: 1}\n'
+        self.assertIn("sample.ahk (1) : ==> Unhandled exception.", self.uncaught_report(source))
+        self.assertEqual(self.uncaught_diagnostic(source)["line"], 1)
+
+    def test_uncaught_error_report_names_the_error_line_not_the_throw_line(self):
+        # The report passed Message or Extra to GetLine as the file name, so Error.File and
+        # Error.Line were never resolved and the throw site was always shown.
+        source = 'x := 1\ny := 2\ne := Error("made on 3")\nz := 3\nw := 4\nthrow e\n'
+        text = self.uncaught_report(source)
+        self.assertIn("sample.ahk (3) : ==> made on 3", text)
+        self.assertIn("sample.ahk (6) : [] throw(e)", text)  # The call stack keeps the throw site.
+        record = self.uncaught_diagnostic(source)
+        self.assertEqual((record["type"], record["line"]), ("Error", 3))
+        self.assertEqual(record["source"], 'e := Error("made on 3")')
+        source = 'x := 1\ny := 2\nz := 3\nthrow {File: A_ScriptFullPath, Line: 2, Message: "m"}\n'
+        self.assertIn("sample.ahk (2) : ==> m", self.uncaught_report(source))
+        record = self.uncaught_diagnostic(source)
+        self.assertEqual((record["message"], record["line"], record["source"]), ("m", 2, "y := 2"))
+
+    def test_uncaught_object_without_a_loaded_location_reports_the_throw_site(self):
+        cases = [
+            ('x := 1\nthrow {Message: "m", File: A_ScriptFullPath, Line: 999999}\n', "m", ""),
+            ('x := 1\nthrow {Line: 3}\n', "Unhandled exception.", ""),
+            ('x := 1\nthrow 42\n', "Unhandled exception.", "42"),
+            ('x := 1\nthrow "text"\n', "Unhandled exception.", "text"),
+        ]
+        for source, message, extra in cases:
+            with self.subTest(source=source):
+                self.assertIn(f"sample.ahk (2) : ==> {message}", self.uncaught_report(source))
+                record = self.uncaught_diagnostic(source)
+                self.assertEqual((record["message"], record["extra"], record["line"]),
+                                 (message, extra, 2))
+        # A dynamic File property is never invoked, so a getter that throws cannot interfere.
+        source = ('o := {Line: 2}\no.DefineProp("File", {Get: (*) => ThrowIt()})\n'
+                  'ThrowIt() {\n    throw Error("getter")\n}\nthrow o\n')
+        self.assertIn("sample.ahk (6) : ==> Unhandled exception.", self.uncaught_report(source))
+        record = self.uncaught_diagnostic(source)
+        self.assertEqual((record["message"], record["line"]), ("Unhandled exception.", 6))
+
 
 if __name__ == "__main__":
     unittest.main()
