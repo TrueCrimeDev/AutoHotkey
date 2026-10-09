@@ -122,6 +122,38 @@ test('full outline of the fixture', () => {
   ]);
 });
 
+// AHK keywords are case-insensitive: the engine accepts every spelling below.
+const KEYWORD_CASE = `Class Shape {
+    Area() => 1
+    Width => 2
+    Static Unit() => 3
+    static Count => 0
+    STATIC Upper() {
+        return 4
+    }
+}
+CLASS Loud extends Shape {
+    Ping() => "pong"
+}
+Classify(x) => x
+Static := 1
+`;
+
+test('class and static keywords are matched in any letter case', () => {
+  const found = parseSourceOutline(KEYWORD_CASE).map(s => `${s.kind} ${s.name} ${s.line}`);
+  assert.deepEqual(found, [
+    'class Shape 1',
+    'method Area 2',
+    'property Width 3',
+    'method Unit 4',
+    'property Count 5',
+    'method Upper 6',
+    'class Loud 10',
+    'method Ping 11',
+    'function Classify 13',
+  ]);
+});
+
 test('workspace_symbols carries the new kinds and the file path', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ahk-outline-'));
   try {

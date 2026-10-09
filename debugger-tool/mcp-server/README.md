@@ -124,7 +124,7 @@ AI: I'll help you debug. Let me set that breakpoint...
 | Tool | Description |
 |------|-------------|
 | `get_source_context` | Source lines around a `file:line` |
-| `source_outline` | Classes, functions, methods, properties, hotkeys and labels from one file. A line scan, one definition per line: parameter lists are read with balanced brackets and string literals (so parenthesized defaults such as `Fn(a := (1 + 2), b := Map(), c := "x)")` are found), bodies may be `{`, `=>` or an Allman `{` on the next line, and members directly inside a class body are `method` (`static` included) and `property` (`Prop => expr`, `Prop[params] => expr`, `Prop { ... }`). Call statements, comments and getter/setter bodies are not symbols |
+| `source_outline` | Classes, functions, methods, properties, hotkeys and labels from one file. A line scan, one definition per line: parameter lists are read with balanced brackets and string literals (so parenthesized defaults such as `Fn(a := (1 + 2), b := Map(), c := "x)")` are found), bodies may be `{`, `=>` or an Allman `{` on the next line, and members directly inside a class body are `method` (`static` included) and `property` (`Prop => expr`, `Prop[params] => expr`, `Prop { ... }`). Call statements, comments and getter/setter bodies are not symbols; `class` and `static` are matched in any letter case, as the engine reads them |
 | `ast_outline` | Tree-sitter outline with line ranges and byte spans; the real parse. Shells to the engine through `scripts/ast_outline.ahk` (`AHK_BIN` overrides the engine path) |
 | `workspace_symbols` | The `source_outline` scan over every `.ahk` and `.ah2` file under a root, each symbol carrying its `file`, with an optional case-insensitive name filter |
 

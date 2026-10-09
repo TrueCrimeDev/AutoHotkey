@@ -394,7 +394,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'source_outline',
-        description: 'Extract classes, functions, methods, properties, hotkeys, and labels from an AutoHotkey source file (line scan: one definition per line, fat-arrow bodies and parenthesized defaults included; ast_outline is the real parse)',
+        description: 'Extract classes, functions, methods, properties, hotkeys, and labels from an AutoHotkey source file (line scan: one definition per line; fat-arrow bodies, parenthesized defaults and any-case class/static keywords included; ast_outline is the real parse)',
         inputSchema: {
           type: 'object',
           properties: {

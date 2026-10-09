@@ -6,7 +6,8 @@
  * balanced parameter list (nested brackets and string literals included) and what
  * follows it: `{`, `=>`, or nothing when the next code line opens the body with `{`.
  * Brace depth is tracked so members directly inside a class body are reported as
- * methods and properties. ast_outline remains the real parse.
+ * methods and properties. Keywords (`class`, `static`, control flow) match in any
+ * letter case, as the engine reads them. ast_outline remains the real parse.
  */
 
 import * as fs from 'fs/promises';
@@ -148,13 +149,13 @@ function bodyMarker(tail: string): 'brace' | 'arrow' | 'next' | null {
 type Match = { kind: SymbolKind; name: string; needsBrace: boolean };
 
 function matchDefinition(line: string, inClassBody: boolean): Match | null {
-  const classMatch = /^class\s+([A-Za-z_]\w*)\b/.exec(line);
+  const classMatch = /^class\s+([A-Za-z_]\w*)\b/i.exec(line);
   if (classMatch)
     return { kind: 'class', name: classMatch[1], needsBrace: false };
 
   let rest = line;
   if (inClassBody) {
-    const staticMatch = /^static\s+(?=[A-Za-z_])/.exec(rest);
+    const staticMatch = /^static\s+(?=[A-Za-z_])/i.exec(rest);
     if (staticMatch)
       rest = rest.slice(staticMatch[0].length);
   }
