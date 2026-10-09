@@ -453,6 +453,9 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.
 - `qa/` is the subprocess regression suite; `tests/run_console_gate.py ENGINE`
   is the aggregate boundary. Use an explicit engine path from `BUILD.md`.
+  `AHK_QA_JUNIT=<path>` makes `qa/run.ahk` write JUnit XML (one testsuite per
+  file, one testcase per assertion), as `AHK_TEST_JUNIT` does for
+  `tests/Test.ahk` suites; `qa/README.md` gives the shape.
 - `WORKLOG.md` tracks verification results and outstanding language/docs work.
   Build and test locally when requested; remote publishing is a separate action.
 

@@ -63,6 +63,46 @@ first, so it may be missing. CI does this and merges the reports with
 This is the key difference from a single-process `#Include` runner, which
 cannot survive a test that fails to load.
 
+## JUnit XML
+
+Set `AHK_QA_JUNIT=<path>` and the runner also writes a JUnit XML report there,
+in the shape `tests/Test.ahk` writes under `AHK_TEST_JUNIT`, so one consumer (a
+CI reporter, the VS Code Test Explorer) reads both:
+
+```xml
+<testsuites name="qa" tests="862" failures="1" errors="0" skipped="0" time="5.625">
+  <testsuite name="test_json.ahk" tests="151" failures="1" errors="0" skipped="0" time="0.312">
+    <testcase name="parse: nested object" classname="test_json.ahk" />
+    <testcase name="parse: bad input" classname="test_json.ahk">
+      <failure message="expected: 1  actual: 2">C:\fork\qa\tests\test_json.ahk:42</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
+```
+
+- One `testsuite` per test file (`time` is the child's wall clock) and one
+  `testcase` per assertion, named by its label. The runner hands the variable
+  to every child, and `Assert.ahk` then prints `  PASS <label>` for each
+  passing assertion; a failing one always prints
+  `  FAIL <label> -- <detail>  (<file>:<line>)`, which becomes a `failure`
+  with the detail as its `message` and `file:line` as its text. A
+  `  SKIP <text>` line becomes a `skipped` testcase.
+- A crashed or timed-out file is one testcase with an `error` whose message is
+  the runner's reason and whose text is the child's output (capped at 64 KiB).
+- The counts match the stdout summary: `tests` minus `failures`, `errors` and
+  `skipped` is the passed count; `failures` plus `errors` is the failed count,
+  which is also the exit code; `errors` is the crashed count. A test that
+  prints its own summary line without `Assert.ahk` gets unnamed `pass #n` and
+  `fail #n` cases, so each suite's element counts still equal its summary.
+- The document is written whole to `<path>.<pid>.tmp` beside the report and
+  moved into place, so a reader never sees a partial file; a missing report
+  directory is created. When the report cannot be written the runner prints
+  `qa: JUnit report "<path>" not written: <reason>` and the exit code stays
+  the suite's own.
+
+CI sets it to `junit-qa.xml` and uploads that next to `tests/run.ahk`'s
+`junit.xml`.
+
 ## Add a test
 
 Create `qa/tests/test_<topic>.ahk`:
@@ -91,6 +131,9 @@ standalone (its exit code = its own failure count).
 | `Assert.throws(fn, label [, msgPart])` | `fn()` raises (msg contains `msgPart`) |
 | `Assert.noThrow(fn, label)` | `fn()` does not raise |
 
+A failed assertion prints `  FAIL <label> -- <detail>  (<file>:<line>)`, where
+the location is the test line that called it.
+
 ## Runner regression checks
 
 ```powershell
@@ -99,7 +142,10 @@ python tests/test_qa_runner.py bin/AutoHotkey64Console.exe
 
 These tests copy the runner into an isolated temporary suite and verify real
 process outcomes: success/failure, empty discovery, summary/exit agreement,
-headless child flags, timeout recovery, and descendant cleanup.
+headless child flags, timeout recovery, descendant cleanup, and the
+`AHK_QA_JUNIT` report (suite and case counts match the summary, failures carry
+the assertion message and location, no temp file is left behind, and an
+unwritable path leaves the exit code alone).
 
 ## Coverage
 

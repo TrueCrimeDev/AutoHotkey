@@ -6,39 +6,39 @@
 ; standalone `$? -eq 0` means the file is green even when run on its own.
 ;
 ; Depends on this fork's variadic Print() BIF for console output.
+;
+; Every failure prints "  FAIL <label> -- <detail>  (<file>:<line>)", naming
+; the test line that called the assertion. When AHK_QA_JUNIT is set (run.ahk
+; hands its environment to every child), each passing assertion also prints
+; "  PASS <label>", so the runner can name every testcase in its JUnit report.
 
 class Assert {
     static passed := 0
     static failed := 0
+    static report := EnvGet("AHK_QA_JUNIT") != ""
 
     ; Strict equality. Numbers and strings compare by value with ==.
     static eq(actual, expected, label) {
-        if (actual == expected) {
-            Assert.passed += 1
-            return
-        }
-        Assert.failed += 1
-        Print("  FAIL {} -- expected: {}  actual: {}", label, expected, actual)
+        if (actual == expected)
+            Assert.pass(label)
+        else
+            Assert.fail(label, Format("expected: {}  actual: {}", expected, actual))
     }
 
     ; The value must be truthy (non-zero, non-empty).
     static truthy(cond, label) {
-        if cond {
-            Assert.passed += 1
-            return
-        }
-        Assert.failed += 1
-        Print("  FAIL {} -- expected truthy, got falsy", label)
+        if cond
+            Assert.pass(label)
+        else
+            Assert.fail(label, "expected truthy, got falsy")
     }
 
     ; The value must be falsy.
     static falsy(cond, label) {
-        if !cond {
-            Assert.passed += 1
-            return
-        }
-        Assert.failed += 1
-        Print("  FAIL {} -- expected falsy, got truthy", label)
+        if !cond
+            Assert.pass(label)
+        else
+            Assert.fail(label, "expected falsy, got truthy")
     }
 
     ; fn must raise. Optionally assert the thrown Message contains `msgPart`.
@@ -46,16 +46,13 @@ class Assert {
         try {
             fn()
         } catch as e {
-            if (msgPart != "" && !InStr(e.Message, msgPart)) {
-                Assert.failed += 1
-                Print("  FAIL {} -- threw but message '{}' lacks '{}'", label, e.Message, msgPart)
-                return
-            }
-            Assert.passed += 1
+            if (msgPart != "" && !InStr(e.Message, msgPart))
+                Assert.fail(label, Format("threw but message '{}' lacks '{}'", e.Message, msgPart))
+            else
+                Assert.pass(label)
             return
         }
-        Assert.failed += 1
-        Print("  FAIL {} -- no exception raised", label)
+        Assert.fail(label, "no exception raised")
     }
 
     ; fn must NOT raise; its return value is otherwise ignored.
@@ -63,11 +60,24 @@ class Assert {
         try {
             fn()
         } catch as e {
-            Assert.failed += 1
-            Print("  FAIL {} -- unexpected exception: {}", label, e.Message)
+            Assert.fail(label, "unexpected exception: " e.Message)
             return
         }
+        Assert.pass(label)
+    }
+
+    static pass(label) {
         Assert.passed += 1
+        if Assert.report
+            Print("  PASS {}", label)
+    }
+
+    ; Counts one failure and prints its detail line. The location is two
+    ; frames up: the test line that called the assertion method.
+    static fail(label, detail) {
+        Assert.failed += 1
+        where := Error("", -2)
+        Print("  FAIL {} -- {}  ({}:{})", label, detail, where.File, where.Line)
     }
 
     static Summary() {
