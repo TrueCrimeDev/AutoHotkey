@@ -530,6 +530,7 @@ bin\AutoHotkey64Console.exe /Headless tests\crashlog_check.ahk C:\temp\se.log "[
 | `qa/tests/test_json_class.ahk` | `JSON()` and the generic constructor paths are refused; `JSON.True`/`False`/`Null` are read-only (§22). |
 | `qa/tests/test_check_severity.ahk` | `Check()` reports the error record when warnings come first (§22). |
 | `tests/test_debugger_fatal.py` | Refused and dropped `/Debug` connections print the stderr notice and the script continues (§22). Exits 77 without starting an engine that lacks the notice text; the gate counts that as a skip, or as a failure under `CI=true`. |
+| `tests/test_runtime_regressions.py` | Console runtime boundaries: debugger stream packets, an idle `/Debug=stdio` session, crash-log field truncation, oversized `Eval`, coverage of module functions, `Check()` child isolation, and long diagnostics (§23): a 300 KB message and a 100 KB Extra reach `/Diag=json` and the text report whole, a deep-stack record is complete, and `/StdErrFile` mirrors it. |
 | `tests/test_repl.sh` | `repl` subcommand end-to-end (bash under WSL; pipes stdin): values, cross-line state, error resilience, JSON mode, `ExitApp` passthrough, script-hosted session. Pass the engine as its argument. It writes `/Diag=json` and calls `wslpath`, so under Git Bash its JSON-mode and script-hosted checks fail for path reasons; the gate covers the REPL with `tests/test_console_repl.py`. |
 | `tests/manual_*.ahk` | Manual verification scripts (SEH, recursion, long-running for Ctrl+C). Not run automatically. |
 
@@ -1074,3 +1075,33 @@ Print("{} {} line {}: {}", d.Severity, d.Code, d.Line, d.Message)
 Before: the first record won, so the VarUnset warning that load prints before
 a missing `Goto` label or a `break` outside a loop came back as
 `Severity` "warning", `Code` 0. Test: `qa/tests/test_check_severity.ahk`.
+
+---
+
+## 23. Engine fixes of 2026-10-09
+
+### Diagnostic reports are never cut (`6690ba29`)
+
+A `/Diag=json` record and the plain-text error report grow with their
+content. `message` and `extra` carry the thrown `Message` and `Extra` whole,
+however long, and the record stays one valid JSON line in the schema-2 field
+order; the text report keeps its `Specifically:`, source-context and
+`Call stack:` lines after a long message, and `/StdErrFile` mirrors the whole
+record. `stack` is unchanged: it follows `Error.Stack`'s 2048-character cap
+and ends in `... N more` when frames are dropped.
+
+```autohotkey
+throw Error(StrReplace(Format("{:030720}", 0), "0", "0123456789"))  ; a 307200-character message
+```
+
+Under `/Diag=json` that is one 307782-byte line whose `message` parses back
+to the full 307200 characters; without it, the report's header line carries
+the whole message and `Specifically:`, the source lines and the call stack
+follow.
+
+Before: every escaped JSON field was cut at 16384 characters and the text
+report at 87298, silently, so a long message came back shortened and the
+text report lost everything after it. The records were also assembled in
+stack buffers of up to 175 KB on every error path; they are heap strings
+now. Test: `tests/test_runtime_regressions.py`
+(`test_diag_json_record_keeps_a_300kb_message` and the four cases after it).
