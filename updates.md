@@ -988,8 +988,10 @@ stderr line that parses as a diagnostic:
 | `test` | as `run` | `exitCode` 0 pass, 10 uncaught error, 12 parse error, 14 for `ExitApp(14)`, a persistent script or an execution failure (§7) |
 
 `diagnostics[]` items are the engine's schema-2 diagnostic objects (`type`,
-`message`, `file`, `line`, `column`, `stack`, …). A persistent script under
-`run` is reported with `timedOut: true` rather than hanging the server.
+`message`, `file`, `line`, `column`, `stack`, …); for an uncaught error,
+`file`, `line` and `source` follow `Error.File` and `Error.Line` when they
+name a loaded line, and the throw site otherwise (§23). A persistent script
+under `run` is reported with `timedOut: true` rather than hanging the server.
 
 ---
 
@@ -1074,3 +1076,25 @@ Print("{} {} line {}: {}", d.Severity, d.Code, d.Line, d.Message)
 Before: the first record won, so the VarUnset warning that load prints before
 a missing `Goto` label or a `break` outside a loop came back as
 `Severity` "warning", `Code` 0. Test: `qa/tests/test_check_severity.ahk`.
+
+---
+
+## 23. Engine fixes of 2026-10-09
+
+### Uncaught-error report resolves `Error.File` and `Error.Line`
+
+The uncaught-error report (the stderr text, the `/Diag=json` record and the
+GUI dialog) shows the line the thrown object names when its own `File` and
+`Line` resolve to a loaded line, and the throw site otherwise. `e :=
+Error("m")` on line 3, thrown on line 6, is reported at line 3 (`line` 3,
+`source` the `Error(...)` line; the call stack still ends at line 6). A
+`File` that is not loaded, a `Line` with no code, a missing `File`, a dynamic
+`File` property (it is never invoked) and a non-object value all report the
+throw line. The exit code is 10 in every case.
+
+Before: `Script::ShowError` (`source/error.cpp`) handed `GetLine` the last
+token it had read, `Extra` or else `Message`, as the file name, so no source
+file ever matched and the throw site always won; with neither property the
+token was uninitialized, and `throw {File: A_LineFile, Line: 1}` from any
+other line died with 0xC0000409 and printed nothing. Test:
+`tests/test_runtime_regressions.py` (`test_uncaught_*`).
