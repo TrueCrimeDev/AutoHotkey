@@ -123,8 +123,10 @@ AI: I'll help you debug. Let me set that breakpoint...
 
 | Tool | Description |
 |------|-------------|
-| `source_outline` | Extract classes, functions, hotkeys, and labels from a file |
-| `workspace_symbols` | Build a symbol index across workspace `.ahk` files |
+| `get_source_context` | Source lines around a `file:line` |
+| `source_outline` | Classes, functions, methods, properties, hotkeys and labels from one file. A line scan, one definition per line: parameter lists are read with balanced brackets and string literals (so parenthesized defaults such as `Fn(a := (1 + 2), b := Map(), c := "x)")` are found), bodies may be `{`, `=>` or an Allman `{` on the next line, and members directly inside a class body are `method` (`static` included) and `property` (`Prop => expr`, `Prop[params] => expr`, `Prop { ... }`). Call statements, comments and getter/setter bodies are not symbols; `class` and `static` are matched in any letter case, as the engine reads them |
+| `ast_outline` | Tree-sitter outline with line ranges and byte spans; the real parse. Shells to the engine through `scripts/ast_outline.ahk` (`AHK_BIN` overrides the engine path) |
+| `workspace_symbols` | The `source_outline` scan over every `.ahk` and `.ah2` file under a root, each symbol carrying its `file`, with an optional case-insensitive name filter |
 
 ## Available MCP Resources
 
@@ -308,14 +310,25 @@ AutoHotkey: Sets breakpoint, returns ID
 MCP Response: "Breakpoint set: ID=1, a.ahk:10"
 ```
 
-## Future Enhancements
+## Status
 
-- [ ] Multi-session support (multiple AutoHotkey instances)
-- [ ] Watch expressions
-- [ ] Exception breakpoints
-- [ ] Performance profiling
-- [ ] Log points (non-breaking breakpoints)
-- [ ] Hot reload (modify code during debug)
+This server is the legacy DBGp bridge. The engine's native `mcp` verb,
+`AutoHotkey64Console.exe mcp`, is the primary MCP surface: the engine serves MCP
+over stdin/stdout itself, with no Node process and no network listener. Its
+`check`, `run` and `test` tools spawn the engine on a file and return the exit
+code, captured streams and JSON diagnostics (`updates.md` §21 in the repository
+root; `tests/test_mcp_protocol.py` pins the envelope), and on the current engine
+`tools/list` also reports `ast_outline`, `get_source_context`, `server_status`,
+`source_outline` and `workspace_symbols`. The repository's `.mcp.json` registers
+that server for Claude Code as `ahk-mcp`.
+
+Until roadmap A1 (DBGp completion: `eval`, conditional breakpoints, logpoints,
+data breakpoints) lands in the engine's debugger, the debugger side lives only
+here: `launch_script`, which supervises the engine over `/Debug=stdio`;
+`breakpoint_set`, `breakpoint_remove` and `breakpoint_list`; the `debug_*` run
+and step commands; `stack_trace`, `variables_get`, `evaluate` and the `watch_*`
+tools; and the `capture_error`, `analyze_error`, `apply_fix` loop. The engine
+has no DBGp `eval` command yet, so `evaluate` answers DBGp error 4 until A1.
 
 ## License
 

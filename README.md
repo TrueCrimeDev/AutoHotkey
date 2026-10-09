@@ -556,22 +556,34 @@ parse failure there.
 
 ## AI-assisted debugging
 
-The fork preserves AutoHotkey's DBGp debugger and pairs it with an MCP server
-([`debugger-tool/mcp-server/`](debugger-tool/mcp-server/)) that exposes it to LLM tools such as
-Claude Code and Cursor. Combined with the structured errors above, this closes a tight loop:
+`AutoHotkey64Console.exe mcp` is the primary MCP surface. The engine serves MCP over
+stdin/stdout itself, with no Node bridge and no network listener. Its `check`, `run` and
+`test` tools spawn the engine on a file and return the exit code, captured streams and JSON
+diagnostics ([`updates.md` §21](updates.md)); on the current build `tools/list` also reports
+`ast_outline`, `get_source_context`, `server_status`, `source_outline` and
+`workspace_symbols`. The checked-in [`.mcp.json`](.mcp.json) registers it for Claude Code as
+`ahk-mcp`, and `tests/test_mcp_protocol.py` pins the protocol envelope.
+
+The fork also preserves AutoHotkey's DBGp debugger. The legacy DBGp bridge
+([`debugger-tool/mcp-server/`](debugger-tool/mcp-server/)) is a separate Node MCP server that
+drives it for LLM tools such as Claude Code and Cursor; until roadmap A1 completes the
+debugger protocol, breakpoints, stepping, stack and variable inspection and error capture
+live only there. Combined with the structured errors above, this closes a tight loop:
 
 ```
 run script → capture structured error → inspect source / variables → apply fix → re-run
 ```
 
-The MCP server speaks DBGp on port 9000 and surfaces ~22 tools:
+The bridge speaks DBGp on port 9000, or supervises the engine over `/Debug=stdio` with
+`launch_script`, and surfaces 28 tools:
 
 | Group | Tools |
 |---|---|
-| Execution | `debug_run`, `debug_step_into` / `_over` / `_out`, `debug_stop`, `debug_status` |
+| Supervision | `launch_script`, `terminate_script`, `get_script_output` |
+| Execution | `debug_run`, `debug_step_into` / `_over` / `_out`, `debug_stop`, `debug_status`, `debug_command` |
 | Breakpoints | `breakpoint_set`, `breakpoint_remove`, `breakpoint_list` |
 | Inspection | `variables_get`, `evaluate`, `stack_trace`, `watch_add` / `_remove` / `_list` |
-| Source intel | `get_source_context`, `source_outline`, `workspace_symbols` |
+| Source intel | `get_source_context`, `source_outline`, `ast_outline`, `workspace_symbols` |
 | Error loop | `capture_error`, `analyze_error`, `apply_fix` |
 | Queue | `list_errors`, `clear_errors` |
 
@@ -599,7 +611,7 @@ For Claude Code, the [ClautoHotkey](https://github.com/TrueCrimeDev/ClautoHotkey
 | Path | Purpose |
 |---|---|
 | [`source/`](source/) | AutoHotkey engine source (C++) — fork changes live here |
-| [`debugger-tool/mcp-server/`](debugger-tool/mcp-server/) | MCP server bridging LLM tools to AutoHotkey's DBGp debugger |
+| [`debugger-tool/mcp-server/`](debugger-tool/mcp-server/) | Legacy DBGp bridge: a Node MCP server for breakpoints, stepping and error capture |
 | [`debugger-tool/ahk-error-agent/`](debugger-tool/ahk-error-agent/) | Headless error-capture and fix-automation agent |
 | [`examples/`](examples/) | Runnable feature demos — `alpha21/`, `alpha22/`, plus structs, GUIs, and ANSI showcases |
 | `examples/Alpha22_Example.ahk` … `examples/Alpha30_Example.ahk` | Per-version language showcases |

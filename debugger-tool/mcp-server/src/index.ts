@@ -17,6 +17,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { DBGpClient, ErrorInfo } from './dbgp-client.js';
 import { ScriptLauncher } from './launcher.js';
+import { getSourceOutline, getWorkspaceSymbols } from './source-outline.js';
 import { z } from 'zod';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -160,105 +161,6 @@ const LaunchScriptSchema = z.object({
 const GetScriptOutputSchema = z.object({
   clear: z.boolean().optional().describe('Clear buffered output after reading (default: false)'),
 });
-
-type SourceSymbol = {
-  kind: 'function' | 'class' | 'hotkey' | 'label';
-  name: string;
-  line: number;
-  text: string;
-  file?: string;
-};
-
-const AHK_EXTENSIONS = new Set(['.ahk', '.ah2']);
-
-async function getSourceOutline(file: string): Promise<SourceSymbol[]> {
-  const content = await fs.readFile(file, 'utf-8');
-  const lines = content.split(/\r?\n/);
-  const symbols: SourceSymbol[] = [];
-  const controlFlow = new Set(['if', 'while', 'for', 'loop', 'switch', 'catch', 'try', 'else']);
-
-  lines.forEach((rawLine, idx) => {
-    const lineNo = idx + 1;
-    const line = rawLine.trim();
-    if (!line || line.startsWith(';'))
-      return;
-
-    const classMatch = line.match(/^class\s+([A-Za-z_]\w*)\b/);
-    if (classMatch) {
-      symbols.push({ kind: 'class', name: classMatch[1], line: lineNo, text: rawLine });
-      return;
-    }
-
-    const fnMatch = line.match(/^([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(\{|=>|$)/);
-    if (fnMatch && !controlFlow.has(fnMatch[1].toLowerCase())) {
-      symbols.push({ kind: 'function', name: fnMatch[1], line: lineNo, text: rawLine });
-      return;
-    }
-
-    const hotkeyMatch = line.match(/^([^;\s][^:]*?)::/);
-    if (hotkeyMatch) {
-      symbols.push({ kind: 'hotkey', name: hotkeyMatch[1].trim(), line: lineNo, text: rawLine });
-      return;
-    }
-
-    const labelMatch = line.match(/^([A-Za-z_]\w*)\s*:\s*(?:;.*)?$/);
-    if (labelMatch && labelMatch[1].toLowerCase() !== 'case' && labelMatch[1].toLowerCase() !== 'default') {
-      symbols.push({ kind: 'label', name: labelMatch[1], line: lineNo, text: rawLine });
-    }
-  });
-
-  return symbols;
-}
-
-async function listAhkFiles(root: string, maxFiles: number): Promise<string[]> {
-  const files: string[] = [];
-  const skipDirs = new Set(['.git', 'node_modules', 'build', 'dist', 'bin_debug', 'build_mingw']);
-
-  const walk = async (dir: string): Promise<void> => {
-    if (files.length >= maxFiles)
-      return;
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (files.length >= maxFiles)
-        return;
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (!skipDirs.has(entry.name))
-          await walk(fullPath);
-        continue;
-      }
-      if (entry.isFile() && AHK_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
-        files.push(fullPath);
-    }
-  };
-
-  await walk(root);
-  return files;
-}
-
-async function getWorkspaceSymbols(root: string, query = '', maxResults = 200): Promise<SourceSymbol[]> {
-  const files = await listAhkFiles(root, Math.max(maxResults * 2, 500));
-  const needle = query.trim().toLowerCase();
-  const symbols: SourceSymbol[] = [];
-
-  for (const file of files) {
-    if (symbols.length >= maxResults)
-      break;
-    const outline = await getSourceOutline(file);
-    for (const symbol of outline) {
-      if (symbols.length >= maxResults)
-        break;
-      if (!needle || symbol.name.toLowerCase().includes(needle)) {
-        symbols.push({
-          ...symbol,
-          file,
-        });
-      }
-    }
-  }
-
-  return symbols;
-}
 
 // === Watch Helpers ===
 
@@ -492,7 +394,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'source_outline',
-        description: 'Extract classes, functions, hotkeys, and labels from an AutoHotkey source file',
+        description: 'Extract classes, functions, methods, properties, hotkeys, and labels from an AutoHotkey source file (line scan: one definition per line; fat-arrow bodies, parenthesized defaults and any-case class/static keywords included; ast_outline is the real parse)',
         inputSchema: {
           type: 'object',
           properties: {
