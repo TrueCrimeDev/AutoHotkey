@@ -223,6 +223,31 @@ Print(Eval("Eval('6*7')"))
         self.assertEqual(records["sample.ahk"], ["DA:3,1"])
         self.assertEqual(records["helper.ahk"], ["DA:3,1", "DA:6,0"])
 
+    MODULE_REF_PRELUDE = '#Module Mod\nglobal X := 1\n#Module __Main\n#Import Mod\n'
+
+    def test_module_var_ref_held_at_exit_exits_zero(self):
+        # ScriptModule::__Ref must AddRef the VarRef it returns: without it the
+        # held reference and the module variable double-freed it in cleanup
+        # (exit 0xC0000374 after "done" had been printed).
+        source = self.MODULE_REF_PRELUDE + 'ref := &Mod.X\n%ref% := %ref% + 1\nPrint(Mod.X)\nPrint("done")\n'
+        result = self.run_script(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [b"2", b"done"])
+
+    def test_module_var_ref_byref_and_release_keep_the_variable(self):
+        # Same defect through a ByRef parameter: the callee's write landed, then
+        # the Release of the __Ref result freed the VarRef the variable aliased,
+        # so the next read of Mod.X was an UnsetError and the exit code was
+        # still 0xC0000374 (the error exit's cleanup double-freed it).
+        source = (self.MODULE_REF_PRELUDE
+                  + 'Bump(&v) {\n    v += 10\n}\n'
+                  + 'Bump(&Mod.X)\nPrint(Mod.X)\n'
+                  + 'ref := &Mod.X\nref := ""\nPrint(Mod.X)\n'
+                  + 'Mod.X := 3\nPrint(Mod.X)\nPrint("done")\n')
+        result = self.run_script(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [b"11", b"11", b"3", b"done"])
+
     def test_check_shared_child_preserves_results_and_never_runs_the_body(self):
         marker = self.root / "executed.txt"
         source = f'''sentinel := 42
