@@ -37,23 +37,32 @@
             "preLaunchTask": "build-debug (msbuild .sln, GUI only, x64 -> bin_debug)"
         },
         {
-            // Debugs the active .ahk script over DBGp with the fork's console
-            // engine (the bin\*.exe engines are gitignored: build one first, see
-            // BUILD.md).
+            // Debugs the active .ahk script over DBGp with the fork engine (the
+            // bin\*.exe engines are gitignored: build one first, see BUILD.md).
             // Requires the zero-plusplus.vscode-autohotkey-debug extension, which
             // provides the "autohotkey" debug type; the thqby AutoHotkey2 LSP does
             // not include a debugger and asks for one. Without it VS Code reports
             // that the debug type is not supported. .vscode/extensions.json
             // recommends it, so VS Code offers to install it (see
             // docs/VSCODE_SETUP.md).
-            // Console window (not verified here; the extension is not installed):
-            // if the adapter starts the runtime as an ordinary child of VS Code,
-            // which has no console, this console-subsystem engine opens its own
-            // console window on each launch. To avoid that, set "runtime" to
-            // ${workspaceFolder}/bin/AutoHotkey64.exe, the GUI build that
-            // AutoHotkey2.InterpreterPath uses. Both bin\ exes now come from the
-            // same CI build (f14d7427, run 37807040408), so the GUI one has the
-            // same features (inspect, processPipe, coverage).
+            // Attributes checked 2026-10-09 against that extension's package.json
+            // (1.11.1, contributes.debuggers[0].configurationAttributes.launch):
+            // "runtime" string; "program" string (default ${file}); "args" string
+            // array; "useDebugDirective" boolean or object; "variableCategories"
+            // "recommend" or an array of {label, source Local|Static|Global,
+            // noduplicate, hidden, matchers: [{className} | {builtin} | {pattern,
+            // ignorecase, type, static, method}]}. Defaults the adapter fills in:
+            // "runtimeArgs" ["/ErrorStdOut"] (accepted by the fork, where it only
+            // selects the stderr encoding), "port" 9002, "hostname" "localhost",
+            // "stopOnEntry" false, "useAutoJumpToError" false, "useOutputDebug"
+            // true, "useAnnounce" true, "maxChildren" 10000.
+            // Runtime: the adapter starts it with Node's child_process.spawn
+            // (stdout and stderr piped into the Debug Console, no windowsHide), so
+            // the console-subsystem bin\AutoHotkey64Console.exe would open its own
+            // console window on every launch. The GUI build is used instead; its
+            // Print output and stderr still arrive through the pipes. Both bin\
+            // exes come from the same CI build (f14d7427, run 37807040408), so
+            // the GUI one has the same features (inspect, processPipe, coverage).
             // No prompt on a missing or lost debugger: with either exe, if
             // nothing listens on the port, or the adapter goes away, the script
             // runs on without the debugger and only stderr says so ("Debugger
@@ -66,44 +75,44 @@
             // debug toolset, hidden by default) starts at 9000 and moves to 9001+
             // when busy, so the two normally coexist. The project's ahk-mcp server
             // (.mcp.json, the engine's native mcp verb) has no DBGp tool.
-            "name": "Debug AHK script (DBGp, fork console engine)",
+            "name": "Debug AHK script (DBGp, fork engine)",
             "type": "autohotkey",
             "request": "launch",
             "program": "${file}",
-            "runtime": "${workspaceFolder}/bin/AutoHotkey64Console.exe",
+            "runtime": "${workspaceFolder}/bin/AutoHotkey64.exe",
             "useDebugDirective": true,
             "args": [],
             "variableCategories": [
                 {
                     "label": "Local",
-                    "source": "Local",
+                    "source": "Local"
                 },
                 {
                     "label": "Static",
-                    "source": "Static",
+                    "source": "Static"
                 },
                 {
                     "label": "Global",
                     "source": "Global",
-                    "noduplicate": true,
+                    "noduplicate": true
                 },
                 {
                     "label": "Global Classes",
                     "source": "Global",
                     "matchers": [
                         {
-                            "className": "Class",
-                        },
-                    ],
+                            "className": "Class"
+                        }
+                    ]
                 },
                 {
                     "label": "Global Functions",
                     "source": "Global",
                     "matchers": [
                         {
-                            "className": "Func",
-                        },
-                    ],
+                            "className": "Func"
+                        }
+                    ]
                 },
                 {
                     "label": "Built-in Global",
@@ -111,9 +120,9 @@
                     "matchers": [
                         {
                             "builtin": true
-                        },
-                    ],
-                },
+                        }
+                    ]
+                }
             ]
         }
     ]

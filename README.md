@@ -617,7 +617,7 @@ For Claude Code, the [ClautoHotkey](https://github.com/TrueCrimeDev/ClautoHotkey
 | `examples/Alpha22_Example.ahk` … `examples/Alpha30_Example.ahk` | Per-version language showcases |
 | `tests/` | `run.ahk` + `*.test.ahk` single-process suite, `Test.ahk` framework, Python console-gate suites |
 | [`qa/`](qa/) | Subprocess-per-test interpreter regression suite |
-| `tools/` | `check_all.py` (parse every `.ahk`), `lcov_summary.py` (merge coverage, badge JSON) |
+| `tools/` | `check_all.py` (parse every `.ahk`), `lcov_summary.py` (merge coverage, badge JSON), `vscode/` (AutoHotkey2 LSP syntaxes generator and a `tasks.json` template with the `/Diag=json` problem matcher; see [`docs/VSCODE_SETUP.md`](docs/VSCODE_SETUP.md)) |
 | [`BUILD.md`](BUILD.md) | Build instructions |
 | [`updates.md`](updates.md) | Complete fork reference |
 
@@ -634,6 +634,7 @@ For Claude Code, the [ClautoHotkey](https://github.com/TrueCrimeDev/ClautoHotkey
 | [`CLAUDE.md`](CLAUDE.md) | Project orientation for AI agents |
 | [`V3_MILESTONE_STATUS.md`](docs/V3_MILESTONE_STATUS.md) | Milestone implementation status |
 | [`docs/TREE_SITTER.md`](docs/TREE_SITTER.md) | Vendored tree-sitter AHK grammar DLL: exports, DllCall usage |
+| [`docs/VSCODE_SETUP.md`](docs/VSCODE_SETUP.md) | VS Code: tasks, launch configurations, the `/Diag=json` problem matcher, and workspace-wide fork declarations for the AutoHotkey2 LSP (`AutoHotkey2.Syntaxes`) |
 | `debugger-tool/mcp-server/README.md` | MCP tool reference and setup |
 
 ---
