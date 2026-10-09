@@ -36,7 +36,7 @@ def main():
         *[[sys.executable, str(ROOT / "tests" / suite), str(engine)] for suite in (
             "test_qa_runner.py", "test_console_cli.py", "test_console_repl.py", "test_mcp_protocol.py",
             "test_console_trace.py", "test_console_coverage.py", "test_runtime_regressions.py",
-            "test_process_mcp_regressions.py", "test_debugger_fatal.py"
+            "test_process_mcp_regressions.py", "test_debugger_fatal.py", "test_vscode_matcher.py"
         )],
         [str(engine), "test", "/Headless", str(ROOT / "tests/run.ahk")],
     ]
