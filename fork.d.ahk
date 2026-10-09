@@ -700,7 +700,7 @@ class ProcessPipe extends Object {
 ; variables from a .d.ahk file. The fork's directives (#EnableEval, #CrashLog)
 ; and command-line switches (/Eval, /CrashLog=, /StdErrFile=, /Coverage=,
 ; /Trace=json, /Diag=json, /Headless, /Check) are covered in updates.md.
-; `AutoHotkey64Console.exe --help` lists the switches and commands (/Check as
-; the `check` command); `--capabilities` lists only commands, features,
-; diagnostic formats and exit codes.
+; `AutoHotkey64Console.exe --help` lists every switch and command spelling the
+; parser accepts, with the -- aliases and /Debug; `--capabilities` lists only
+; commands, features, diagnostic formats and exit codes.
 ;
