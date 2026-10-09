@@ -27,38 +27,41 @@ FResult ConsoleEval::Evaluate(LPCTSTR aExpression, UserFunc *aScope, ResultToken
 	Line *scratch = nullptr;
 	if (g_script.ParseExprToPostfix(buf.get(), caller, scratch) != OK)
 	{
-		// Convert any parser exception into a SyntaxError so `catch SyntaxError` works.
-		// The parser raises a generic Error via ScriptError/LineError; we replace it with
-		// a SyntaxError that preserves the Message and adds a Column property.
+		// The parser reports failure through ScriptError, which (inside try, or with OnError)
+		// leaves a generic Error in g->ThrownToken.  Rebuild it as a SyntaxError through
+		// CreateRuntimeException so that What, Extra and Stack are filled the same way as
+		// for every other runtime error, then apply the Eval-specific File, Line and Column.
 
-		// 1) Extract message from any pre-existing thrown exception.
-		LPCTSTR msg_src = _T("Invalid expression");
-		LPTSTR msg_copy = nullptr;
-		if (g->ThrownToken && g->ThrownToken->symbol == SYM_OBJECT)
+		// 1) Take the Message and Extra of any pre-existing thrown exception.  Holding a
+		// reference keeps those strings valid after the token is freed, until the new
+		// exception has copied them.
+		LPCTSTR msg = _T("Invalid expression");
+		LPCTSTR extra = nullptr;
+		Object *prev = nullptr;
+		if (g->ThrownToken)
 		{
-			auto *prev = dynamic_cast<Object*>(g->ThrownToken->object);
+			if (g->ThrownToken->symbol == SYM_OBJECT)
+				prev = dynamic_cast<Object*>(g->ThrownToken->object);
 			if (prev)
 			{
+				prev->AddRef();
 				LPTSTR prev_msg = prev->GetOwnPropString(_T("Message"));
 				if (prev_msg && *prev_msg)
-				{
-					// Copy into a local stack buffer before freeing the exception.
-					size_t mlen = _tcslen(prev_msg);
-					msg_copy = (LPTSTR)_alloca((mlen + 1) * sizeof(TCHAR));
-					_tcscpy(msg_copy, prev_msg);
-					msg_src = msg_copy;
-				}
+					msg = prev_msg;
+				extra = prev->GetOwnPropString(_T("Extra"));
 			}
+			// 2) Free the old exception (clears g->ThrownToken).
+			g_script.FreeExceptionToken(g->ThrownToken);
 		}
 
-		// 2) Free the old exception (clears g->ThrownToken).
-		if (g->ThrownToken)
-			g_script.FreeExceptionToken(g->ThrownToken);
-
-		// 3) Build a new SyntaxError object with Message, File, Line, Column.
-		auto *err = Object::Create();
-		err->SetBase(ErrorPrototype::Syntax);
-		err->SetOwnProp(_T("Message"), const_cast<LPTSTR>(msg_src));
+		// 3) Build the SyntaxError the way the engine builds any runtime error: Error.__New
+		// sets Message, What (the throwing BIF, i.e. Eval), Extra, File, Line and Stack.
+		Line *line = g_script.mCurrLine;
+		auto *err = dynamic_cast<Object*>(line->CreateRuntimeException(msg, extra, ErrorPrototype::Syntax));
+		if (prev)
+			prev->Release();
+		if (!err)
+			return g->ThrownToken ? FR_FAIL : FR_E_OUTOFMEM; // __New threw, or Object::Create failed.
 		err->SetOwnProp(_T("File"),    _T("_Eval"));
 		err->SetOwnProp(_T("Line"),    (__int64)0);
 		err->SetOwnProp(_T("Column"),  (__int64)0);
@@ -66,9 +69,9 @@ FResult ConsoleEval::Evaluate(LPCTSTR aExpression, UserFunc *aScope, ResultToken
 		// 4) Throw it (mirrors BIF_Throw pattern).
 		ResultToken *token = new ResultToken;
 		token->symbol = SYM_OBJECT;
-		token->object = err; // Object::Create() returns refcount=1; token owns it.
+		token->object = err; // CreateRuntimeException returns refcount=1; token owns it.
 		token->mem_to_free = nullptr;
-		g_script.mCurrLine->SetThrownToken(*g, token, FAIL);
+		line->SetThrownToken(*g, token, FAIL);
 		return FR_FAIL;
 	}
 

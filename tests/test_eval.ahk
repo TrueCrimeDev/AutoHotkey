@@ -62,6 +62,44 @@ Assert(threw,                              "G.1 bad input throws SyntaxError")
 Assert(caught.Message != "",               "G.2 message is non-empty")
 Assert(caught.HasProp("Column"),           "G.3 has Column property")
 
+; --- Section I: an Eval SyntaxError carries the full Error surface ---
+; What, Extra and Stack come from the engine's own Error construction, so a
+; handler written for any Error can read them. The documented File, Line and
+; Column stay as they were.
+Assert(caught.HasOwnProp("What"),                        "I.1 has What property")
+Assert(caught.HasOwnProp("Extra"),                       "I.2 has Extra property")
+Assert(caught.HasOwnProp("Stack"),                       "I.3 has Stack property")
+Assert(caught.What is String,                            "I.4 What is a String")
+Assert(caught.Extra is String,                           "I.5 Extra is a String")
+Assert(caught.Stack is String,                           "I.6 Stack is a String")
+Assert(caught.What = "Eval",                             "I.7 What names the throwing function")
+Assert(caught.Extra = "+",                               "I.8 Extra carries the parser's offending token")
+Assert(InStr(caught.Stack, "Eval(`"1 + + +`")"),         "I.9 Stack holds the script call stack at the Eval call")
+Assert(caught.Message = "Missing operand.",              "I.10 Message is unchanged")
+Assert(caught.File = "_Eval",                            "I.11 File is unchanged")
+Assert(caught.Line = 0,                                  "I.12 Line is unchanged")
+Assert(caught.Column = 0,                                "I.13 Column is unchanged")
+
+; A generic handler reads What, Extra and Stack without guarding them.
+GenericCatch(expr) {
+    try Eval(expr)
+    catch Error as e
+        return Type(e) "|" e.What "|" e.Extra "|" (InStr(e.Stack, "GenericCatch") ? "in-stack" : "no-stack")
+    return "no throw"
+}
+Assert(GenericCatch("1 + + +") = "SyntaxError|Eval|+|in-stack", "I.14 generic catch Error reads What, Extra and Stack")
+Assert(GenericCatch("foo(") = "SyntaxError|Eval|foo(|in-stack", "I.15 Extra carries the source fragment for an unbalanced call")
+
+; Check() records for the same kind of input are unchanged by the Eval change.
+chk := Check("1 +")
+Assert(chk.Ok = 0,                                                   "I.16 Check('1 +') reports failure")
+Assert(chk.Diagnostics.Length = 1,                                   "I.17 Check('1 +') has one diagnostic")
+chkd := chk.Diagnostics[1]
+Assert(chkd.Severity = "error" && chkd.Code = 13,                    "I.18 Check diagnostic severity and code unchanged")
+Assert(chkd.Line = 1 && chkd.Column = 0,                             "I.19 Check diagnostic line and column unchanged")
+Assert(chkd.Message = "This line does not contain a recognized action.", "I.20 Check diagnostic message unchanged")
+Assert(chkd.Extra = "1 +",                                           "I.21 Check diagnostic extra unchanged")
+
 ; --- Section H: reentrancy ---
 h1_expr := 'Eval("1 + 1") + Eval("2 + 2")'
 Assert(Eval(h1_expr) = 6, "H.1 nested Eval")
