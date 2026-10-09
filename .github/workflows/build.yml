@@ -251,6 +251,7 @@ jobs:
       shell: pwsh
       env:
         AHK_QA_COVERAGE_DIR: ${{ github.workspace }}\coverage\qa
+        AHK_QA_JUNIT: junit-qa.xml
       run: |
         engine\AutoHotkey64Console.exe /Headless /ErrorStdOut qa\run.ahk
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -271,6 +272,7 @@ jobs:
           coverage/merged.lcov
           coverage/badge.json
           junit.xml
+          junit-qa.xml
           diag.jsonl
         if-no-files-found: ignore
 
