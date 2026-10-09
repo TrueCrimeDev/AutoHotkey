@@ -1,0 +1,185 @@
+{
+    // tasks.json template for any workspace that runs scripts on the
+    // AutoHotkey 2.1-alpha.33+Console fork. Copy it to .vscode/tasks.json
+    // (or merge its "tasks" into an existing one).
+    //
+    // Every task runs the console engine at
+    // %USERPROFILE%\Documents\Design\Coding\AutoHotkey\bin\AutoHotkey64Console.exe
+    // with /Diag=json, so each diagnostic is one JSON object on stderr:
+    // {"kind":"diagnostic","format":"json","schema":2,"severity":"error",
+    //  "type":"ValueError","code":10,"message":"...","extra":"...","what":"Fn",
+    //  "file":"C:\\path\\script.ahk","line":4,"column":0,"source":"...","stack":"..."}
+    // The "ahk" problem matcher below turns those lines into Problems entries
+    // (file, line, severity, message). It ignores every other line: script
+    // output, CHECK PASS, {"kind":"check",...}, /Trace=json events and the
+    // text-format reports an engine prints without /Diag=json. "column" is
+    // captured only when it is not 0 (the engine reports 0 today), so the
+    // whole line is marked; "critical" falls back to the matcher's "severity".
+    // tests/test_vscode_matcher.py in the fork repo checks the regexp against
+    // records from a real engine.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            // Runs the active file in a dedicated terminal: Print output and
+            // ANSI colour show, dialogs and GUIs still open. Exit 10 = uncaught
+            // error, 12 = parse error.
+            "label": "Run AHK (fork)",
+            "type": "process",
+            "command": "${env:USERPROFILE}\\Documents\\Design\\Coding\\AutoHotkey\\bin\\AutoHotkey64Console.exe",
+            "args": ["run", "/Diag=json", "${file}"],
+            "options": {
+                "cwd": "${fileDirname}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": {
+                "owner": "ahk",
+                "source": "ahk",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": {
+                    "regexp": "^\\{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":\\d+,\"severity\":\"(error|warning|critical)\",\"type\":\"[^\"]*\",\"code\":-?\\d+,\"message\":\"((?:[^\"\\\\]|\\\\.)*)\",\"extra\":\"(?:[^\"\\\\]|\\\\.)*\",\"what\":\"(?:[^\"\\\\]|\\\\.)*\",\"file\":\"((?:[^\"\\\\]|\\\\.)+)\",\"line\":(\\d+),\"column\":(?:0|([1-9]\\d*)),",
+                    "severity": 1,
+                    "message": 2,
+                    "file": 3,
+                    "line": 4,
+                    "column": 5
+                }
+            }
+        },
+        {
+            // Syntax check without running (implies /Headless). Exit 0 = pass
+            // (warnings do not fail it), 13 = syntax error or missing file.
+            "label": "Check AHK (fork)",
+            "type": "process",
+            "command": "${env:USERPROFILE}\\Documents\\Design\\Coding\\AutoHotkey\\bin\\AutoHotkey64Console.exe",
+            "args": ["check", "/Diag=json", "${file}"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": {
+                "owner": "ahk",
+                "source": "ahk",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": {
+                    "regexp": "^\\{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":\\d+,\"severity\":\"(error|warning|critical)\",\"type\":\"[^\"]*\",\"code\":-?\\d+,\"message\":\"((?:[^\"\\\\]|\\\\.)*)\",\"extra\":\"(?:[^\"\\\\]|\\\\.)*\",\"what\":\"(?:[^\"\\\\]|\\\\.)*\",\"file\":\"((?:[^\"\\\\]|\\\\.)+)\",\"line\":(\\d+),\"column\":(?:0|([1-9]\\d*)),",
+                    "severity": 1,
+                    "message": 2,
+                    "file": 3,
+                    "line": 4,
+                    "column": 5
+                }
+            }
+        },
+        {
+            // Test mode (implies /Headless). Exit 0 = pass; 10 = uncaught
+            // error; 12 = parse error; 14 = ExitApp(14), a persistent script or
+            // an execution failure.
+            "label": "Test AHK (fork)",
+            "type": "process",
+            "command": "${env:USERPROFILE}\\Documents\\Design\\Coding\\AutoHotkey\\bin\\AutoHotkey64Console.exe",
+            "args": ["test", "/Diag=json", "${file}"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": {
+                "owner": "ahk",
+                "source": "ahk",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": {
+                    "regexp": "^\\{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":\\d+,\"severity\":\"(error|warning|critical)\",\"type\":\"[^\"]*\",\"code\":-?\\d+,\"message\":\"((?:[^\"\\\\]|\\\\.)*)\",\"extra\":\"(?:[^\"\\\\]|\\\\.)*\",\"what\":\"(?:[^\"\\\\]|\\\\.)*\",\"file\":\"((?:[^\"\\\\]|\\\\.)+)\",\"line\":(\\d+),\"column\":(?:0|([1-9]\\d*)),",
+                    "severity": 1,
+                    "message": 2,
+                    "file": 3,
+                    "line": 4,
+                    "column": 5
+                }
+            }
+        },
+        {
+            // Runs the active file with the statement tracer: one line per
+            // executed statement on stderr (text form; /Trace=json gives
+            // {"event":"statement",...} objects instead). Diagnostics stay
+            // JSON, so the matcher still fills Problems.
+            "label": "Trace AHK (fork)",
+            "type": "process",
+            "command": "${env:USERPROFILE}\\Documents\\Design\\Coding\\AutoHotkey\\bin\\AutoHotkey64Console.exe",
+            "args": ["run", "/Diag=json", "/Trace", "${file}"],
+            "options": {
+                "cwd": "${fileDirname}"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": {
+                "owner": "ahk",
+                "source": "ahk",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": {
+                    "regexp": "^\\{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":\\d+,\"severity\":\"(error|warning|critical)\",\"type\":\"[^\"]*\",\"code\":-?\\d+,\"message\":\"((?:[^\"\\\\]|\\\\.)*)\",\"extra\":\"(?:[^\"\\\\]|\\\\.)*\",\"what\":\"(?:[^\"\\\\]|\\\\.)*\",\"file\":\"((?:[^\"\\\\]|\\\\.)+)\",\"line\":(\\d+),\"column\":(?:0|([1-9]\\d*)),",
+                    "severity": 1,
+                    "message": 2,
+                    "file": 3,
+                    "line": 4,
+                    "column": 5
+                }
+            }
+        },
+        {
+            // Runs the active file in test mode and writes an LCOV line-coverage
+            // report for every loaded script file to coverage\<name>.lcov under
+            // the workspace (the engine creates missing directories). Open it
+            // with a coverage-gutters extension, or merge several with the
+            // fork's tools/lcov_summary.py.
+            "label": "Coverage AHK (fork)",
+            "type": "process",
+            "command": "${env:USERPROFILE}\\Documents\\Design\\Coding\\AutoHotkey\\bin\\AutoHotkey64Console.exe",
+            "args": ["test", "/Diag=json", "/Coverage=${workspaceFolder}\\coverage\\${fileBasenameNoExtension}.lcov", "${file}"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": {
+                "owner": "ahk",
+                "source": "ahk",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": {
+                    "regexp": "^\\{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":\\d+,\"severity\":\"(error|warning|critical)\",\"type\":\"[^\"]*\",\"code\":-?\\d+,\"message\":\"((?:[^\"\\\\]|\\\\.)*)\",\"extra\":\"(?:[^\"\\\\]|\\\\.)*\",\"what\":\"(?:[^\"\\\\]|\\\\.)*\",\"file\":\"((?:[^\"\\\\]|\\\\.)+)\",\"line\":(\\d+),\"column\":(?:0|([1-9]\\d*)),",
+                    "severity": 1,
+                    "message": 2,
+                    "file": 3,
+                    "line": 4,
+                    "column": 5
+                }
+            }
+        }
+    ]
+}

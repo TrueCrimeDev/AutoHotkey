@@ -30,7 +30,9 @@
 ; workspace). Once an interpreter is selected, it also searches
 ; Documents\AutoHotkey\Lib\ and <interpreter folder>\Lib\.
 ; AutoHotkey2.Syntaxes replaces the bundled ahk2.d.ahk wholesale, so it cannot
-; add this file alongside the bundled one.
+; add this file alongside the bundled one. For every file in every workspace,
+; tools/vscode/gen_syntaxes.py builds such a folder from the extension's own
+; files plus this one; see docs/VSCODE_SETUP.md.
 ;
 ; Each @since tag gives the engine version at the commit that added the member
 ; (its "+Console" version string where the fork set one). The server enforces

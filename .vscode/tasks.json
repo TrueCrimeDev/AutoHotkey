@@ -15,10 +15,16 @@
             // Runs the active file with the console engine in the integrated
             // terminal, so Print / FileAppend(..., "*") output and ANSI colour
             // appear (the AHK extension's Run button uses the non-VT OUTPUT panel).
+            // /Diag=json writes each diagnostic as one JSON line on stderr (the
+            // engine never colours those lines, so colour cannot break them); the
+            // "ahk" matcher below turns it into a Problems entry, and the terminal
+            // shows that line instead of the text report. The matcher is the one
+            // in tools/vscode/tasks.template.json; tests/test_vscode_matcher.py
+            // pins both against real engine records. See docs/VSCODE_SETUP.md.
             "label": "Run AHK (fork, color)",
             "type": "process",
             "command": "${workspaceFolder}\\bin\\AutoHotkey64Console.exe",
-            "args": ["${file}"],
+            "args": ["run", "/Diag=json", "${file}"],
             "presentation": {
                 "echo": true,
                 "reveal": "always",
@@ -27,18 +33,33 @@
                 "showReuseMessage": false,
                 "clear": true
             },
-            "problemMatcher": []
+            "problemMatcher": {
+                "owner": "ahk",
+                "source": "ahk",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": {
+                    "regexp": "^\\{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":\\d+,\"severity\":\"(error|warning|critical)\",\"type\":\"[^\"]*\",\"code\":-?\\d+,\"message\":\"((?:[^\"\\\\]|\\\\.)*)\",\"extra\":\"(?:[^\"\\\\]|\\\\.)*\",\"what\":\"(?:[^\"\\\\]|\\\\.)*\",\"file\":\"((?:[^\"\\\\]|\\\\.)+)\",\"line\":(\\d+),\"column\":(?:0|([1-9]\\d*)),",
+                    "severity": 1,
+                    "message": 2,
+                    "file": 3,
+                    "line": 4,
+                    "column": 5
+                }
+            }
         },
         {
             // Syntax-checks the active file (check implies /Headless and
             // /ErrorStdOut). Exit 0 = CHECK PASS (warnings do not fail it);
-            // 13 = syntax error or missing file. The matcher turns
-            // `file (line) : ==> [Warning: ]msg` stderr lines into Problems
-            // entries, with warnings as warnings.
+            // 13 = syntax error or missing file. With /Diag=json each diagnostic
+            // is one JSON line on stderr; the matcher turns it into a Problems
+            // entry, with warnings as warnings ("column" is captured only when
+            // not 0, so the whole line is marked). A missing /Diag=json record
+            // field, or a changed key order, fails tests/test_vscode_matcher.py.
             "label": "Check AHK (fork)",
             "type": "process",
             "command": "${workspaceFolder}\\bin\\AutoHotkey64Console.exe",
-            "args": ["check", "${file}"],
+            "args": ["check", "/Diag=json", "${file}"],
             "group": "test",
             "presentation": {
                 "echo": true,
@@ -49,14 +70,16 @@
             },
             "problemMatcher": {
                 "owner": "ahk",
+                "source": "ahk",
                 "fileLocation": "absolute",
                 "severity": "error",
                 "pattern": {
-                    "regexp": "^\\s*(.+?) \\((\\d+)\\) : ==> (?:(Warning): )?(.+)$",
-                    "file": 1,
-                    "line": 2,
-                    "severity": 3,
-                    "message": 4
+                    "regexp": "^\\{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":\\d+,\"severity\":\"(error|warning|critical)\",\"type\":\"[^\"]*\",\"code\":-?\\d+,\"message\":\"((?:[^\"\\\\]|\\\\.)*)\",\"extra\":\"(?:[^\"\\\\]|\\\\.)*\",\"what\":\"(?:[^\"\\\\]|\\\\.)*\",\"file\":\"((?:[^\"\\\\]|\\\\.)+)\",\"line\":(\\d+),\"column\":(?:0|([1-9]\\d*)),",
+                    "severity": 1,
+                    "message": 2,
+                    "file": 3,
+                    "line": 4,
+                    "column": 5
                 }
             }
         },
@@ -65,10 +88,11 @@
             // /ErrorStdOut). Exit 0 = pass; 14 = explicit ExitApp(14), a
             // persistent script, or an exec failure; an uncaught runtime error
             // keeps 10 and a parse error 12 (see --capabilities exitCodes).
+            // /Diag=json and the matcher as in "Check AHK (fork)".
             "label": "Test AHK (fork)",
             "type": "process",
             "command": "${workspaceFolder}\\bin\\AutoHotkey64Console.exe",
-            "args": ["test", "${file}"],
+            "args": ["test", "/Diag=json", "${file}"],
             "group": "test",
             "presentation": {
                 "echo": true,
@@ -79,14 +103,16 @@
             },
             "problemMatcher": {
                 "owner": "ahk",
+                "source": "ahk",
                 "fileLocation": "absolute",
                 "severity": "error",
                 "pattern": {
-                    "regexp": "^\\s*(.+?) \\((\\d+)\\) : ==> (?:(Warning): )?(.+)$",
-                    "file": 1,
-                    "line": 2,
-                    "severity": 3,
-                    "message": 4
+                    "regexp": "^\\{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":\\d+,\"severity\":\"(error|warning|critical)\",\"type\":\"[^\"]*\",\"code\":-?\\d+,\"message\":\"((?:[^\"\\\\]|\\\\.)*)\",\"extra\":\"(?:[^\"\\\\]|\\\\.)*\",\"what\":\"(?:[^\"\\\\]|\\\\.)*\",\"file\":\"((?:[^\"\\\\]|\\\\.)+)\",\"line\":(\\d+),\"column\":(?:0|([1-9]\\d*)),",
+                    "severity": 1,
+                    "message": 2,
+                    "file": 3,
+                    "line": 4,
+                    "column": 5
                 }
             }
         },
