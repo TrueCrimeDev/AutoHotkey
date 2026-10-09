@@ -13,6 +13,15 @@ import xml.etree.ElementTree as ET
 
 ENGINE = Path(sys.argv.pop(1)).resolve()
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+# Schema-2 diagnostic record fields, in emission order.
+DIAG_KEYS = ["kind", "format", "schema", "severity", "type", "code", "message", "extra",
+             "what", "file", "line", "column", "source", "stack"]
+# Longer than every former fixed buffer: the 16384-character field cap and the
+# 87298-character text report. Built in-script by StrReplace over a zero-padded number.
+LONG_MESSAGE = "0123456789" * 30720  # 300 KB
+LONG_EXTRA = "abcdefghij" * 10240  # 100 KB
+LONG_MESSAGE_EXPR = 'StrReplace(Format("{:030720}", 0), "0", "0123456789")'
+LONG_EXTRA_EXPR = 'StrReplace(Format("{:010240}", 0), "0", "abcdefghij")'
 
 
 def packets(data):
@@ -245,6 +254,67 @@ Print(JSON.Stringify({{ok:valid.Ok, validDiagnostics:valid.Diagnostics.Length,
         self.assertTrue(record["hasRaw"])
         self.assertEqual(record["sentinel"], 42)
         self.assertFalse(marker.exists())
+
+    def diagnostic(self, source, *options):
+        """Run under /Diag=json; return the result and its one schema-2 record."""
+        result = self.run_script(source, "/Diag=json", *options)
+        lines = result.stderr.decode("utf-8").splitlines()
+        self.assertEqual(len(lines), 1, result.stderr[:400])
+        record = json.loads(lines[0])
+        self.assertEqual(list(record), DIAG_KEYS)
+        return result, record
+
+    def test_diag_json_record_keeps_a_300kb_message(self):
+        result, record = self.diagnostic(f'msg := {LONG_MESSAGE_EXPR}\nthrow Error(msg, , "ctx")\n')
+        self.assertEqual(result.returncode, 10, result.stderr[:400])
+        self.assertEqual(len(record["message"]), len(LONG_MESSAGE))
+        self.assertEqual(record["message"], LONG_MESSAGE)
+        self.assertEqual(record["extra"], "ctx")
+        self.assertEqual((record["type"], record["code"], record["line"]), ("Error", 10, 2))
+
+    def test_diag_json_record_keeps_a_100kb_extra(self):
+        result, record = self.diagnostic(
+            f'extra := {LONG_EXTRA_EXPR}\nthrow Error("short message", , extra)\n')
+        self.assertEqual(result.returncode, 10, result.stderr[:400])
+        self.assertEqual(record["message"], "short message")
+        self.assertEqual(len(record["extra"]), len(LONG_EXTRA))
+        self.assertEqual(record["extra"], LONG_EXTRA)
+
+    def test_diag_json_deep_stack_record_is_complete(self):
+        source = ("Recurse(n) {\n"
+                  "    if (n = 0)\n"
+                  f'        throw Error({LONG_MESSAGE_EXPR}, , "deep extra")\n'
+                  "    Recurse(n - 1)\n"
+                  "}\n"
+                  "Recurse(120)\n")
+        result, record = self.diagnostic(source)
+        self.assertEqual(result.returncode, 10, result.stderr[:400])
+        self.assertEqual(record["message"], LONG_MESSAGE)
+        self.assertEqual(record["extra"], "deep extra")
+        self.assertEqual(record["line"], 3)
+        self.assertTrue(record["source"].lstrip().startswith("throw Error("), record["source"])
+        stack = record["stack"]
+        self.assertTrue(stack.startswith(str(self.root / "sample.ahk") + " (3) : [Recurse] throw("), stack[:200])
+        # Whole frames up to the thread marker, or up to Error.Stack's "... N more" cap.
+        self.assertRegex(stack, r"(?:\(6\) : \[\] Recurse\(120\)\r\n> Auto-execute\r\n|\[Recurse\] Recurse\(n - 1\)\r\n\.\.\. \d+ more)$")
+
+    def test_text_report_keeps_a_300kb_message(self):
+        result = self.run_script(f'msg := {LONG_MESSAGE_EXPR}\nthrow Error(msg, , "ctx")\n')
+        self.assertEqual(result.returncode, 10, result.stderr[:400])
+        header, _, rest = result.stderr.decode("utf-8").partition("\n")
+        self.assertIn("sample.ahk (2) : ==> ", header)
+        message = header.partition(" : ==> ")[2]
+        self.assertEqual(len(message), len(LONG_MESSAGE), header[-80:])
+        self.assertEqual(message, LONG_MESSAGE)
+        self.assertTrue(rest.startswith("     Specifically: ctx\n"), rest[:200])
+        self.assertIn("     Call stack:\n", rest)
+        self.assertTrue(rest.endswith("> Auto-execute\n"), rest[-200:])
+
+    def test_stderr_file_mirrors_a_long_record(self):
+        mirror = self.root / "stderr.txt"
+        result, record = self.diagnostic(f"throw Error({LONG_MESSAGE_EXPR})\n", f"/StdErrFile={mirror}")
+        self.assertEqual(record["message"], LONG_MESSAGE)
+        self.assertEqual(mirror.read_bytes(), result.stderr)
 
 
 if __name__ == "__main__":

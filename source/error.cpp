@@ -22,6 +22,7 @@ GNU General Public License for more details.
 #include "abi.h"
 #include "crashlog.h"
 #include <richedit.h>
+#include <string>
 
 
 ResultType Line::PreparseError(LPTSTR aErrorText, LPTSTR aExtraInfo)
@@ -235,14 +236,13 @@ static LPCTSTR DiagSeverity(ResultType aErrorType)
 	}
 }
 
-static int EscapeJsonText(LPTSTR aDest, int aDestSize, LPCTSTR aSrc)
+// Append aSrc to aOut as the body of a JSON string (without the surrounding quotes).
+// The output grows with the input, so no field of a diagnostic record is ever cut.
+static void AppendJsonText(std::wstring &aOut, LPCTSTR aSrc)
 {
-	if (!aDest || aDestSize < 1)
-		return 0;
 	if (!aSrc)
-		aSrc = _T("");
-	int n = 0;
-	for (; *aSrc && n < aDestSize - 1; ++aSrc)
+		return;
+	for (; *aSrc; ++aSrc)
 	{
 		LPCTSTR repl = NULL;
 		switch (*aSrc)
@@ -254,25 +254,16 @@ static int EscapeJsonText(LPTSTR aDest, int aDestSize, LPCTSTR aSrc)
 		case _T('\t'): repl = _T("\\t"); break;
 		}
 		if (repl)
+			aOut += repl;
+		else if ((UINT)*aSrc < 0x20)
 		{
-			int wrote = sntprintf(aDest + n, aDestSize - n, _T("%s"), repl);
-			if (wrote <= 0 || wrote >= aDestSize - n)
-				break;
-			n += wrote;
-			continue;
+			TCHAR esc[8];
+			sntprintf(esc, _countof(esc), _T("\\u%04X"), (UINT)*aSrc);
+			aOut += esc;
 		}
-		if ((UINT)*aSrc < 0x20)
-		{
-			int wrote = sntprintf(aDest + n, aDestSize - n, _T("\\u%04X"), (UINT)*aSrc);
-			if (wrote <= 0 || wrote >= aDestSize - n)
-				break;
-			n += wrote;
-			continue;
-		}
-		aDest[n++] = *aSrc;
+		else
+			aOut += *aSrc;
 	}
-	aDest[n] = '\0';
-	return n;
 }
 
 // ---- ANSI color codes (shared by the plain-text formatter and source-context rendering) ----
@@ -288,10 +279,11 @@ static int EscapeJsonText(LPTSTR aDest, int aDestSize, LPCTSTR aSrc)
 #define ERR_CONTEXT_RADIUS 2
 #define ERR_CONTEXT_MAXLEN 1024
 
-// Assembly buffer size for a single JSON diagnostic record.  Sized to hold every
-// escaped component (each independently capped by EscapeJsonText) plus the template,
-// so the final sntprintf can never truncate mid-record and emit invalid JSON.
-#define DIAG_JSON_BUF_SIZE (LINE_SIZE * 3 + T_MAX_PATH + SCRIPT_STACK_BUF_SIZE * 2 + 1280)
+// What the plain-text report needs beyond its message and Extra: the path and line
+// header, the source context (or the decompiled line), the indented call stack, the
+// labels and the ANSI codes.  FormatStdErrText sizes its heap buffer from this plus
+// the two strings, so neither is cut (the JSON record is built on a std::wstring).
+#define DIAG_TEXT_OVERHEAD (T_MAX_PATH + LINE_SIZE + SCRIPT_STACK_BUF_SIZE * 8 + 1280)
 
 // Read line aLineNumber (1-based) verbatim from the file behind aFileIndex into aBuf
 // (null-terminated, trailing EOL stripped).  Returns false for stdin/embedded sources
@@ -429,50 +421,32 @@ static void RetrieveErrorStack(LPTSTR aBuf, int aBufSize, bool aIncludeStack)
 #endif
 }
 
-static int FormatDiagJson(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraInfo
+// One schema-2 diagnostic record (a single line ending in LF).  Built on a string that
+// grows with its fields, so a long message or Extra is never cut and the record is
+// always valid JSON.  The stack keeps Error.Stack's SCRIPT_STACK_BUF_SIZE cap.
+static std::wstring FormatDiagJson(LPCTSTR aErrorText, LPCTSTR aExtraInfo
 	, FileIndexType aFileIndex, LineNumberType aLineNumber, ResultType aErrorType, Line *aLine, bool aIncludeStack
 	, Object *aException = nullptr)
 {
-	if (!aBuf || aBufSize < 1)
-		return 0;
-
-	TCHAR msg[LINE_SIZE];
-	TCHAR extra[LINE_SIZE];
-	TCHAR what[256];
-	TCHAR type[128];
-	TCHAR file[T_MAX_PATH];
-	TCHAR source[LINE_SIZE];
-	TCHAR stack[SCRIPT_STACK_BUF_SIZE * 2];
-
 	LPCTSTR file_name = (aFileIndex < Line::sSourceFileCount && Line::sSourceFile[aFileIndex])
 		? Line::sSourceFile[aFileIndex] : _T("");
-
-	EscapeJsonText(msg, _countof(msg), aErrorText ? aErrorText : _T(""));
-	EscapeJsonText(extra, _countof(extra), aExtraInfo ? aExtraInfo : _T(""));
-	EscapeJsonText(file, _countof(file), file_name);
 
 	// Error class name (e.g. TypeError, OSError, SyntaxError) and the throwing context,
 	// taken from the exception object when one is available (runtime throws).
 	LPCTSTR type_src = aException ? aException->Type() : (aErrorType == WARN ? _T("Warning") : nullptr);
 	LPCTSTR what_src = aException ? aException->GetOwnPropString(_T("What")) : nullptr;
-	EscapeJsonText(type, _countof(type), type_src ? type_src : _T("Error"));
-	EscapeJsonText(what, _countof(what), what_src ? what_src : _T(""));
 
 	// Column within the line, when the exception carries one (e.g. SyntaxError from Eval).
 	int column = aException ? (int)aException->GetOwnPropInt64(_T("Column")) : 0;
 
+	TCHAR line_buf[LINE_SIZE];
 	if (aLine)
-	{
-		TCHAR line_buf[LINE_SIZE];
 		GetErrorSourceText(aLine, line_buf, _countof(line_buf));
-		EscapeJsonText(source, _countof(source), line_buf);
-	}
 	else
-		*source = '\0';
+		*line_buf = '\0';
 
 	TCHAR stack_buf[SCRIPT_STACK_BUF_SIZE];
 	RetrieveErrorStack(stack_buf, _countof(stack_buf), aIncludeStack);
-	EscapeJsonText(stack, _countof(stack), stack_buf);
 
 	// Match the actual process exit code (see AutoHotkey.cpp): load-time failures use
 	// the PARSE/VALIDATE codes, runtime failures use RUNTIME/CRITICAL.  mIsReadyToExecute
@@ -487,12 +461,27 @@ static int FormatDiagJson(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR
 	else
 		code = AHK_EXIT_RUNTIME_ERROR;
 
-	int n = sntprintf(aBuf, aBufSize
-		, _T("{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":2,\"severity\":\"%s\",\"type\":\"%s\",\"code\":%d,\"message\":\"%s\",\"extra\":\"%s\",\"what\":\"%s\",\"file\":\"%s\",\"line\":%d,\"column\":%d,\"source\":\"%s\",\"stack\":\"%s\"}\n")
-		, DiagSeverity(aErrorType), type, code, msg, extra, what, file, (int)aLineNumber, column, source, stack);
-	if (n < 0 || n >= aBufSize)
-		return (int)_tcslen(aBuf);
-	return n;
+	TCHAR numbers[96];
+	std::wstring out = _T("{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":2,\"severity\":\"");
+	out += DiagSeverity(aErrorType);
+	out += _T("\",\"type\":\"");
+	AppendJsonText(out, type_src ? type_src : _T("Error"));
+	sntprintf(numbers, _countof(numbers), _T("\",\"code\":%d,\"message\":\""), code);
+	out += numbers;
+	AppendJsonText(out, aErrorText);
+	out += _T("\",\"extra\":\"");
+	AppendJsonText(out, aExtraInfo);
+	out += _T("\",\"what\":\"");
+	AppendJsonText(out, what_src);
+	out += _T("\",\"file\":\"");
+	AppendJsonText(out, file_name);
+	sntprintf(numbers, _countof(numbers), _T("\",\"line\":%d,\"column\":%d,\"source\":\""), (int)aLineNumber, column);
+	out += numbers;
+	AppendJsonText(out, line_buf);
+	out += _T("\",\"stack\":\"");
+	AppendJsonText(out, stack_buf);
+	out += _T("\"}\n");
+	return out;
 }
 
 void Script::PrintErrorStdOut(LPCTSTR aErrorText, int aLength, LPCTSTR aFile)
@@ -536,10 +525,12 @@ void Script::PrintErrorStdOut(LPCTSTR aErrorText, int aLength, LPCTSTR aFile)
 			int byte_count = WideCharToMultiByte(cp, 0, aErrorText, aLength, nullptr, 0, nullptr, nullptr);
 			if (byte_count > 0)
 			{
-				char *buf = (char *)_alloca((size_t)byte_count);
-				byte_count = WideCharToMultiByte(cp, 0, aErrorText, aLength, buf, byte_count, nullptr, nullptr);
+				// On the heap: a record can be as long as the script's message, which
+				// _alloca would take from the stack.
+				std::string bytes((size_t)byte_count, '\0');
+				byte_count = WideCharToMultiByte(cp, 0, aErrorText, aLength, &bytes[0], byte_count, nullptr, nullptr);
 				if (byte_count > 0)
-					CrashLog::MirrorStderr(buf, (size_t)byte_count);
+					CrashLog::MirrorStderr(bytes.data(), (size_t)byte_count);
 			}
 		}
 	}
@@ -633,16 +624,41 @@ int FormatStdErr(LPTSTR aBuf, int aBufSize, LPCTSTR aErrorText, LPCTSTR aExtraIn
 	return n;
 }
 
+// The plain-text report as a string.  Its buffer is sized from the message and Extra
+// (plus DIAG_TEXT_OVERHEAD for everything else FormatStdErr writes), so a long one
+// reaches stderr whole.
+static std::wstring FormatStdErrText(LPCTSTR aErrorText, LPCTSTR aExtraInfo, FileIndexType aFileIndex
+	, LineNumberType aLineNumber, bool aWarn, Line *aLine, bool aIncludeStack, bool aUseColor)
+{
+	std::wstring text(_tcslen(aErrorText) + _tcslen(aExtraInfo) + DIAG_TEXT_OVERHEAD, _T('\0'));
+	int n = FormatStdErr(&text[0], (int)text.size(), aErrorText, aExtraInfo, aFileIndex, aLineNumber
+		, aWarn, aLine, aIncludeStack, aUseColor);
+	text.resize(n);
+	return text;
+}
+
+// What goes to stderr for one diagnostic: the JSON record under /Diag=json, else the
+// plain-text report.  Shared by the load-time, runtime and warning paths.
+static std::wstring FormatDiagnostic(LPCTSTR aErrorText, LPCTSTR aExtraInfo, FileIndexType aFileIndex
+	, LineNumberType aLineNumber, ResultType aErrorType, Line *aLine, bool aIncludeStack, Object *aException = nullptr)
+{
+	if (!aErrorText)
+		aErrorText = _T("");
+	if (!aExtraInfo)
+		aExtraInfo = _T("");
+	if (g_script.mDiagJson)
+		return FormatDiagJson(aErrorText, aExtraInfo, aFileIndex, aLineNumber, aErrorType, aLine, aIncludeStack, aException);
+	return FormatStdErrText(aErrorText, aExtraInfo, aFileIndex, aLineNumber, aErrorType == WARN, aLine, aIncludeStack
+		, g_script.mErrorStdOutColor);
+}
+
 // For backward compatibility, this actually prints to stderr, not stdout.
 void Script::PrintErrorStdOut(LPCTSTR aErrorText, LPCTSTR aExtraInfo, FileIndexType aFileIndex, LineNumberType aLineNumber, Line *aLine)
 {
-	TCHAR buf[DIAG_JSON_BUF_SIZE];
 	// This is the load-time path (mIsReadyToExecute is false here); FormatDiagJson derives
 	// the correct code (PARSE/VALIDATE) from that state rather than from aErrorType.
-	auto n = mDiagJson
-		? FormatDiagJson(buf, _countof(buf), aErrorText, aExtraInfo, aFileIndex, aLineNumber, FAIL, aLine, false)
-		: FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo, aFileIndex, aLineNumber, false, aLine, false, mErrorStdOutColor);
-	PrintErrorStdOut(buf, n, _T("**"));
+	auto text = FormatDiagnostic(aErrorText, aExtraInfo, aFileIndex, aLineNumber, FAIL, aLine, false);
+	PrintErrorStdOut(text.c_str(), (int)text.size(), _T("**"));
 }
 
 ResultType Line::LineError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR aExtraInfo)
@@ -1150,13 +1166,12 @@ ResultType Script::ShowError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR 
 	// twice (once here, once from the stderr path).
 	if (g_Debugger.HasStdErrHook() && !(mErrorStdOut || mHeadless))
 	{
-		TCHAR buf[LINE_SIZE * 4];
 		Line *line = aLine ? aLine : mCurrLine;
-		FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo
+		auto text = FormatStdErrText(aErrorText, aExtraInfo
 			, line ? line->mFileIndex : mCurrFileIndex
 			, line ? line->mLineNumber : mCombinedLineNumber
 			, aErrorType == WARN, line, mIsReadyToExecute, false);
-		g_Debugger.OutputStdErr(buf);
+		g_Debugger.OutputStdErr(text.c_str());
 	}
 #endif
 
@@ -1164,19 +1179,12 @@ ResultType Script::ShowError(LPCTSTR aErrorText, ResultType aErrorType, LPCTSTR 
 	// This enables headless/console operation where all errors go to the shell.
 	if (mErrorStdOut || mHeadless)
 	{
-		TCHAR buf[DIAG_JSON_BUF_SIZE];
 		Line *line = aLine ? aLine : mCurrLine;
-		if (mDiagJson)
-			FormatDiagJson(buf, _countof(buf), aErrorText, aExtraInfo
-				, line ? line->mFileIndex : mCurrFileIndex
-				, line ? line->mLineNumber : mCombinedLineNumber
-				, aErrorType, line, mIsReadyToExecute, aException);
-		else
-			FormatStdErr(buf, _countof(buf), aErrorText, aExtraInfo
-				, line ? line->mFileIndex : mCurrFileIndex
-				, line ? line->mLineNumber : mCombinedLineNumber
-				, aErrorType == WARN, line, mIsReadyToExecute, mErrorStdOutColor);
-		PrintErrorStdOut(buf, (int)_tcslen(buf), _T("**")); // ** means stderr
+		auto text = FormatDiagnostic(aErrorText, aExtraInfo
+			, line ? line->mFileIndex : mCurrFileIndex
+			, line ? line->mLineNumber : mCombinedLineNumber
+			, aErrorType, line, mIsReadyToExecute, aException);
+		PrintErrorStdOut(text.c_str(), (int)text.size(), _T("**")); // ** means stderr
 
 		// Handle exit behavior based on error type
 		if (aErrorType == WARN)
@@ -1887,20 +1895,16 @@ void Script::ScriptWarning(WarnMode warnMode, LPCTSTR aWarningText, LPCTSTR aExt
 		return;
 
 	// In /Diag=json mode, emit the warning as a JSON record too, so it doesn't corrupt
-	// the structured stream with plain text.  Buffer sized for the JSON path (the
-	// plain-text path needs far less).
-	TCHAR buf[DIAG_JSON_BUF_SIZE];
-	auto n = mDiagJson
-		? FormatDiagJson(buf, _countof(buf), aWarningText, aExtraInfo, fileIndex, lineNumber, WARN, line, false)
-		: FormatStdErr(buf, _countof(buf), aWarningText, aExtraInfo, fileIndex, lineNumber, true, line, false, mErrorStdOutColor);
+	// the structured stream with plain text.
+	auto text = FormatDiagnostic(aWarningText, aExtraInfo, fileIndex, lineNumber, WARN, line, false);
 
 	if (warnMode == WARNMODE_STDOUT)
-		PrintErrorStdOut(buf, n);
+		PrintErrorStdOut(text.c_str(), (int)text.size());
 	else
 #ifdef CONFIG_DEBUGGER
-	if (!g_Debugger.OutputStdErr(buf))
+	if (!g_Debugger.OutputStdErr(text.c_str()))
 #endif
-		OutputDebugString(buf);
+		OutputDebugString(text.c_str());
 
 	// In MsgBox mode, MsgBox is in addition to OutputDebug
 	if (warnMode == WARNMODE_MSGBOX)
