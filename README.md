@@ -505,7 +505,9 @@ Test.Case("rejects garbage", () => Assert.Throws(() => JSON.Parse("{"), JSONErro
 ```
 
 `Test.Run()` prints one line per case, exits 14 on any failure, emits `::error` annotations
-under GitHub Actions, and writes JUnit XML when `AHK_TEST_JUNIT` is set.
+under GitHub Actions, and writes JUnit XML when `AHK_TEST_JUNIT` is set. The subprocess
+suite `qa/run.ahk` writes the same shape (one `testsuite` per test file, one `testcase` per
+assertion) when `AHK_QA_JUNIT` is set.
 
 **3. Run it** with coverage and machine-readable diagnostics:
 

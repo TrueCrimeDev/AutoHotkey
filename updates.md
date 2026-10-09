@@ -491,6 +491,13 @@ Both directives must appear at top-of-script scope, alongside `#Requires`, `#Sin
 The aggregate gate runs the automated suites against one engine: the `qa/`
 runner, `tests/test_eval*.ahk`, the Python checks, and `tests/run.ahk`.
 
+Both script frameworks write JUnit XML on request: `AHK_TEST_JUNIT=<path>` for
+a `tests/Test.ahk` suite (one `testsuite`, one `testcase` per case) and
+`AHK_QA_JUNIT=<path>` for `qa/run.ahk` (a `testsuites` root with one
+`testsuite` per test file and one `testcase` per assertion, written to a temp
+file and moved into place; a write failure is printed and leaves the exit code
+alone). `qa/README.md` gives the qa shape, and CI uploads both reports.
+
 ```bat
 python tests\run_console_gate.py bin\AutoHotkey64Console.exe
 ```
@@ -523,6 +530,7 @@ bin\AutoHotkey64Console.exe /Headless tests\crashlog_check.ahk C:\temp\se.log "[
 | `tests/test_crashlog_exitapp_n.ahk` | `ExitApp 7` → `[EXIT] code=7 reason=ExitApp(7)`. |
 | `tests/crashlog_check.ahk` | Verifier harness: asserts a log file contains given substrings. |
 | `tests/run.ahk` | Single-process suite: `#Include`s every `tests/*.test.ahk` (framework in `tests/Test.ahk`), prints results, exits 14 on failure. Run with `test`; add `/Coverage=` for LCOV. |
+| `tests/test_qa_runner.py` | `qa/run.ahk` contracts on a copied runner: empty discovery, summary/exit agreement, the headless flag, timeout and descendant cleanup, and the `AHK_QA_JUNIT` report (suite and case counts equal the summary, failures carry the assertion message and `file:line`, no temp file remains, an unwritable path leaves the exit code alone). |
 | `qa/tests/test_inspect.ahk` | `Inspect`: primitives, depth/MaxItems clamps, arrays/maps/JSON.Object, class getters and methods, native Gui controls, cycles, 60-deep chains, 500-property objects. |
 | `qa/tests/test_processpipe.ahk` | `ProcessPipe`: UTF-8 round trip, timeouts, Kill, stderr separation, 2 MB producer without deadlock, 200 KB line across chunk boundaries, argument quoting, kill-on-release, error paths. |
 | `tests/test_console_coverage.py` | `/Coverage=`: DA/LF/LH consistency, structural lines excluded, per-iteration `while` counts, relative path resolution, report survives uncaught errors and `ExitApp(14)`. |
