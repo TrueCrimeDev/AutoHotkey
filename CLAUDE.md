@@ -466,7 +466,7 @@ Open items:
 - [x] Stale `export` module examples fixed 2026-09-10: keyword dropped, and the
   `#Import {X} from M` / bare `#Import "file.ahk"` forms (never valid on this
   engine) rewritten as `#Import M {X}` / `#Import "file.ahk" {*}`.
-- [ ] **`&Module.Var` corrupts the heap (upstream alpha.33 bug)**:
+- [x] **`&Module.Var` corrupts the heap (upstream alpha.33 bug)**:
   `source/script_module.cpp:42`-`44` (`ScriptModule::__Ref`, upstream
   `9f4df71b`) returns `Var::GetRef()`'s uncounted reference
   (`source/var.cpp:245`-`248`) through `_o_return` without an `AddRef`.
@@ -477,6 +477,7 @@ Open items:
   official `AutoHotkey_2.1-alpha.33.zip` GUI build (2026-10-08), so it is not
   the merge. Use `#Import Mod {X}` plus `&X`. Engine fix: `AddRef` before
   `_o_return(ref)`, then report it upstream. No suite pins it yet.
+  Fixed 2026-10-09 on m1/module-ref: `ref->AddRef()` before `_o_return(ref)`; pinned by `qa/tests/test_alpha33.ahk` and two `tests/test_runtime_regressions.py` cases (both fail on `d9fd14ac`, exit 3221226356); upstream report drafted in `docs/upstream/alpha33-module-ref-addref.md`.
 - [ ] **Module init is not lazy, by upstream design** (rechecked on alpha.33,
   2026-10-08): every module runs at startup in reverse order of creation
   (`source/script.cpp:1042`-`1048`, `Script::AutoExecSection`), so a
@@ -542,7 +543,8 @@ docs-only scope:
   throws `TypeError` (guards `a020f5b0`), `ObjSetCapacity` on a Struct throws
   `TypeError`, `a.b[1]` with `b => unset` throws `UnsetError`, `#Import` inside a
   function, `NumPut(Int32, ...)`/`NumGet(buf, Int32)`, `#Requires` scoping in an
-  `#Include`, and `&Module.Var` as a KNOWN-BUG `RunSnippet` pin.
+  `#Include`. (`test_alpha33.ahk` exists since 2026-10-09 with the `&Module.Var`
+  pins as a fixed-bug section; the other cases are still to add.)
 - [x] FIXED 2026-10-08: `tests/test_powershell_cli.py` and
   `debugger-tool/mcp-ahk/tests/conformance_native.py` read the version from
   `source/ahkversion.h` instead of hard-coding `2.1-alpha.33`, and
