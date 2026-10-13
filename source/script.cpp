@@ -594,7 +594,6 @@ ResultType Script::Init(LPTSTR aScriptFilename, IObject *aArgs)
 	// Up to this point, mCurrentModule == &mBuiltinModule for initialization of built-ins.
 	// From this point, declarations should add names to a script module, not mBuiltinModule.
 	mCurrentModule = &mDefaultModule;
-	mDefaultModule.mSelfFileIndex = 0;
 
 	if (aArgs) // Caller-provided command-line args.
 	{
@@ -2297,6 +2296,12 @@ process_completed_line:
 						mClassPropertyDef = NULL;
 					}
 				}
+				else if (mClassStructUnion)
+				{
+					mClassStructUnion = false;
+					free(mClassTypedPropSuffix);
+					mClassTypedPropSuffix = nullptr;
+				}
 				else
 				{
 					// End of class definition.
@@ -2427,11 +2432,26 @@ process_completed_line:
 					goto continue_main_loop;
 				}
 			}
-			return ScriptError(ERR_INVALID_LINE_IN_PROPERTY_DEF, buf);
+			if (mClassPropertyStatic || !mClassPropertyEmpty || mClassStructUnion
+				|| 0 != _tcsicmp(mClassPropertyDef, _T("union.Get()")))
+				return ScriptError(ERR_INVALID_LINE_IN_PROPERTY_DEF, buf);
+			// Reinterpret this as an anonymous union{}.
+			mClassStructUnion = true;
+			if (!(mClassProperty->Getter() || mClassProperty->Setter() || mClassProperty->Method()))
+				mClassObject[mClassObjectCount - 1]->ClassGetPrototype()->DeleteOwnProp(_T("union"));
+			mClassProperty = NULL;
+			free(mClassPropertyDef);
+			mClassPropertyDef = NULL;
 		}
 
 		if (mClassObjectCount && !g->CurrentFunc) // Inside a class definition (and not inside a method).
 		{
+			if (mClassStructUnion)
+			{
+				if (!DefineClassVars(buf, false))
+					return FAIL;
+				goto continue_main_loop;
+			}
 			LPTSTR id = buf;
 			bool is_static = false;
 			if (!_tcsnicmp(id, _T("Static"), 6) && IS_SPACE_OR_TAB(id[6]))
@@ -3620,7 +3640,7 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 				// Save the working directory; see the similar line below for details.
 				LPTSTR prev_dir = GetWorkingDir();
 				// Attempt to find the script file in a Lib folder:
-				auto path = FindLibraryFile(parameter, parameter_end - parameter);
+				auto path = FindLibraryFile(parameter);
 				// Attempt to include the file if found:
 				bool error_was_shown = path && !LoadIncludedFile(path, false, ignore_load_failure);
 				// Restore the working directory.
@@ -6649,6 +6669,7 @@ ResultType Script::DefineClassProperty(LPTSTR aBuf, bool aStatic, bool &aBufHasB
 	}
 	mClassProperty = class_object->DefineProperty(aBuf);
 	mClassPropertyStatic = aStatic;
+	mClassPropertyEmpty = true;
 	if (!mClassProperty)
 		return ScriptError(ERR_OUTOFMEM);
 
@@ -6682,6 +6703,7 @@ ResultType Script::DefineClassPropertyXet(LPTSTR aBuf, LPTSTR aEnd)
 		mClassProperty->NoParamGet = g->CurrentFunc->mParamCount == 1 && !g->CurrentFunc->mIsVariadic;
 		mClassProperty->NoEnumGet = g->CurrentFunc->mMinParams > 1;
 	}
+	mClassPropertyEmpty = false;
 	if (*aEnd && !AddLine(ACT_BLOCK_BEGIN)) // *aEnd is '{' or '='.
 		return FAIL;
 	if (*aEnd == '=') // => expr
@@ -6735,9 +6757,9 @@ ResultType Script::DefineClassVars(LPTSTR aBuf, bool aStatic)
 			name_end = item_end;
 		}
 		item_end = omit_leading_whitespace(item_end);
+		LPTSTR type_name = nullptr, type_name_end = nullptr;
 		if (!item_name_has_dot)
 		{
-			LPTSTR type_name = nullptr, type_name_end = nullptr;
 			if (*item_end == ':' && item_end[1] != '=' && !aStatic)
 			{
 				// A type declaration could consist of any expression that returns
@@ -6791,11 +6813,20 @@ ResultType Script::DefineClassVars(LPTSTR aBuf, bool aStatic)
 					//    the current point in the script.
 					auto type_end_char = *type_name_end;
 					*type_name_end = '\0';
-					_sntprintf(type_buf, _countof(type_buf), _T("DefineProp(this.Prototype,'%s',{Type:%s,Pack:%i})")
-						, item, type_name, mClassStructPack[mClassObjectCount]);
+					_sntprintf(type_buf, _countof(type_buf), _T("DefineProp(this.Prototype,'%s',{Type:%s,Pack:%i%s})")
+						, item, type_name, mClassStructPack[mClassObjectCount]
+						, mClassTypedPropSuffix ? mClassTypedPropSuffix : _T(""));
 					if (!DefineClassVarInit(type_buf, true, class_object, ACT_EXPRESSION))
 						return FAIL;
 					*type_name_end = type_end_char;
+					if (mClassStructUnion && !mClassTypedPropSuffix)
+					{
+						size_t size = item_end - item + 11;
+						mClassTypedPropSuffix = tmalloc(size);
+						if (!mClassTypedPropSuffix)
+							return ScriptError(ERR_OUTOFMEM);
+						_sntprintf(mClassTypedPropSuffix, size, _T(",Offset:\"%s\""), item);
+					}
 				}
 				// Store the unset marker in prototype.%item% to allow duplicate declarations to be detected:
 				if (!prototype->SetOwnProp(item, unset_token))
@@ -6803,6 +6834,9 @@ ResultType Script::DefineClassVars(LPTSTR aBuf, bool aStatic)
 				*name_end = orig_char; // Undo termination.
 			}
 		}
+
+		if (mClassStructUnion && !type_name)
+			return ScriptError(ERR_INVALID_CLASS_VAR, item);
 						
 		// This section is very similar to the one in ParseAndAddLine() which deals with
 		// variable declarations, so maybe maintain them together:
@@ -7016,98 +7050,30 @@ bool Script::ResolveBaseClass(LPCTSTR aClassName, bool aStruct, Object *&aClass,
 
 #ifndef AUTOHOTKEYSC
 
-#define FUNC_LIB_EXT EXT_AUTOHOTKEY
-#define FUNC_LIB_EXT_LENGTH (_countof(FUNC_LIB_EXT) - 1)
-#define FUNC_LOCAL_LIB _T("\\Lib\\") // Needs leading and trailing backslash.
-#define FUNC_LOCAL_LIB_LENGTH (_countof(FUNC_LOCAL_LIB) - 1)
-#define FUNC_USER_LIB _T("\\AutoHotkey\\Lib\\") // Needs leading and trailing backslash.
-#define FUNC_USER_LIB_LENGTH (_countof(FUNC_USER_LIB) - 1)
-#define FUNC_STD_LIB _T("\\Lib\\") // Needs leading and trailing backslash.
-#define FUNC_STD_LIB_LENGTH (_countof(FUNC_STD_LIB) - 1)
-
-#define FUNC_LIB_COUNT 3
-
-void Script::InitFuncLibraries(FuncLibrary aLib[])
+LPTSTR Script::FindLibraryFile(LPTSTR aFuncName)
 {
-	// Local lib in script's directory.
-	InitFuncLibrary(aLib[0], mFileDir, FUNC_LOCAL_LIB);
-
-	// User lib in Documents folder.
-	PWSTR docs_dir = GetDocumentsFolder();
-	InitFuncLibrary(aLib[1], docs_dir, FUNC_USER_LIB);
-	CoTaskMemFree(docs_dir);
-
-	// Std lib in AutoHotkey directory.
-	InitFuncLibrary(aLib[2], mOurEXEDir, FUNC_STD_LIB);
-}
-
-void Script::InitFuncLibrary(FuncLibrary &aLib, LPTSTR aPathBase, LPTSTR aPathSuffix)
-{
-	TCHAR buf[T_MAX_PATH + 1]; // +1 to ensure truncated paths are filtered out due to being too long for GetFileAttributes().  It would probably have to be intentional due to MAX_PATH limits elsewhere, but this +1 costs nothing.
-	int length = sntprintf(buf, _countof(buf), _T("%s%s"), aPathBase, aPathSuffix);
-	DWORD attr = GetFileAttributes(buf); // Seems to accept directories that have a trailing backslash, which is good because it simplifies the code.
-	if (attr == 0xFFFFFFFF || !(attr & FILE_ATTRIBUTE_DIRECTORY)) // Directory doesn't exist or it's a file vs. directory. Relies on short-circuit boolean order.
+	auto search_path = GetSearchPath(SearchPathForInclude);
+	
+	FileIndexType file_index;
+	switch (FindIncludeFileIndex(aFuncName, search_path, file_index, mCurrFileIndex, false))
 	{
-		aLib.path = _T("");
-		return;
+	case OK: return Line::sSourceFile[file_index];
+	case FAIL: return nullptr;
 	}
-	// Allow room for appending each candidate file/function name.  This could be exactly
-	// MAX_PATH on ANSI builds since no path longer than that would work, but doing it this
-	// way simplifies length checks later (and Unicode builds support much longer paths).
-	size_t buf_size = length + MAX_VAR_NAME_LENGTH + FUNC_LIB_EXT_LENGTH + 1;
-	aLib.path = SimpleHeap::Alloc<TCHAR>(buf_size);
-	tmemcpy(aLib.path, buf, length + 1);
-	aLib.length = length;
-}
 
-LPTSTR Script::FindLibraryFile(LPTSTR aFuncName, size_t aFuncNameLength, bool aIsModule)
-// If aFuncNameLength is 0, the entire length of aFuncName is used.
-// Returns the path; valid only until the next call to this function.
-{
-	int i;
-	DWORD attr;
-
-	static FuncLibrary sLib[FUNC_LIB_COUNT] = {0};
-
-	if (!sLib[0].path) // Allocate & discover paths only upon first use because many scripts won't use anything from the library. This saves a bit of memory and performance.
-		InitFuncLibraries(sLib);
-	// Above must ensure that all sLib[].path elements are non-NULL (but they can be "" to indicate "no library").
-
-	if (!aFuncNameLength) // Caller didn't specify, so use the entire string.
-		aFuncNameLength = _tcslen(aFuncName);
-	if (aFuncNameLength > MAX_VAR_NAME_LENGTH) // Too long to fit in the allowed space, and also too long to be a valid function name.
+	if (!LoadTimeBackCompatMode())
 		return nullptr;
 
-	TCHAR *dest;
-	LPTSTR naked_filename = aFuncName;               // Set up for the first iteration.
-	size_t naked_filename_length = aFuncNameLength; //
-
-		for (i = 0; i < FUNC_LIB_COUNT; ++i)
-		{
-			if (!*sLib[i].path) // Library is marked disabled, so skip it.
-				continue;
-
-			dest = (LPTSTR) tmemcpy(sLib[i].path + sLib[i].length, naked_filename, naked_filename_length); // Append the filename to the library path.
-			_tcscpy(dest + naked_filename_length, FUNC_LIB_EXT); // Append the file extension.
-
-			attr = GetFileAttributes(sLib[i].path); // Testing confirms that GetFileAttributes() doesn't support wildcards; which is good because we want filenames containing question marks to be "not found" rather than being treated as a match-pattern.
-			if (attr == 0xFFFFFFFF || (attr & FILE_ATTRIBUTE_DIRECTORY)) // File doesn't exist or it's a directory.
-				continue;
-
-			// Since above didn't "continue", a file exists whose name matches that of the requested library.
-			return sLib[i].path; // Only valid until the next call to this function.
-		} // for() each library directory.
-
-	if (aIsModule)
+	// Since we're in v2.0 mode, search for A.ahk if this is something like #Include <A_B>.
+	auto cp = _tcsrchr(aFuncName, '_');
+	if (!cp)
 		return nullptr;
 
-	// The legacy behaviour for #Include <A_B> is that all Libs are searched for A_B.ahk before
-	// searching for A.ahk, which means that A_B.ahk takes precedence over A.ahk even if A.ahk
-	// is defined in the local Lib and A_B.ahk is not.
-	for (i = 0; i < (int)aFuncNameLength; ++i)
-		if (aFuncName[i] == '_')
-			return FindLibraryFile(aFuncName, i);
-	return nullptr;
+	// Caller provides a modifiable buffer, so may as well take advantage.
+	*cp = '\0';
+	auto r = FindLibraryFile(aFuncName);
+	*cp = '_';
+	return r;
 }
 
 #endif
@@ -9856,12 +9822,13 @@ standard_pop_into_postfix: // Use of a goto slightly reduces code size.
 		
 		case SYM_MAYBE:
 		{
-			if (stack[stack_count - 1]->symbol == SYM_OPAREN && this_infix->symbol == SYM_CPAREN // (...?)
-				&& !((this_infix[1].symbol == SYM_DOT || this_infix[1].symbol == SYM_FUNC) && (this_infix[1].callsite->flags & EIF_STACK_MEMBER))) // not a.%b?% or a.%b?%()
-				//&& *stack[stack_count - 1]->marker != g_DerefChar) // This would exclude %a?%, which we don't want to exclude.
+			if (stack[stack_count - 1]->symbol == SYM_OPAREN && this_infix->symbol == SYM_CPAREN) // (...?)
 			{
 				++this_infix; // Discard CPAREN
 				--stack_count; // Discard OPAREN
+				if ((this_infix->symbol == SYM_DOT || this_infix->symbol == SYM_FUNC || this_infix->symbol == SYM_OBRACKET)
+					&& (this_infix->callsite->flags & EIF_STACK_MEMBER)) // a.%b?%, a.%b?%() or a.%b?%[]
+					bcmap[this_postfix - infix] += 1; // Need to pop the dot's "this" object.
 				// Push MAYBE back onto the stack, below any operators to the left which are at
 				// the new nesting level.  It will be popped again at the next CPAREN or at the
 				// end of the unset chain.
@@ -9995,8 +9962,7 @@ standard_pop_into_postfix: // Use of a goto slightly reduces code size.
 						return LineError(_T("This statement's parameters cannot be unset."), FAIL, this_postfix->error_reporting_marker);
 				}
 			}
-			else if (  !((infix_symbol == SYM_FUNC || infix_symbol == SYM_DOT || infix_symbol == SYM_OBRACKET)
-						&& (inf->callsite->flags & EIF_STACK_MEMBER))  ) // not x.%a?%() or x.%a?% or x.%a?%[]
+			else
 				return LineError(_T("This operator's left operand must not be unset."), FAIL, infix_symbol == SYM_DYNAMIC ? inf->marker : inf->error_reporting_marker);
 			if (  !(stack_symbol == SYM_FUNC
 				|| IS_OPAREN_LIKE(stack_symbol) || stack_symbol == SYM_BEGIN

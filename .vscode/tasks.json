@@ -255,7 +255,7 @@
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "RawAhkVersion": "2.1-alpha.33+Console",
+                    "RawAhkVersion": "2.1-alpha.35+Console",
                     "AhkVersionN": "2,1,0,33"
                 },
                 "shell": {
@@ -281,7 +281,7 @@
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "RawAhkVersion": "2.1-alpha.33+Console",
+                    "RawAhkVersion": "2.1-alpha.35+Console",
                     "AhkVersionN": "2,1,0,33"
                 },
                 "shell": {
@@ -307,7 +307,7 @@
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "RawAhkVersion": "2.1-alpha.33+Console",
+                    "RawAhkVersion": "2.1-alpha.35+Console",
                     "AhkVersionN": "2,1,0,33"
                 },
                 "shell": {
