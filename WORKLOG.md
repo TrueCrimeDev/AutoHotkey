@@ -717,3 +717,14 @@ unlogged loop session between 3 and now.)
   misdiagnosis: every fork engine has `Print`; ahk-mcp's inspector had run
   stock `C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe` (its `config.js`
   resolver falls back to Program Files when no `AHK_*` variable is set).
+- CI (2026-10-13, `workflow_dispatch` on `feat/console-cleanup-20260919`): run
+  38342988713 on `56f57edb` failed the Win32 and mingw regression gates (x64
+  cancelled by fail-fast) while the qa suite passed 908/908 on both. Cause: the
+  runner's `%TEMP%` is the 8.3 short name `C:\Users\RUNNER~1\...`, and
+  `test_diag_json_deep_stack_record_is_complete` (`tests/test_runtime_regressions.py`)
+  and `test_generates_bundled_plus_fork_idempotently` (`tests/test_vscode_matcher.py`)
+  compared the raw tempdir with the long form the engine and `gen_syntaxes.py`
+  print. Reproduced locally with `TEMP` pointed at a short-name directory; both
+  fixtures now `resolve()` the path (`d001b0b1`). Run 38343502990 on `d001b0b1`
+  passed all jobs: debugger-clients, build (x64), build (Win32), build-mingw and
+  test; badge and release skipped as on any non-tag, non-`alpha` run.
