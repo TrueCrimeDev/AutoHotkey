@@ -1,6 +1,6 @@
 {
     // tasks.json template for any workspace that runs scripts on the
-    // AutoHotkey 2.1-alpha.33+Console fork. Copy it to .vscode/tasks.json
+    // AutoHotkey 2.1-alpha.35+Console fork. Copy it to .vscode/tasks.json
     // (or merge its "tasks" into an existing one).
     //
     // Every task runs the console engine at

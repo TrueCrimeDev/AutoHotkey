@@ -1,7 +1,7 @@
 ;
 ; fork.d.ahk: declarations for thqby's vscode-autohotkey2-lsp covering this
-; fork's additions on top of AutoHotkey v2.1-alpha.33. The engine reports
-; A_AhkVersion = "2.1-alpha.33+Console".
+; fork's additions on top of AutoHotkey v2.1-alpha.35. The engine reports
+; A_AhkVersion = "2.1-alpha.35+Console".
 ;
 ; This file holds declarations only, not code. Do not #Include it: the engine
 ; would load each entry as a script definition that shadows the built-in, and
@@ -142,7 +142,7 @@ Print(Fmt?, Values*) => void
  *   warning printed before the error (VarUnset warnings are on by default)
  *   does not take its place. Only when no record is an error does it use the
  *   first record of any severity. `File` names the temporary file. Before
- *   2.1-alpha.33+Console revision 47bc3fcb the first record was used
+ *   2.1-alpha.35+Console revision 47bc3fcb the first record was used
  *   whatever its severity.
  * - `Raw`: all of the child's stderr followed by all of its stdout, normally
  *   one JSON object per line: the diagnostic records, then

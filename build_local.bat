@@ -5,7 +5,7 @@ REM Fork version override. The vcxproj's SetAhkVersion target normally runs
 REM `git describe` to derive RAW_AHK_VERSION/AhkVersionN; we pin both here so
 REM the build doesn't regress to an older tag when the working tree is dirty
 REM (or when the latest tag doesn't reflect what this fork actually ships).
-set "RawAhkVersion=2.1-alpha.33+Console"
+set "RawAhkVersion=2.1-alpha.35+Console"
 set "AhkVersionN=2,1,0,33"
 
 REM VS 2026 BuildTools

@@ -225,22 +225,14 @@ T *NewObject(size_t aSuffixSize)
 // Map::SetItems - Add or set items given an array of key/value pairs.
 //
 
-Map *Map::Create(ExprTokenType *aParam[], int aParamCount)
+Map *Map::Create()
 {
-	ASSERT(!(aParamCount & 1));
-
 	Map *map = new Map();
 	map->SetBase(Map::sPrototype);
-	if (aParamCount && !map->SetItems(aParam, aParamCount))
-	{
-		// Out of memory.
-		map->Release();
-		return NULL;
-	}
 	return map;
 }
 
-ResultType Map::SetItems(ExprTokenType *aParam[], int aParamCount)
+ResultType Map::SetItems(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount)
 {
 	ASSERT(!(aParamCount & 1)); // Caller should verify and throw.
 
@@ -264,10 +256,26 @@ ResultType Map::SetItems(ExprTokenType *aParam[], int aParamCount)
 		if (mCapacity == mCount && !HasItem(*aParam[i]))
 			SetInternalCapacity(max_capacity_required);
 
-		if (!SetItem(*aParam[i], *aParam[i + 1]))
-			return FAIL; // Out of memory.
+		if (!SetItem(aResultToken, *aParam[i], *aParam[i + 1]))
+			return FAIL;
 	}
 
+	return OK;
+}
+
+ResultType Map::ValidateKey(ResultToken &aResultToken, ExprTokenType &aKey)
+{
+	if (TokenIsPureNumeric(aKey) == PURE_FLOAT && !g_script.BackCompatMode())
+		return aResultToken.TypeError(_T("Integer"), aKey);
+	return OK;
+}
+
+ResultType Map::SetItem(ResultToken &aResultToken, ExprTokenType &aKey, ExprTokenType &aValue)
+{
+	if (!ValidateKey(aResultToken, aKey))
+		return FAIL;
+	if (!SetItem(aKey, aValue))
+		return aResultToken.MemoryError();
 	return OK;
 }
 
@@ -1141,7 +1149,15 @@ ResultType Object::SetBoxedPointer(ResultToken &aResultToken, ExprTokenType &aVa
 			p = nullptr;
 	}
 	else
-		return aResultToken.TypeError(aPrototype->GetOwnPropString(_T("__Class")), aValue);
+	{
+		if (IsCArrayOf(v, aPrototype))
+		{
+			p = (Object*)v; // Struct.Array
+			np = p->DataPtr();
+		}
+		else
+			return aResultToken.TypeError(aPrototype->GetOwnPropString(_T("__Class")), aValue);
+	}
 	
 	aPtr = np;
 
@@ -1152,6 +1168,20 @@ ResultType Object::SetBoxedPointer(ResultToken &aResultToken, ExprTokenType &aVa
 		(*nest)->Release();
 	*nest = p;
 	return OK;
+}
+
+
+bool Object::IsCArrayOf(IObject *aCandidate, Object *aPrototype)
+{
+	if (!aCandidate)
+		return false;
+	auto &vsi = *aCandidate->Base()->GetStructInfo();
+	if (!vsi.item_count)
+		return false;
+	if (vsi.pointed_class)
+		return vsi.pointed_class->ClassGetPrototype() == aPrototype;
+	else
+		return vsi.native_type == aPrototype->GetStructInfo()->native_type;
 }
 
 
@@ -1314,6 +1344,8 @@ void Map::__Item(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *
 {
 	if (!IS_INVOKE_SET) // Get or call.
 	{
+		if (!ValidateKey(aResultToken, *aParam[0]))
+			return;
 		if (!GetItem(aResultToken, *aParam[0]))
 		{
 			if (ParamIndexIsOmitted(1))
@@ -1339,8 +1371,7 @@ void Map::__Item(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *
 	{
 		if (aParam[0]->symbol == SYM_MISSING)
 			return Delete(aResultToken, aID, aFlags, aParam + 1, 1);
-		if (!SetItem(*aParam[1], *aParam[0]))
-			_o_throw_oom;
+		SetItem(aResultToken, *aParam[1], *aParam[0]);
 	}
 }
 
@@ -1349,8 +1380,8 @@ void Map::Set(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aPa
 {
 	if (aParamCount & 1)
 		_o_throw(ERR_PARAM_COUNT_INVALID);
-	if (!SetItems(aParam, aParamCount))
-		_o_throw_oom;
+	if (!SetItems(aResultToken, aParam, aParamCount))
+		return;
 	AddRef();
 	_o_return(this);
 }
@@ -1837,7 +1868,7 @@ void Object::CreateCArrayClass(ResultToken &aResultToken, ExprTokenType &aOfClas
 	ap->Release();
 
 	// Cache it.
-	ExprTokenType _et(ac);
+	ExprTokenType _et(ac); // Named temporary for GCC (see Map::SetItem).
 	if (!map->SetItem(key, _et))
 	{
 		ac->Release();
@@ -1893,6 +1924,9 @@ void Map::Delete(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *
 	index_t pos;
 	SymbolType key_type;
 	Key key;
+
+	if (!ValidateKey(aResultToken, *aParam[0]))
+		return;
 
 	if (item = FindItem(*aParam[0], _f_number_buf, key_type, key, pos))
 		pos = index_t(item - mItem); // else min_pos was already set by FindItem.
@@ -2074,6 +2108,8 @@ void Object::HasOwnProp(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 
 void Map::Has(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
 {
+	if (!ValidateKey(aResultToken, *aParam[0]))
+		return;
 	SymbolType key_type;
 	Key key;
 	index_t insert_pos;
@@ -2083,7 +2119,7 @@ void Map::Has(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aPa
 
 void Object::Clone(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
 {
-	if (GetNativeBase() != Object::sPrototype)
+	if (HasData() || GetNativeBase() != Object::sPrototype)
 		_o_throw(ERR_TYPE_MISMATCH, ErrorPrototype::Type); // Cannot construct an instance of this class using Object::Clone().
 	auto clone = new Object();
 	if (!CloneTo(*clone))
@@ -2093,6 +2129,8 @@ void Object::Clone(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType
 
 void Map::Clone(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
 {
+	if (HasData())
+		_o_throw(ERR_TYPE_MISMATCH, ErrorPrototype::Type);
 	auto clone = new Map();
 	if (!CloneTo(*clone))
 		_o_throw_oom;
@@ -2125,7 +2163,7 @@ Property *Object::DefineProperty(name_t aName, bool aEnumerable)
 	return field->prop;
 }
 
-TypedProperty *Object::DefineTypedProperty(name_t aName)
+TypedProperty *Object::DefineTypedProperty(name_t aName, bool aEnumerable)
 {
 	ASSERT((mFlags & (ClassPrototype | StructInfoInitialized)) == (ClassPrototype | StructInfoInitialized));
 	index_t insert_pos;
@@ -2138,6 +2176,7 @@ TypedProperty *Object::DefineTypedProperty(name_t aName)
 	// Add it to the new field.
 	field->symbol = SYM_TYPED_FIELD;
 	field->tprop = tprop;
+	field->enumerable = aEnumerable;
 	// Add it to the Prototype's linked list of struct fields.
 	auto &si = *(StructInfo*)(this + 1);
 	if (si.first_field) // Check first_field and not last_field, which may belong to a superclass.
@@ -2150,7 +2189,7 @@ TypedProperty *Object::DefineTypedProperty(name_t aName)
 	return tprop;
 }
 
-FResult Object::DefineTypedProperty(name_t aName, Object *aClass, size_t aPack, size_t aOffset)
+FResult Object::DefineTypedProperty(name_t aName, Object *aClass, size_t aPack, size_t aOffset, bool aEnumerable)
 {
 	size_t psize = 0, palign = 0;
 	MdType native_type = MdType::Void;
@@ -2176,7 +2215,7 @@ FResult Object::DefineTypedProperty(name_t aName, Object *aClass, size_t aPack, 
 		: GetStructInfo(false);
 	if (!si)
 		return FR_E_FAILED;
-	auto tprop = DefineTypedProperty(aName);
+	auto tprop = DefineTypedProperty(aName, aEnumerable);
 	if (!tprop)
 		return FR_E_OUTOFMEM;
 	tprop->type = native_type;
@@ -2328,33 +2367,63 @@ void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 	auto name = ParamIndexToString(0, _f_number_buf);
 	if (!*name)
 		_o_throw_param(0 + aID);
-	ExprTokenType getter, setter, method, value;
-	getter.symbol = SYM_INVALID;
-	setter.symbol = SYM_INVALID;
-	method.symbol = SYM_INVALID;
-	value.symbol = SYM_INVALID;
+
+	static const LPTSTR sDescProps[]{ _T("Call"), _T("Get"), _T("Offset"), _T("Pack"), _T("Set"), _T("Type"), _T("Value") };
+	const auto ValueIndex = 6;
+	const auto TypeIndex = 5;
+	const auto ValueValidMask = (1 << ValueIndex);
+	const auto DynamicValidMask  = 0b0010011;
+	const auto TypedOptionalMask = 0b0001100;
+	const auto RequireObjectMask = 0b0110011;
+
+	ExprTokenType v[_countof(sDescProps)];
+	auto &getter = v[1], &setter = v[4], &method = v[0];
+	auto &tclass = v[TypeIndex], &tpack = v[3], &toffset = v[2];
+
+	UINT mask = 0;
+	PropType kind = PropType::None;
 	auto desc = dynamic_cast<Object *>(ParamIndexToObject(1));
-	if (desc && desc->GetOwnProp(value, _T("Type"))) // TODO: make this properly mutually exclusive with the others
+	if (desc)
 	{
-		Object *pclass = dynamic_cast<Object*>(TokenToObject(value));
-		size_t pack = desc->GetOwnProp(value, _T("Pack")) ? (size_t)TokenToInt64(value) : 0;
+		for (int i = 0; i < _countof(sDescProps); ++i)
+			if (desc->GetOwnProp(v[i], sDescProps[i]) && (!((1 << i) & RequireObjectMask) || v[i].symbol == SYM_OBJECT))
+				mask |= (1 << i);
+			else
+				v[i].symbol = SYM_INVALID;
+		if (mask == ValueValidMask)
+			kind = PropType::Value;
+		else if ((mask & ~TypedOptionalMask) == (1 << TypeIndex))
+			kind = PropType::Typed;
+		else if (mask && (mask & ~DynamicValidMask) == 0)
+			kind = PropType::Dynamic;
+	}
+	if (kind == PropType::None) // Not a valid combination of descriptor properties.
+		return (void)aResultToken.ParamError(1 + aID, aParam[1]);
+
+	ExprTokenType et;
+	bool enumerable = !desc->GetOwnProp(et, _T("Enumerable")) || TokenToBOOL(et);
+
+	if (kind == PropType::Typed)
+	{
+		Object *pclass = dynamic_cast<Object*>(TokenToObject(tclass));
+		size_t pack = tpack.symbol != SYM_INVALID ? (size_t)TokenToInt64(tpack) : 0;
 		size_t offset = -1;
-		if (desc->GetOwnProp(value, _T("Offset")))
+		if (toffset.symbol != SYM_INVALID)
 		{
-			if (value.symbol == SYM_STRING)
+			if (toffset.symbol == SYM_STRING)
 			{
-				auto f = FindField(value.marker);
+				auto f = FindField(toffset.marker);
 				if (f && f->symbol == SYM_TYPED_FIELD)
 					offset = f->tprop->data_offset;
 			}
-			else if (value.symbol == SYM_INTEGER && value.value_int64 >= 0)
+			else if (toffset.symbol == SYM_INTEGER && toffset.value_int64 >= 0)
 			{
-				offset = (size_t)value.value_int64;
+				offset = (size_t)toffset.value_int64;
 			}
 			if (offset == -1)
 				_o_throw_value(aID ? ERR_PARAM3_INVALID : ERR_PARAM2_INVALID);
 		}
-		switch (DefineTypedProperty(name, pclass, pack, offset))
+		switch (DefineTypedProperty(name, pclass, pack, offset, enumerable))
 		{
 		case OK:
 			AddRef();
@@ -2367,23 +2436,14 @@ void Object::DefineProp(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 			_o_throw(_T("Cannot add typed property."));
 		}
 	}
-	if (!desc // Must be an Object.
-		|| desc->GetOwnProp(getter, _T("Get")) && getter.symbol != SYM_OBJECT  // If defined, must be an object.
-		|| desc->GetOwnProp(setter, _T("Set")) && setter.symbol != SYM_OBJECT
-		|| desc->GetOwnProp(method, _T("Call")) && method.symbol != SYM_OBJECT
-		|| desc->GetOwnProp(value, _T("Value")) && (getter.symbol != SYM_INVALID || setter.symbol != SYM_INVALID || method.symbol != SYM_INVALID)
-		// To help prevent errors, throw if none of the above properties were present.  This also serves to
-		// reserve some cases for possible future use, such as passing a function object to imply {get:...}.
-		|| getter.symbol == SYM_INVALID && setter.symbol == SYM_INVALID && method.symbol == SYM_INVALID && value.symbol == SYM_INVALID)
-		_o_throw_param(1 + aID);
-	if (value.symbol != SYM_INVALID) // Above already verified that neither Get nor Set was present.
+	else if (kind == PropType::Value)
 	{
-		if (!SetOwnProp(name, value))
+		if (!SetOwnProp(name, v[ValueIndex], enumerable))
 			_o_throw_oom;
 		AddRef();
 		_o_return(this);
 	}
-	auto prop = DefineProperty(name);
+	auto prop = DefineProperty(name, enumerable);
 	if (!prop)
 		_o_throw_oom;
 	if (getter.symbol == SYM_OBJECT)
@@ -3068,14 +3128,16 @@ ObjectMember Array::sMembers[] =
 
 void Array::Invoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
 {
+	index_t index;
 	switch (aID)
 	{
 	case P___Item:
 	case M_Get:
 	{
-		auto index = ParamToZeroIndex(*aParam[IS_INVOKE_SET ? 1 : 0]);
+		auto &index_param = *aParam[IS_INVOKE_SET ? 1 : 0];
+		index = ParamToZeroIndex(index_param);
 		if (index >= mLength)
-			_o_throw(ERR_INVALID_INDEX, *aParam[IS_INVOKE_SET ? 1 : 0], ErrorPrototype::Index);
+			_o_throw(ERR_INVALID_INDEX, index_param, index == BadIndexType ? ErrorPrototype::Type : ErrorPrototype::Index);
 		auto &item = mItem[index];
 		if (IS_INVOKE_SET)
 		{
@@ -3121,12 +3183,11 @@ void Array::Invoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType
 	case M_InsertAt:
 	case M_Push:
 	{
-		index_t index;
 		if (aID == M_InsertAt)
 		{
 			index = ParamToZeroIndex(*aParam[0]);
 			if (index > mLength || index + (index_t)aParamCount > MaxIndex) // The second condition is very unlikely.
-				_o_throw_param(0);
+				break;
 			aParam++;
 			aParamCount--;
 		}
@@ -3140,12 +3201,11 @@ void Array::Invoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType
 	case M_RemoveAt:
 	case M_Pop:
 	{
-		index_t index;
 		if (aID == M_RemoveAt)
 		{
 			index = ParamToZeroIndex(*aParam[0]);
 			if (index >= mLength)
-				_o_throw_param(0);
+				break;
 		}
 		else
 		{
@@ -3177,15 +3237,17 @@ void Array::Invoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType
 	
 	case M_Has:
 	{
-		auto index = ParamToZeroIndex(*aParam[0]);
+		index = ParamToZeroIndex(*aParam[0]);
+		if (index == BadIndexType)
+			break;
 		_o_return(index >= 0 && index < mLength && mItem[index].symbol != SYM_MISSING);
 	}
 
 	case M_Delete:
 	{
-		auto index = ParamToZeroIndex(*aParam[0]);
+		index = ParamToZeroIndex(*aParam[0]);
 		if (index >= mLength)
-			_o_throw_param(0);
+			break;
 		mItem[index].ReturnMove(aResultToken);
 		mItem[index].AssignMissing();
 		OnSet(index);
@@ -3193,6 +3255,8 @@ void Array::Invoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType
 	}
 
 	case M_Clone:
+		if (HasData())
+			_o_throw(ERR_TYPE_MISMATCH, ErrorPrototype::Type);
 		if (auto *arr = Clone())
 			_o_return(arr);
 		_o_throw_oom;
@@ -3201,12 +3265,24 @@ void Array::Invoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType
 		_o_return(new IndexEnumerator(this, ParamIndexToOptionalInt(0, 0)
 			, static_cast<IndexEnumerator::Callback>(&Array::GetEnumItem)));
 	}
+
+	if (index == BadIndexType)
+		_o_throw_param(0, _T("Integer"));
+	else
+		_o_throw_param(0);
 }
 
 Array::index_t Array::ParamToZeroIndex(ExprTokenType &aParam)
 {
-	if (!TokenIsNumeric(aParam))
-		return BadIndex;
+	switch (TokenIsNumeric(aParam))
+	{
+	case PURE_FLOAT:
+		if (!g_script.BackCompatMode())
+			return BadIndexType;
+		break;
+	case PURE_NOT_NUMERIC:
+		return g_script.BackCompatMode() ? BadIndex : BadIndexType;
+	}
 	auto index = TokenToInt64(aParam);
 	if (index <= 0) // Let -1 be the last item and 0 be the first unused index.
 		index += mLength + 1;
