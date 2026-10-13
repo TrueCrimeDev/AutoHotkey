@@ -679,3 +679,41 @@ unlogged loop session between 3 and now.)
   exes (qa 857 passed, 0 failed, 0 crashed, plus the `SKIP` line), `check_all`
   103/103, native conformance 60/60, `test-hooks.sh` 171 passed. Run directly,
   `test_alpha31.ahk` still gives 61 passed (the pins ran).
+
+### Session 17 (2026-10-12) — upstream v2.1-alpha.35 merge
+
+- Merged upstream tags `v2.1-alpha.34` and `v2.1-alpha.35` (12 commits after the
+  previous base `47eabd41`) on `m1/upstream-alpha35`. Two conflicts, both in
+  `Map`'s native API (`source/script_object.h`, `.cpp`): upstream dropped the
+  `LPTSTR`-keyed `SetItem` overloads and added `ValidateKey` and `ResultToken`
+  forms of `SetItem`/`SetItems`. Kept one `SetItem(LPTSTR, ExprTokenType&)`
+  for `json.cpp` and the fork's named temporaries (GCC rejects binding
+  `ExprTokenType(...)` to a non-const reference). `ahkversion.h` is
+  `2.1-alpha.35+Console` / `2,1,0,35`; every `2.1-alpha.33+Console` tag in docs,
+  tooling and tests was bumped.
+- **Upstream bug found and fixed**: `Script::GetSearchPath`
+  (`source/script_module.cpp`, new in `3a1291c6`) set its duplicate-check
+  pointer before the directory existence check, so after the first missing
+  entry (`Lib`, for any script with no `Lib` folder) every later entry was
+  compared with itself and dropped: the user and standard libraries and all of
+  `AhkLibPath` were ignored and `#Include <Name>` failed with "Script library
+  not found." Fixed by assigning the pointer only for a kept entry;
+  `docs/upstream/alpha35-searchpath-last-dir.md` is the report.
+- New `qa/tests/test_alpha35.ahk` (29 asserts): `Map` Float keys and `Array`
+  Float/empty indexes throw `TypeError` in v2.1 mode and are accepted (or
+  `IndexError`) in v2.0 mode, `Enumerable: false` hides a property from
+  `Props()` only, `DefineProp` descriptor validation, v2.1 `<A_B>` has no `A.ahk`
+  fallback while v2.0 keeps it, `AhkLibPath` from a `%TEMP%` script (the bug
+  above), and `Print()` / verbatim single-arg / Format form on this engine.
+- Results on the MSVC x64 build (`out/msvc/x64`, also installed into `bin/` and
+  `Documents\Design\Coding\AutoHotkey\bin` with the previous engines kept as
+  `*.f14d7427.bak` / `*.36b223e2.bak`): console gate 17/17 suites, `check_all`
+  104/104, `test_print.ahk` 9/9, `test_alpha35.ahk` 29/29. `Print` output for the
+  seven-case spec script is byte-identical to the `f14d7427` engine, with no
+  flags, `/Headless` and `/ErrorStdOut`. A project MCP server started before the
+  swap still runs the old file (renamed `bin/AutoHotkey64Console.exe.inuse.f14d7427`);
+  reconnect it (`/mcp`) and delete that file.
+- The "missing `Print`" report that started the session was a stale
+  misdiagnosis: every fork engine has `Print`; ahk-mcp's inspector had run
+  stock `C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe` (its `config.js`
+  resolver falls back to Program Files when no `AHK_*` variable is set).

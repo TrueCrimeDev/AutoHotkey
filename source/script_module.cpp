@@ -609,11 +609,15 @@ LPCTSTR Script::GetSearchPath(SearchPathForType aFor)
 		// is in the same directory as the main script and/or EXE.
 		if (last_dir && !_tcsicmp(last_dir, cp))
 			continue;
-		last_dir = cp;
 		// Ignore nonexistent directories so each Import won't do unnecessary checks.
 		DWORD attr = GetFileAttributes(cp);
 		if (attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY))
 			continue; // Ignore this item.
+		// Only a kept item may serve as last_dir: a discarded one still lives at cp,
+		// so pointing last_dir there would make the next item compare equal to itself
+		// and be dropped too (upstream v2.1-alpha.35: everything after the first
+		// missing Lib directory was ignored, including AhkLibPath entries).
+		last_dir = cp;
 		cp += len + 1; // Write the next item after the null terminator.
 	}
 	if (cp == buf) // No items; could happen in the case of a malformed env var.

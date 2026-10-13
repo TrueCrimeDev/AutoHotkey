@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A native AutoHotkey `2.1-alpha.33+Console` fork. The engine supplies shell
+A native AutoHotkey `2.1-alpha.35+Console` fork. The engine supplies shell
 commands, structured diagnostics, Eval, JSON, Inspect, ProcessPipe, source
 introspection, coverage, and an MCP server. The TypeScript debugger integrations
 under `debugger-tool/` are separate consumers of the engine's DBGp protocol.
@@ -438,16 +438,18 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
 
 ---
 
-# Current State & Open Items (updated 2026-10-08)
+# Current State & Open Items (updated 2026-10-12)
 
-- Target language version: `2.1-alpha.33+Console`, based on upstream
-  `v2.1-alpha.33` plus the upstream `alpha` commits through `47eabd41`
-  (`docs/alpha/v2.1-alpha.33.md`). Always verify the actual executable's
+- Target language version: `2.1-alpha.35+Console`, based on upstream
+  `v2.1-alpha.35` (`3a1291c6`; merged 2026-10-12, `docs/alpha/v2.1-alpha.35.md`
+  and `v2.1-alpha.34.md`). Always verify the actual executable's
   `--version` and hash; historical files in `bin/` or `bin_harness/` may be
-  stale. Since 2026-10-08 `bin/` holds the CI build of `f14d7427` (run
-  37807040408; `--version` revision `f14d74270a2b`, sha256 matching the run's
-  artifacts); `bin/*.alpha33.bak` are the previous `f7712ec15171` engines,
-  which lack that day's fixes.
+  stale. Since 2026-10-12 `bin/` holds the local MSVC x64 build of the alpha.35
+  merge (`2.1-alpha.35+Console`); `bin/*.f14d7427.bak` are the previous CI
+  engines of `f14d7427` (run 37807040408), and `bin/*.alpha33.bak` the
+  `f7712ec15171` ones before that. Alpha.35's `Script::GetSearchPath` dropped
+  every library directory after the first missing one (upstream bug, fixed
+  here; `docs/upstream/alpha35-searchpath-last-dir.md`).
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.
