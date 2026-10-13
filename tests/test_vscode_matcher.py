@@ -259,7 +259,9 @@ class GenSyntaxesTests(unittest.TestCase):
                                                   encoding="utf-8", newline="")
             (syntaxes / "ahk2_common.json").write_text('{"methods": []}', encoding="utf-8")
             (syntaxes / "ahk2.tmLanguage.json").write_text("{}", encoding="utf-8")
-            out = Path(td) / "generated"
+            # resolve() as gen_syntaxes.py does, so the printed setting matches when
+            # %TEMP% is an 8.3 short name (C:\Users\RUNNER~1\... on GitHub runners).
+            out = (Path(td) / "generated").resolve()
 
             stdout = self.generate(ext, out)
             first = self.snapshot(out)

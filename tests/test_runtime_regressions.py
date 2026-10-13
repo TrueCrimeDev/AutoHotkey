@@ -96,7 +96,9 @@ class RuntimeRegressions(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory(prefix="ahk-runtime-")
         self.addCleanup(self.folder.cleanup)
-        self.root = Path(self.folder.name)
+        # resolve() expands an 8.3 short name (%TEMP% is C:\Users\RUNNER~1\... on
+        # GitHub runners) to the long form the engine reports in paths and stacks.
+        self.root = Path(self.folder.name).resolve()
 
     def script(self, source, name="sample.ahk"):
         path = self.root / name
