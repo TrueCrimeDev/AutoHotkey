@@ -177,7 +177,10 @@ Object *Object::CreateStructPtr(Object *aBase, UINT_PTR aPtr, bool aCallDelete)
 		obj->mFlags |= CannotOwnProps;
 	if (!aCallDelete)
 		obj->mFlags |= NoCallDelete;
-	void *data = obj + 1;
+	// The suffix follows the native object, which can be larger than Object (Map,
+	// ProcessPipe, JSON.Object); DataPtr(), SetDataPtr() and NewInstance() all use
+	// object_size. obj + 1 wrote the pointer over the subclass's own fields.
+	void *data = (char*)obj + si.object_size;
 	if (si.nested_object_size)
 	{
 		ZeroMemory(data, si.nested_object_size);
