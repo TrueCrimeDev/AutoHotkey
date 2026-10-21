@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A native AutoHotkey `2.1-alpha.35+Console` fork. The engine supplies shell
+A native AutoHotkey `2.1-alpha.36+Console` fork. The engine supplies shell
 commands, structured diagnostics, Eval, JSON, Inspect, ProcessPipe, source
 introspection, coverage, and an MCP server. The TypeScript debugger integrations
 under `debugger-tool/` are separate consumers of the engine's DBGp protocol.
@@ -438,18 +438,23 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
 
 ---
 
-# Current State & Open Items (updated 2026-10-12)
+# Current State & Open Items (updated 2026-10-21)
 
-- Target language version: `2.1-alpha.35+Console`, based on upstream
-  `v2.1-alpha.35` (`3a1291c6`; merged 2026-10-12, `docs/alpha/v2.1-alpha.35.md`
-  and `v2.1-alpha.34.md`). Always verify the actual executable's
+- Target language version: `2.1-alpha.36+Console`, based on upstream
+  `v2.1-alpha.36` (`0b8e6fa3`; merged 2026-10-21, `docs/alpha/v2.1-alpha.36.md`;
+  alpha.34/35 notes beside it). Always verify the actual executable's
   `--version` and hash; historical files in `bin/` or `bin_harness/` may be
-  stale. Since 2026-10-12 `bin/` holds the local MSVC x64 build of the alpha.35
-  merge (`2.1-alpha.35+Console`); `bin/*.f14d7427.bak` are the previous CI
-  engines of `f14d7427` (run 37807040408), and `bin/*.alpha33.bak` the
-  `f7712ec15171` ones before that. Alpha.35's `Script::GetSearchPath` dropped
-  every library directory after the first missing one (upstream bug, fixed
-  here; `docs/upstream/alpha35-searchpath-last-dir.md`).
+  stale. Since 2026-10-21 `bin/` holds the local MSVC x64 build of the alpha.36
+  merge (`2.1-alpha.36+Console`, revision `a41db9a12322`); `bin/*.56f57edb.bak`
+  are the alpha.35 engines before it, `bin/*.f14d7427.bak` the CI engines of
+  `f14d7427` (run 37807040408), and `bin/*.alpha33.bak` the `f7712ec15171` ones.
+  Alpha.35's `Script::GetSearchPath` bug (every library directory after the
+  first missing one dropped) was fixed here and then upstream in `abe3ff20`.
+  Alpha.36's `ObjCreateWithDataPtr` wrote its pointer over the fields of a
+  native class larger than `Object` (`Map`, `Array`, `Buffer`, `ProcessPipe`,
+  `JSON.Object`) and corrupted the heap; fixed here in `a41db9a1`, pinned by
+  `qa/tests/test_alpha36.ahk` section 3, report in
+  `docs/upstream/alpha36-createstructptr-offset.md` (not yet sent upstream).
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.
@@ -535,7 +540,7 @@ skipped, as on any non-tag run) and are marked [x] below with how they were veri
 - [x] FIXED 2026-10-09 (roadmap Track C item 5): an `Eval` `SyntaxError` was built by hand (`source/console_eval.cpp`: own `Message`, `File` `_Eval`, `Line` 0, `Column` 0 only), so reading `What`, `Extra` or `Stack` threw `PropertyError`. `ConsoleEval::Evaluate` now rebuilds the parser's exception through `Line::CreateRuntimeException` with the `SyntaxError` prototype, so `Error.__New` fills `What` (`"Eval"`), `Extra` (the parser's token, e.g. `"+"` for `1 + + +`) and `Stack` as for any runtime error, then sets `File`, `Line` and `Column` to their documented values. Verified: `tests/test_eval.ahk` section I (fails `I.1 has What property` on the engine before the fix); `Check("1 +")` records and the REPL's `SyntaxError` output are unchanged.
 - [ ] An `Eval` assignment inside a function adds a local to it for good (`source/console_eval.cpp:28` parses in the caller's scope): a later call's `Eval("qq")` reports a *local* unset, and `Eval("gv := 5")` leaves global `gv` unchanged. Documented in `updates.md:107`-`120`; close as intended or change it.
 - [x] FIXED 2026-10-08 (`ec684fd0`): `--coverage=` into a missing directory wrote nothing, printed nothing and exited 0. `WriteWholeFile` (`source/coverage.cpp`) now creates every missing level (`FileCreateDir`) and `ReportWriteFailure` prints one stderr line when the report still cannot be written, leaving the exit code alone. Verified: `qa/tests/test_coverage_missing_dir.ahk` 41/41; `out/a/b/probe.lcov` (relative, forward slashes) was created under `run` and `test`, also on an uncaught-error exit 10; a path under a file printed `Coverage report "<path>" not written: could not create its directory (Win32 error 183: ...)`, a directory path `... not written (Win32 error 5: Access is denied.)`, `--diag=json` one `"type":"OSError"` warning record with the path in `extra`, `/StdErrFile` mirrored it, and exit codes stayed 0 and 3 (`ExitApp(3)`).
-- [ ] Latent factory bug, same class as the `JSON()` one: `File`, `Func`, `BoundFunc`, `Closure`, `Enumerator` and `RegExMatchInfo` are created without a factory of their own (`source/TextIO.cpp:1024`; `no_ctor` in `source/script_object.cpp:4372`-`4384`), so `X()` and `(Object.Call)(X)` build a plain Object on the native prototype (`Type` reports the class and `is X` is true; probed by construction only on `f14d74270a2b`). Calling a native method or property on it would read past its end as JSON's did; not run, on purpose. For `VarRef`, `Module`, `Menu`, `MenuBar`, `ComValue`, `ComObjArray`, `ComValueRef`, `Struct`, `JSON` and the primitive classes, `(Object.Call)(X)` throws "Invalid base." (their direct `X()` calls behave in their own ways); classes whose prototype has `__New` (`Buffer`, `Map`, `Array`, `Gui`, `InputHook`, `ProcessPipe`, the Error classes) were not probed. Fix: record a factory or a throwing `Call`, as `7b1a23b6` did for JSON, and report it upstream.
+- [x] FIXED upstream 2026-10-18 (`65189b9c`, v2.1-alpha.36): `File`, `Func`, `BoundFunc`, `Closure`, `Enumerator` and `RegExMatchInfo` had no factory of their own, so `X()` and `(Object.Call)(X)` built a plain Object on the native prototype (same class as the `JSON()` bug). `Object::GetStructInfo` no longer lets a native class prototype inherit `Object`'s factory. Verified on `a41db9a12322` (`qa/tests/test_alpha36.ahk` section 4): all twelve calls throw `ValueError` "Invalid base."; `JSON()` still throws the fork's `TypeError`, `(Object.Call)(JSON)` "Invalid base.", and `ProcessPipe`, `SyntaxError`, `JSONError`, `(Object.Call)(Error)` and script subclasses of `Map` still construct. Side effect: `(Object.Call)(Struct)` now returns a `Struct` (it threw "Invalid base." on alpha.35).
 - [ ] DBGp has no `eval` command (`source/Debugger.cpp:47` command table; `eval` answers error 4) and `breakpoint_set` rejects `--` conditions (`:771`, error 3), as upstream alpha.33 does: clients read paths with `property_get`.
 - [ ] Native `source_outline`/`workspace_symbols` match functions with one line regex (`source/mcp_server.cpp:930`-`931`, `MatchFuncDecl`), so they miss a function whose default parameters contain parentheses and every fat-arrow function: on `qa/Harness.ahk` they skip `RunQaChild` (line 25) and `SnippetOut` (line 118), which `ast_outline` finds (same on alpha.31). Engine fix: balance nested parentheses and accept `=>` bodies.
 - [x] FIXED 2026-10-09 (`m1/cli-help`): `--help` (`source/AutoHotkey.cpp:86`) listed only slash options. It now lists every spelling `ParseCmdLineArgs` accepts, grouped as commands, information, options and command switches: `/Debug[=host[:port]|stdio]`, the Git Bash aliases (`--headless`, `--diag`, `--eval`, `--trace`, `--check`, `--test`, `--crashlog=`, `--stderrfile=`, `--coverage=`), `/ErrorStdOut:color|nocolor`, `/version`, `/restart`, `/script`, `/validate` and `/iLib file`. `tests/test_console_cli.py` pins that list and also scans the parser's own `_T("/...")`/`_T("--...")` literals, so an option added to the parser without help text fails the gate. `--capabilities` carries no options list and gained none.

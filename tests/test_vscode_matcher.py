@@ -275,7 +275,7 @@ class GenSyntaxesTests(unittest.TestCase):
             for name in ("ahk2.d.ahk", "zh-cn/ahk2.d.ahk"):
                 text = first[name].decode("utf-8")
                 self.assertTrue(text.startswith(self.BUNDLED_D.rstrip("\r\n")), name)
-                self.assertEqual(text.count(";@region fork (AutoHotkey 2.1-alpha.35+Console)"), 1, name)
+                self.assertEqual(text.count(";@region fork (AutoHotkey 2.1-alpha.36+Console)"), 1, name)
                 self.assertEqual(text.count("\n") + 1, text.count("\r\n") + 1, "line endings follow the bundled file")
                 for declaration in ("Eval(Expression) => ", "Print(Fmt?, Values*) => void", "Check(Source) => Object",
                                     "Inspect(Value, Depth := 2, MaxItems := 100) => String", "TSParse(Source) => Object",

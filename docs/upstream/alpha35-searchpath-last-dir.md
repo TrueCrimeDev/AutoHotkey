@@ -3,7 +3,10 @@
 **Affects:** upstream `v2.1-alpha.35` (`3a1291c6`, "Revised search logic for
 #Include <MyLib> and #Import"), `source/script_module.cpp`, `Script::GetSearchPath`.
 **Found:** 2026-10-12 while merging alpha.35 into this fork.
-**Status:** fixed in this fork on branch `m1/upstream-alpha35`; not yet reported upstream.
+**Status:** fixed in this fork on branch `m1/upstream-alpha35` (`57bb8dcc`), then
+upstream in `abe3ff20` ("Fixed AhkLibPath directory ignored if previous directory
+didn't exist.", v2.1-alpha.36) with the same change. The alpha.36 merge takes
+upstream's line; nothing left to report.
 
 ## Symptom
 

@@ -5,7 +5,7 @@ errors go to `stderr` (as text **or** JSON), failures return meaningful exit cod
 can be suppressed, and the debugger speaks DBGp so an LLM can drive it. Everything else is
 stock AutoHotkey.
 
-![engine](https://img.shields.io/badge/engine-2.1--alpha.35%2BConsole-5B9FEF)
+![engine](https://img.shields.io/badge/engine-2.1--alpha.36%2BConsole-5B9FEF)
 ![based on](https://img.shields.io/badge/based%20on-AutoHotkey%20v2.1--alpha-22D3EE)
 [![Build AutoHotkey](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml/badge.svg)](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml)
 ![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/TrueCrimeDev/AutoHotkey/badges/coverage.json)
@@ -60,7 +60,7 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 | **stdout helper** | `FileOpen("*","w")` boilerplate | `Print(fmt, args*)` — UTF-8, `Format`-aware |
 | **Debugger** | DBGp (desktop-oriented) | Same DBGp, wired to an MCP server for LLM-driven debugging |
 
-None of this touches the language. The engine is upstream `v2.1-alpha.35` (see [`docs/alpha/v2.1-alpha.35.md`](docs/alpha/v2.1-alpha.35.md)),
+None of this touches the language. The engine is upstream `v2.1-alpha.36` (see [`docs/alpha/v2.1-alpha.36.md`](docs/alpha/v2.1-alpha.36.md)),
 so scripts that run on that upstream code run here unchanged; the additions are flags,
 subcommands, and a few opt-in built-ins.
 
@@ -367,7 +367,7 @@ live.
 
 ```text
 $ bin\AutoHotkey64Console.exe repl
-AutoHotkey v2.1-alpha.35+Console REPL - one expression per line; .help for commands
+AutoHotkey v2.1-alpha.36+Console REPL - one expression per line; .help for commands
 >>> x := 10
 10
 >>> x * 4
@@ -408,7 +408,7 @@ last events survive even a hard crash. It works regardless of how the script was
 including launchers that discard `stderr`.
 
 ```text
-[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.35+Console script=C:\app\app.ahk ...
+[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.36+Console script=C:\app\app.ahk ...
 [2026-05-13 21:43:22] [ERROR] pid=12345 type=MethodError mode=Return
   Message: This value of type "String" has no method named "DoStuff".
   File: C:\app\Lib\Clip.ahk

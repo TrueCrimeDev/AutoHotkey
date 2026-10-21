@@ -1,7 +1,7 @@
 ;
 ; fork.d.ahk: declarations for thqby's vscode-autohotkey2-lsp covering this
-; fork's additions on top of AutoHotkey v2.1-alpha.35. The engine reports
-; A_AhkVersion = "2.1-alpha.35+Console".
+; fork's additions on top of AutoHotkey v2.1-alpha.36. The engine reports
+; A_AhkVersion = "2.1-alpha.36+Console".
 ;
 ; This file holds declarations only, not code. Do not #Include it: the engine
 ; would load each entry as a script definition that shadows the built-in, and

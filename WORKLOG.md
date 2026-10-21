@@ -728,3 +728,51 @@ unlogged loop session between 3 and now.)
   fixtures now `resolve()` the path (`d001b0b1`). Run 38343502990 on `d001b0b1`
   passed all jobs: debugger-clients, build (x64), build (Win32), build-mingw and
   test; badge and release skipped as on any non-tag, non-`alpha` run.
+
+### Session 18 (2026-10-21) — upstream v2.1-alpha.36 merge
+
+- Merged upstream tag `v2.1-alpha.36` (`0b8e6fa3`, five commits after
+  `3a1291c6`) on `m1/upstream-alpha36` (`cc41eaa8`): `ObjCreateWithDataPtr`
+  (`7aa2e0ea`), invalid constructor calls such as `RegExMatchInfo()`
+  (`65189b9c`), the `#Import` conflicting-local error (`0b8e6fa3`), the
+  `AhkLibPath` fix (`abe3ff20`) and freeing `mSearchPath` after load
+  (`ee7f3514`). One conflict, `Script::GetSearchPath`: upstream's `abe3ff20` is
+  the fork's `57bb8dcc` fix, so upstream's line was taken.
+  `ahkversion.h` is `2.1-alpha.36+Console` / `2,1,0,36`; every
+  `2.1-alpha.35+Console` tag was bumped, and the stale `AhkVersionN 2,1,0,33`
+  in `build_local.bat` and `.vscode/tasks.json` fixed.
+- **Upstream bug found and fixed** (`a41db9a1`): `Object::CreateStructPtr`
+  now constructs through `si.create`, so `ObjCreateWithDataPtr` can build a
+  `Map`, `Array`, `Buffer`, `ProcessPipe` or `JSON.Object`, but it still wrote
+  the pointer at `obj + 1` while `DataPtr()`/`SetDataPtr()` read it at
+  `object_size`. `ObjGetDataPtr` returned garbage, the pointer overwrote the
+  object's first field, and the heap was corrupted (exit 127 on the official
+  `AutoHotkey_2.1-alpha.36.zip`, sha256 `300f9610...5550`; 0xC0000374 in the
+  qa child). Fixed by starting the suffix at `object_size`;
+  `docs/upstream/alpha36-createstructptr-offset.md` is the report.
+- `65189b9c` closes the CLAUDE.md "latent factory bug" item: `RegExMatchInfo`,
+  `File`, `Func`, `BoundFunc`, `Closure` and `Enumerator`, called directly or
+  through `Object.Call`, throw `ValueError` "Invalid base." (alpha.35 returned
+  a plain Object on the native prototype). Fork classes probed on both
+  engines: `JSON()`, `(Object.Call)(JSON)`, `ProcessPipe`, `SyntaxError`,
+  `JSONError`, `(Object.Call)(Error)` and script subclasses are unchanged.
+  New side effect: `(Object.Call)(Struct)` returns a `Struct`.
+  `ObjCreateWithDataPtr(ProcessPipe, 0)` and `(JSON, 0)` skip `__New` but are
+  safe (an unstarted pipe reports "The process was not started.").
+- New `qa/tests/test_alpha36.ahk` (44 asserts): `ObjCreateWithDataPtr` on
+  struct and script classes (Address 0, <65536, `__New` skipped, `__Delete`
+  called), the native-class data pointer (section 3, in a child), the six
+  constructor calls, the `#Import` local/after/alias/parameter conflicts
+  (alpha.35 silently shadowed them), and `AhkLibPath` after a missing
+  directory. On the pre-fix build of `cc41eaa8` only the two section 3
+  asserts fail (child exit 0xC0000374). `test_alpha35.ahk` now expects
+  `A_AhkVersion` instead of a literal version.
+- Results on the MSVC x64 build `a41db9a12322` (`out/msvc/x64`): console gate
+  17/17 suites (qa 947/947 across 18 files), `check_all` 106/106,
+  `.claude/hooks/test-hooks.sh` 171/171. Installed into `bin/` and
+  `Documents\Design\Coding\AutoHotkey\bin`, previous engines kept as
+  `*.56f57edb.bak`; `bin/AutoHotkey64Console.capabilities.json` regenerated;
+  the leftover `bin/AutoHotkey64Console.exe.inuse.f14d7427` deleted. Project
+  MCP servers started before the swap still run the alpha.35 file (now
+  `bin/AutoHotkey64Console.56f57edb.bak`) until reconnected (`/mcp`).
+- Not done: CI run, push, and the upstream report for `CreateStructPtr`.
