@@ -455,6 +455,9 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   `JSON.Object`) and corrupted the heap; fixed here in `a41db9a1`, pinned by
   `qa/tests/test_alpha36.ahk` section 3, report in
   `docs/upstream/alpha36-createstructptr-offset.md` (not yet sent upstream).
+  CI run 39685156323 on `83d013e8` passed every build, test and
+  debugger-clients job (x64 after one rerun of a PowerShell cold-start
+  timeout; WORKLOG Session 18).
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.

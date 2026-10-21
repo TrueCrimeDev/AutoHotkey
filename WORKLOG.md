@@ -781,5 +781,15 @@ unlogged loop session between 3 and now.)
   now succeed (alpha.35 `56f57edb`: `PropertyError`); `Pt()` still throws.
   Same on the official zip, exit 0. Added to the upstream report and CLAUDE.md
   open items; not fixed, to keep the fork's diff from upstream small.
-- Not done: CI run (Win32 and mingw untested), push, and sending the upstream
-  report for `CreateStructPtr`.
+- Pushed `feat/console-cleanup-20260919` (`2710a696..83d013e8`). CI
+  (`workflow_dispatch`; the push alone starts no run): run 39685156323 on
+  `83d013e8` passed debugger-clients, build (Win32), build-mingw and test, and
+  build (x64) after one rerun of the failed job; badge and release skipped.
+  The first x64 attempt failed one case: `test_powershell_cli.py`
+  `test_bare_command` timed out after 12 s (`tests/test_powershell_cli.py:57`)
+  on the job's first `powershell.exe` launch, while its other nine cases and
+  the same suite in the Win32 and mingw jobs passed; the rerun passed it. CI
+  counts qa 952/952 against 947 locally: `test_alpha31.ahk`'s five PixelSearch
+  pins skip on the `tools/run_hidden.py` desktop, which cannot copy the screen.
+- Not done: sending the upstream report for `CreateStructPtr`, and the
+  struct-view `CannotOwnProps` fix.
