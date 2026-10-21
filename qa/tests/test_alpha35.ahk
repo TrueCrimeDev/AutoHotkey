@@ -77,6 +77,9 @@ Assert.falsy(o.HasOwnProp("bad") || o.HasOwnProp("bad2"), "DefineProp rejected d
 ;    AhkLibPath environment variable replaces the default search list, so the
 ;    child finds the library in a directory that is not A_ScriptDir\Lib.
 ; OLD (v2.1 mode): `#Include <A_B>` fell back to A.ahk, like v2.0.
+; The child runs from %TEMP%, which has no Lib folder: upstream alpha.35 then
+; dropped every later search entry, AhkLibPath included (fixed in the fork,
+; then upstream in abe3ff20, v2.1-alpha.36).
 libDir := A_Temp "\qa_lib35_" ProcessExist() "_" A_TickCount
 DirCreate(libDir)
 FileAppend("global QaLib35 := `"A.ahk`"`n", libDir "\A.ahk", "UTF-8")
@@ -103,6 +106,6 @@ try {
 ;    (braces are not Format placeholders), and the Format form.
 r := RunSnippet("Print()`nPrint(`"{ok: true}`")`nPrint(`"0x{:08X} = {1}`", 0xD05)`nPrint(A_AhkVersion)")
 Assert.eq(r.code, 0, "Print: exit 0")
-Assert.eq(r.out, "`n{ok: true}`n0x00000D05 = 3333`n2.1-alpha.35+Console`n", "Print: blank line, verbatim single arg, Format form, version")
+Assert.eq(r.out, "`n{ok: true}`n0x00000D05 = 3333`n" A_AhkVersion "`n", "Print: blank line, verbatim single arg, Format form, version")
 
 Assert.Summary()

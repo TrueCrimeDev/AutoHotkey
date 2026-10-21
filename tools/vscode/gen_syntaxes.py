@@ -52,13 +52,13 @@ REGION_START = ";@region fork"
 DIRECTIVES = [
     {
         "body": "#EnableEval",
-        "description": "Enables the fork's Eval(Expression) built-in for this script; the same as the /Eval command-line switch. Without either, every Eval call throws Error: \"Eval is disabled (add #EnableEval to your script or pass /Eval)\". Top-of-script scope, like #Requires. AutoHotkey 2.1-alpha.35+Console fork only.",
+        "description": "Enables the fork's Eval(Expression) built-in for this script; the same as the /Eval command-line switch. Without either, every Eval call throws Error: \"Eval is disabled (add #EnableEval to your script or pass /Eval)\". Top-of-script scope, like #Requires. AutoHotkey 2.1-alpha.36+Console fork only.",
         "prefix": "#EnableEval",
         "syntax": "#EnableEval",
     },
     {
         "body": "#CrashLog ${1:Path}",
-        "description": "Writes the fork's structured crash log ([START], [ERROR], [EXIT] records with the script stack) to Path for this script; the same as the /CrashLog=Path command-line switch, and the directive wins when both are given. Quoted paths are accepted. Top-of-script scope, like #Requires. AutoHotkey 2.1-alpha.35+Console fork only.",
+        "description": "Writes the fork's structured crash log ([START], [ERROR], [EXIT] records with the script stack) to Path for this script; the same as the /CrashLog=Path command-line switch, and the directive wins when both are given. Quoted paths are accepted. Top-of-script scope, like #Requires. AutoHotkey 2.1-alpha.36+Console fork only.",
         "prefix": "#CrashLog",
         "syntax": "#CrashLog Path",
     },

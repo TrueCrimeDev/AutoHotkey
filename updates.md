@@ -1,6 +1,6 @@
 # Updates — Fork Changes Reference
 
-This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.35` in this fork. Use it as the entry point for "what's new and how do I use it."
+This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.36` in this fork. Use it as the entry point for "what's new and how do I use it."
 
 ## Overview at a glance
 
@@ -353,7 +353,7 @@ Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] ke
 ### Example log
 
 ```
-[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.35+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64Console.exe /CrashLog=C:\logs\ahk.log app.ahk"
+[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.36+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64Console.exe /CrashLog=C:\logs\ahk.log app.ahk"
 [2026-05-13 21:43:22] [ERROR] pid=12345 type=MethodError mode=Return
   Message: This value of type "String" has no method named "DoStuff".
   File: C:\Users\me\Lib\Clip.ahk

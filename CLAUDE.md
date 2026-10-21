@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A native AutoHotkey `2.1-alpha.35+Console` fork. The engine supplies shell
+A native AutoHotkey `2.1-alpha.36+Console` fork. The engine supplies shell
 commands, structured diagnostics, Eval, JSON, Inspect, ProcessPipe, source
 introspection, coverage, and an MCP server. The TypeScript debugger integrations
 under `debugger-tool/` are separate consumers of the engine's DBGp protocol.

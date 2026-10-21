@@ -94,6 +94,7 @@ FuncEntry g_BIF[] =
 	BIF1(NumPut, 3, NA),
 	BIFn(ObjAddRef, 1, 1, BIF_ObjAddRefRelease),
 	BIF1(ObjBindMethod, 1, NA),
+	BIFi(ObjCreateWithDataPtr, 2, 2, StructClass_At, true),
 	BIFn(ObjFromPtr, 1, 1, BIF_ObjPtr),
 	BIFn(ObjFromPtrAddRef, 1, 1, BIF_ObjPtr),
 	BIFn(ObjGetBase, 1, 1, BIF_Base),
@@ -472,6 +473,14 @@ Script::~Script() // Destructor.
 
 	DeleteCriticalSection(&g_CriticalRegExCache); // g_CriticalRegExCache is used elsewhere for thread-safety.
 	OleUninitialize();
+}
+
+
+
+void Script::FreePreparseBuffers()
+{
+	free(mSearchPath); // This is essentially just a cache, and isn't needed during execution.
+	mSearchPath = nullptr;
 }
 
 
@@ -1526,6 +1535,8 @@ UINT Script::LoadFromFile(LPCTSTR aFileSpec)
 
 	if (!PreparseCommands())
 		return LOADING_FAILED; // Error was already displayed by the above calls.
+
+	FreePreparseBuffers();
 	
 #ifndef AUTOHOTKEYSC
 	if (mValidateThenExit)

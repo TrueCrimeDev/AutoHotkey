@@ -270,6 +270,8 @@ Var *ScriptModule::AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, ScriptImport
 	int at;
 	auto &vars = aImp.scope ? aImp.scope->mStaticVars : mVars;
 	auto var = vars.Find(aVarName, &at);
+	if (!var && aImp.scope) // Check for conflicting local declarations.
+		var = aImp.scope->mVars.Find(aVarName);
 	if (var)
 	{
 		// mVars should contain only declared or exported variables at this point.
@@ -613,11 +615,7 @@ LPCTSTR Script::GetSearchPath(SearchPathForType aFor)
 		DWORD attr = GetFileAttributes(cp);
 		if (attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY))
 			continue; // Ignore this item.
-		// Only a kept item may serve as last_dir: a discarded one still lives at cp,
-		// so pointing last_dir there would make the next item compare equal to itself
-		// and be dropped too (upstream v2.1-alpha.35: everything after the first
-		// missing Lib directory was ignored, including AhkLibPath entries).
-		last_dir = cp;
+		last_dir = cp; // Only after confirming the item is kept.
 		cp += len + 1; // Write the next item after the null terminator.
 	}
 	if (cp == buf) // No items; could happen in the case of a malformed env var.
