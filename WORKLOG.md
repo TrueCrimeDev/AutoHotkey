@@ -775,4 +775,11 @@ unlogged loop session between 3 and now.)
   the leftover `bin/AutoHotkey64Console.exe.inuse.f14d7427` deleted. Project
   MCP servers started before the swap still run the alpha.35 file (now
   `bin/AutoHotkey64Console.56f57edb.bak`) until reconnected (`/mcp`).
-- Not done: CI run, push, and the upstream report for `CreateStructPtr`.
+- **Upstream regression left as is**: the same `CreateStructPtr` change tests
+  `obj->IsOfType(Object::sStructPrototype)` before `SetBase`, so struct views
+  never get `CannotOwnProps`: `Pt.At(ptr).foo := 1` and `Int32.At(ptr).foo := 1`
+  now succeed (alpha.35 `56f57edb`: `PropertyError`); `Pt()` still throws.
+  Same on the official zip, exit 0. Added to the upstream report and CLAUDE.md
+  open items; not fixed, to keep the fork's diff from upstream small.
+- Not done: CI run (Win32 and mingw untested), push, and sending the upstream
+  report for `CreateStructPtr`.

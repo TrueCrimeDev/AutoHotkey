@@ -63,3 +63,37 @@ FileAppend("released`n", "*")                         ; printed, then the proces
 
 Pinned in this fork by `qa/tests/test_alpha36.ahk` section 3 (the child exits
 0xC0000374 on an engine without the fix).
+
+## Second issue in the same change: struct views accept own properties
+
+`CreateStructPtr` sets `CannotOwnProps` with
+
+```cpp
+	if (obj->IsOfType(Object::sStructPrototype))
+		obj->mFlags |= CannotOwnProps;
+```
+
+before `obj->SetBase(aBase)`, while the new object's base is still the one
+its factory gave it (`Object.Prototype` for a struct), so the test is always
+false. `StructClass.At` shares the function, so its views now accept own
+properties:
+
+```autohotkey
+struct Pt {
+    x : Int32
+}
+buf := Buffer(8, 0)
+s := Pt.At(buf.Ptr)
+s.foo := 1        ; alpha.35: PropertyError "This value of type "Pt" has no property named "foo"."
+                  ; alpha.36: accepted (also Int32.At(buf.Ptr).foo := 1)
+```
+
+`Pt()` (`CreateStruct`) still throws. No memory damage was seen. Testing the
+class instead restores the old behaviour:
+
+```cpp
+	if (aBase->IsDerivedFrom(Object::sStructPrototype))
+		obj->mFlags |= CannotOwnProps;
+```
+
+Not changed in this fork.
