@@ -60,7 +60,7 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 | **stdout helper** | `FileOpen("*","w")` boilerplate | `Print(fmt, args*)` — UTF-8, `Format`-aware |
 | **Debugger** | DBGp (desktop-oriented) | Same DBGp, wired to an MCP server for LLM-driven debugging |
 
-None of this touches the language. The engine is upstream `v2.1-alpha.35` (see [`docs/alpha/v2.1-alpha.35.md`](docs/alpha/v2.1-alpha.35.md)),
+None of this touches the language. The engine is upstream `v2.1-alpha.36` (see [`docs/alpha/v2.1-alpha.36.md`](docs/alpha/v2.1-alpha.36.md)),
 so scripts that run on that upstream code run here unchanged; the additions are flags,
 subcommands, and a few opt-in built-ins.
 

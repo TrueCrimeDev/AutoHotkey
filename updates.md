@@ -24,7 +24,7 @@ This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.
 | Interactive / pipe-driven REPL | `repl` subcommand (see §16) | n/a — explicit mode |
 | Debugger connection notices | `Debugger error: ...` line or JSON warning instead of a modal prompt (see §22) | Always on |
 
-Everything else inherited from upstream `v2.1-alpha.35` works as documented upstream (implicit `export` for names defined inside a `#Module`, tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc.). The per-release notes are in `docs/alpha/`; `v2.1-alpha.34.md` and `v2.1-alpha.35.md` cover the latest merge (2026-10-12). `examples/Alpha31_Example.ahk` remains the runnable showcase of the alpha.31 changes.
+Everything else inherited from upstream `v2.1-alpha.36` works as documented upstream (implicit `export` for names defined inside a `#Module`, tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc.). The per-release notes are in `docs/alpha/`; `v2.1-alpha.36.md` covers the latest merge (2026-10-21), including the fork's fix to `ObjCreateWithDataPtr` on native classes. `examples/Alpha31_Example.ahk` remains the runnable showcase of the alpha.31 changes.
 
 ---
 
