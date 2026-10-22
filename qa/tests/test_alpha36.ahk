@@ -1,6 +1,7 @@
 #Requires AutoHotkey v2.1-alpha.36
 ; test_alpha36.ahk -- pins behaviour from the upstream v2.1-alpha.36 merge
-; (2026-10-21) and the fork's fix to ObjCreateWithDataPtr on that engine. Every
+; (2026-10-21) and the fork's two fixes to Object::CreateStructPtr, which
+; ObjCreateWithDataPtr and StructClass.At share (sections 3 and 7). Every
 ; fact below was verified against 2.1-alpha.36+Console; the "OLD:" note on a
 ; section records what 2.1-alpha.35+Console (56f57edb) or the official upstream
 ; AutoHotkey_2.1-alpha.36.zip did, so an assert that only passes here is
@@ -147,5 +148,28 @@ try {
     EnvSet("AhkLibPath", "")
     try DirDelete(libDir, true)
 }
+
+; 7. Fork fix: struct views reject own properties again. Object::CreateStructPtr
+;    tested IsOfType(Struct.Prototype) before SetBase, while the new object still
+;    had its factory's base, so CannotOwnProps was never set.
+; OLD (official alpha.36, and a41db9a1): every assignment below succeeded;
+;      alpha.35 threw PropertyError for StructClass.At, Int32.At and the Ptr
+;      dereference (ObjCreateWithDataPtr did not exist).
+noProp := "no property named `"foo`""
+pv := QaPt36.Ptr()
+NumPut("Ptr", buf.Ptr, pv.Ptr)
+Assert.throws(() => QaPt36.At(buf.Ptr).foo := 1, "StructClass.At view rejects an own property", noProp)
+Assert.throws(() => Int32.At(buf.Ptr).foo := 1, "Int32.At view rejects an own property", noProp)
+Assert.throws(() => pv.__Value.foo := 1, "StructClass.Ptr dereference rejects an own property", noProp)
+Assert.throws(() => ObjCreateWithDataPtr(QaPt36, buf.Ptr).foo := 1, "ObjCreateWithDataPtr(struct) rejects an own property", noProp)
+Assert.throws(() => ObjCreateWithDataPtr(QaPt36, 0).foo := 1, "ObjCreateWithDataPtr(struct, 0) rejects an own property", noProp)
+; Only struct views: an object of any other class keeps its own properties.
+mo := ObjCreateWithDataPtr(Map, buf.Ptr)
+mo.foo := 1
+Assert.eq(mo.foo, 1, "ObjCreateWithDataPtr(Map) still accepts an own property")
+cv := ObjCreateWithDataPtr(QaView36, buf.Ptr)
+cv.foo := 2
+Assert.eq(cv.foo, 2, "ObjCreateWithDataPtr(class) still accepts an own property")
+mo := cv := ""
 
 Assert.Summary()
