@@ -793,3 +793,30 @@ unlogged loop session between 3 and now.)
   pins skip on the `tools/run_hidden.py` desktop, which cannot copy the screen.
 - Not done: sending the upstream report for `CreateStructPtr`, and the
   struct-view `CannotOwnProps` fix.
+
+### Session 19 (2026-10-22) — alpha.36 follow-ups
+
+- **Struct views reject own properties again** (`f24c23d1`, branch
+  `m1/alpha36-followups`): `Object::CreateStructPtr` now tests
+  `obj->IsOfType(Object::sStructPrototype)` after `SetBase` instead of
+  before it. Probed on `a41db9a12322` and the new build: `Pt.At`, `Int32.At`,
+  a `Pt.Ptr` `__Value` dereference, `ObjCreateWithDataPtr` on a struct (also
+  Address 0), on `Int32` and on `Struct` accepted `.foo := 1` before and
+  throw `PropertyError` after; `ObjCreateWithDataPtr` on `Map`, `Object` and a
+  script class still accept it; `Pt()` threw throughout. Alpha.35
+  (`56f57edb`) threw for `Pt.At`, `Int32.At` and the dereference. Moving the
+  test was preferred over the report's earlier `aBase->IsDerivedFrom` form,
+  which misses a view of `Struct` itself (`IsDerivedFrom` starts at the
+  base's base); the report now gives the moved test.
+- `qa/tests/test_alpha36.ahk` section 7 (7 asserts, 51 in the file): on
+  `a41db9a1` its five struct asserts fail, on the new build all pass.
+- `tests/test_powershell_cli.py` (`165d7384`): `setUpClass` starts each shell
+  once with a 120-s limit, so the first Windows PowerShell 5.1 launch on a
+  fresh runner (run 39685156323's 12-s timeout) is not charged to a case.
+  Local run: 10/10 in 10 s.
+- Results on the MSVC x64 build `165d73849eb0`: console gate 17/17 suites (qa
+  954/954 across 18 files), `check_all` 106/106, `test-hooks.sh` 171/171.
+  Installed into `bin/` and `Documents\Design\Coding\AutoHotkey\bin`,
+  previous engines kept as `*.a41db9a1.bak`; capabilities JSON regenerated.
+- Still open: sending `docs/upstream/alpha36-createstructptr-offset.md` (now
+  both issues) upstream.
