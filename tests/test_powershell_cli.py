@@ -43,7 +43,16 @@ def quote(value):
 
 
 class PowerShellCliTests(unittest.TestCase):
-    def run_ps(self, shell, command, cwd=None):
+    @classmethod
+    def setUpClass(cls):
+        # The first Windows PowerShell 5.1 launch on a fresh CI runner can take
+        # longer than a case's 12 s (run 39685156323 timed out test_bare_command
+        # while every later launch passed), so start each shell once up front.
+        for shell in SHELLS:
+            cls.run_ps(shell, "exit 0", timeout=120)
+
+    @staticmethod
+    def run_ps(shell, command, cwd=None, timeout=12):
         bootstrap = "[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)\n$OutputEncoding = [Text.UTF8Encoding]::new($false)\n"
         args = [shell, "-NoLogo", "-NonInteractive"]
         if options.wrapper:
@@ -54,7 +63,7 @@ class PowerShellCliTests(unittest.TestCase):
         if options.engine:
             env["AHK_CONSOLE_EXE"] = str(options.engine.resolve())
         return subprocess.run([*args, "-EncodedCommand", encoded], cwd=cwd or ROOT, env=env,
-                              capture_output=True, timeout=12)
+                              capture_output=True, timeout=timeout)
 
     def check_all(self, command, expected, code=0, cwd=None):
         for shell in SHELLS:
