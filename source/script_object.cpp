@@ -173,8 +173,6 @@ Object *Object::CreateStructPtr(Object *aBase, UINT_PTR aPtr, bool aCallDelete)
 	auto &si = *aBase->GetStructInfo(true);
 	Object *obj = si.create(si.nested_object_size + sizeof(void*));
 	obj->mFlags |= DataIsSuffixPtr;
-	if (obj->IsOfType(Object::sStructPrototype))
-		obj->mFlags |= CannotOwnProps;
 	if (!aCallDelete)
 		obj->mFlags |= NoCallDelete;
 	// The suffix follows the native object, which can be larger than Object (Map,
@@ -188,6 +186,11 @@ Object *Object::CreateStructPtr(Object *aBase, UINT_PTR aPtr, bool aCallDelete)
 	}
 	*(UINT_PTR*)data = aPtr;
 	obj->SetBase(aBase);
+	// Only after SetBase: before it the base is still the factory's default, so the
+	// test failed and every struct view (StructClass.At, Pt.Ptr's __Value) could own
+	// properties.
+	if (obj->IsOfType(Object::sStructPrototype))
+		obj->mFlags |= CannotOwnProps;
 	return obj;
 }
 

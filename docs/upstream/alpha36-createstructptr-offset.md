@@ -5,7 +5,8 @@
 **Found:** 2026-10-21 while merging alpha.36 into this fork. Reproduced on the
 official `AutoHotkey_2.1-alpha.36.zip` (`AutoHotkey64.exe`; zip sha256
 `300f9610664b4f3c22468579a30ca993d3f473a307f1421f45c6ede2ab9a5550`).
-**Status:** fixed in this fork on branch `m1/upstream-alpha36`; not yet reported upstream.
+**Status:** both issues fixed in this fork (the offset on `m1/upstream-alpha36`,
+the own-property regression on `m1/alpha36-followups`); not yet reported upstream.
 
 ## Symptom
 
@@ -88,12 +89,23 @@ s.foo := 1        ; alpha.35: PropertyError "This value of type "Pt" has no prop
                   ; alpha.36: accepted (also Int32.At(buf.Ptr).foo := 1)
 ```
 
-`Pt()` (`CreateStruct`) still throws. No memory damage was seen. Testing the
-class instead restores the old behaviour:
+The dereferenced view from `Pt.Ptr`'s `__Value` (the other `CreateStructPtr`
+caller) accepts them too. `Pt()` (`CreateStruct`) still throws. No memory
+damage was seen.
+
+Moving the test after `SetBase` restores alpha.35's `PropertyError` for every
+struct view, including one of `Struct` itself (`aBase->IsDerivedFrom` would
+miss that case, because `IsDerivedFrom` starts at the base's base):
 
 ```cpp
-	if (aBase->IsDerivedFrom(Object::sStructPrototype))
+	*(UINT_PTR*)data = aPtr;
+	obj->SetBase(aBase);
+	if (obj->IsOfType(Object::sStructPrototype))
 		obj->mFlags |= CannotOwnProps;
+	return obj;
 ```
 
-Not changed in this fork.
+`ObjCreateWithDataPtr` on `Map` or a script class still returns an object
+that can own properties. Fixed in this fork on `m1/alpha36-followups`, pinned
+by `qa/tests/test_alpha36.ahk` section 7 (its five struct asserts fail on an
+engine without the fix).
