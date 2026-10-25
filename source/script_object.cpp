@@ -861,7 +861,7 @@ ResultType Object::CallProperty(ResultToken &aResultToken, int aFlags, name_t aN
 	auto result = GetMethodValue(method_token, aFlags, aName, aThisToken);
 	if (result != INVOKE_NOT_HANDLED)
 	{
-		if (method_token.symbol == SYM_MISSING) // Property getter returned unset.
+		if (result == OK && method_token.symbol == SYM_MISSING) // Property getter returned unset (a getter that threw leaves the token unset too).
 			return aResultToken.UnsetError(ERR_RETURNED_UNSET, aName);
 		if (result == OK)
 			result = CallAsMethod(method_token, aResultToken, aThisToken, aParam, aParamCount);
@@ -2344,9 +2344,9 @@ UINT_PTR Object::StructSize()
 
 bool Object::GetStructCallbackArgInfo(MdType &aType, Object *&aStructProto)
 {
-	if (!(mFlags & StructInfoInitialized))
-		return false;
-	auto &si = *(StructInfo*)(this + 1);
+	// Initialize (and lock) the layout on demand: a subclass with only inherited fields
+	// has no StructInfo of its own until an instance is created or the layout is locked.
+	auto &si = *GetStructInfo(true);
 	if (si.item_count != 0)
 		aType = MdType::Array, aStructProto = this;
 	else if (si.native_type == MdType::Void)

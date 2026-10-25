@@ -112,4 +112,39 @@ Assert.eq(NumGet(b8, Int32), 77, "NumGet/NumPut still accept numeric classes")
 r := RunSnippet("try DllCall('msvcrt\abs', IntPtr, {}, 'Int')`ncatch as e`n    Print('{}: {}', Type(e), e.Message)")
 Assert.eq(r.code " " r.out, "0 TypeError: Expected a Number but got an Object.`n", "DllCall(IntPtr, {}) throws TypeError")
 
+; 9. Fork fixes to alpha.37 regressions found by Copilot on fork PR #33, each
+;    reproduced on the unfixed merge build (6460921b) first; the report is
+;    docs/upstream/alpha37-regressions.md.
+; OLD (6460921b, upstream 279247ee): NumPut("Int", 1, "Bogus", 2, buf) wrote 2
+;      with the previous pair's 4-byte size (ConvertNumGetType no longer reset
+;      num_size per pair); C().b() with a getter that throws replaced the
+;      exception with UnsetError (CallProperty tested the token before the
+;      result); CallbackCreate rejected a struct subclass with only inherited
+;      fields until an instance existed (GetStructCallbackArgInfo required
+;      StructInfoInitialized). On Win32 only: "Int64*", unset occupied eight
+;      bytes ("Parameter list too large.") and "Double*", unset shifted the
+;      following arguments, because the unset branch cleared passed_by_address
+;      but kept the 64-bit type; an array callback parameter was counted at its
+;      struct size instead of one pointer slot (from source).
+b16 := Buffer(16, 0)
+Assert.throws(() => NumPut("Int", 1, "Bogus", 2, b16), "NumPut rejects an invalid type in a later pair", "Invalid parameter(s).")
+NumPut("Int", 1, "Short", 2, "UChar", 3, b16)
+Assert.eq(NumGet(b16, 0, "Int") " " NumGet(b16, 4, "Short") " " NumGet(b16, 6, "UChar"), "1 2 3", "NumPut still writes every valid pair")
+class QaThrows37 {
+    b {
+        get {
+            throw ValueError("original")
+        }
+    }
+}
+Assert.throws(() => QaThrows37().b(), "a.b() keeps the getter's own exception", "original")
+struct QaBase37 {
+    x : Int32
+}
+struct QaDerived37 extends QaBase37 {
+}
+Assert.noThrow(() => CallbackCreate((s) => 0, , [QaDerived37, "Void"]), "CallbackCreate accepts a struct subclass with only inherited fields before any instance exists")
+Assert.eq(DllCall("kernel32\lstrlenW", "Int64*", unset, "Int"), 0, 'DllCall "Int64*" unset passes one null pointer slot (Win32 regression)')
+Assert.eq(DllCall("msvcrt\_wcsnicmp", "Double*", unset, "Str", "abc", "UPtr", 0, "Cdecl Int"), 0, 'DllCall "Double*" unset does not shift the following arguments (Win32 regression)')
+
 Assert.Summary()
