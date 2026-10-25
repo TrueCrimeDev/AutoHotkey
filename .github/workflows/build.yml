@@ -228,7 +228,7 @@ jobs:
     - name: Run tests/run.ahk with coverage
       shell: pwsh
       env:
-        AHK_TEST_JUNIT: junit.xml
+        AHK_TEST_JUNIT: ${{ github.workspace }}\junit.xml
       run: |
         New-Item -ItemType Directory -Force coverage | Out-Null
         engine\AutoHotkey64Console.exe /Headless /Diag=json /Coverage=coverage\tests.lcov test tests\run.ahk 2>diag.jsonl
@@ -251,7 +251,7 @@ jobs:
       shell: pwsh
       env:
         AHK_QA_COVERAGE_DIR: ${{ github.workspace }}\coverage\qa
-        AHK_QA_JUNIT: junit-qa.xml
+        AHK_QA_JUNIT: ${{ github.workspace }}\junit-qa.xml
       run: |
         engine\AutoHotkey64Console.exe /Headless /ErrorStdOut qa\run.ahk
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -274,7 +274,7 @@ jobs:
           junit.xml
           junit-qa.xml
           diag.jsonl
-        if-no-files-found: ignore
+        if-no-files-found: warn
 
   # The README badge reads coverage.json from the `badges` branch through
   # img.shields.io/endpoint. No third-party service, no extra secrets: the
