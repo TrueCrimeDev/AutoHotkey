@@ -820,3 +820,52 @@ unlogged loop session between 3 and now.)
   previous engines kept as `*.a41db9a1.bak`; capabilities JSON regenerated.
 - Still open: sending `docs/upstream/alpha36-createstructptr-offset.md` (now
   both issues) upstream.
+
+### Session 20 (2026-10-25) — upstream v2.1-alpha.37 merge
+
+- Merged `upstream/alpha` `279247ee` (fifteen commits after `0b8e6fa3`; the
+  `v2.1-alpha.37` tag was announced on the forum but not pushed, rechecked
+  before the docs commit) on `m1/upstream-alpha37` (`6460921b`), branched
+  from `alpha` after PR #32 landed: `unset` as a null `Str`/`*`/`P` DllCall
+  pointer (`1fa8d1f1`), `Struct.Prototype.__New(fieldValues*)` (`176a9d1d`),
+  `IsSet(a.b)` implying a final `?` (`42fb8260`), `Struct.At(ptr)` on
+  `Struct` itself (`d99ace41`), numeric struct instances passed by value to
+  DllCall (`91ab8b82`), array-subtype callback parameters (`c20d449d`),
+  `a.b()` with `b => unset` throwing `UnsetError` (`2f4f3967`), `a.b[c]` on a
+  method throwing (`77595540`), `NumGet`/`NumPut` rejecting a wrong type
+  (`2cdf79a6`), `DllCall(IntPtr, obj)` throwing `TypeError` (`f74fd031`),
+  the `#Import A {invalid}` assertion (`348ae41b`), a debugger line-group
+  crash (`d4522806`) and the `a & b::AltTabMenu` hook crash from v2.0
+  (`43e233e7`). No conflicts; `CreateStructPtr` untouched, so `a41db9a1` and
+  `f24c23d1` survive (`test_alpha36.ahk` 51/51). `ahkversion.h` is
+  `2.1-alpha.37+Console` / `2,1,0,37`; every `2.1-alpha.36+Console` tag
+  bumped except the historical note in `test_alpha36.ahk`.
+- Every forum item probed on the alpha.36 engine (`165d7384`) and the new
+  build before being written as an assert: `qa/tests/test_alpha37.ahk`, 8
+  sections, 26 asserts; the alpha.36 engine stops at line 19 ("Missing a
+  required parameter."). Not pinned: the array-subtype callback, because an
+  array class (`Int32[2]`) is reachable only as a field type and
+  `ObjGetBase` on a field value gives a prototype that `CallbackCreate`
+  rejects; the debugger and hook crashes.
+- Copilot's three engine findings on PR #32, rechecked: alpha.37's
+  `2cdf79a6` closes the `NumGet(buf, "")`/`NumPut({}, ...)` one (also
+  present on alpha.35, so not an alpha.36 regression);
+  `DllCall(..., Int32.Ptr, Any.Prototype)` still exits 11 on alpha.35, .36
+  and .37 (`IsCArrayOf` null base); the x86 callback slot overflow stays
+  unverified. The two open ones are CLAUDE.md open items now.
+- Results on the MSVC x64 build `6460921b7672`: console gate 17/17 suites
+  (qa 954/954 across 18 files), `check_all` 106/106; CI run 40216066837
+  (`workflow_dispatch` on the branch) passed every build, test and
+  debugger-clients job. Installed into `bin/` (the console exe was held open
+  by the project MCP server, so it was renamed aside rather than overwritten)
+  and `Documents\Design\Coding\AutoHotkey\bin`, previous engines kept as
+  `*.165d7384.bak`; capabilities JSON regenerated.
+- Earlier the same day: PR #32 (`feat/console-cleanup-20260919`, 122
+  commits) merged into `alpha` as `7a19a1ce` after two fixes: relative
+  `AHK_TEST_JUNIT`/`AHK_QA_JUNIT`/`AHK_QA_COVERAGE_DIR` paths now resolve
+  against `A_InitialWorkingDir` in `tests/Test.ahk` and `qa/Harness.ahk`
+  (they landed in `tests/` and `qa/`, so CI run 40201881909's artifact had
+  no JUnit report), and a CI step fails the test job when either report is
+  missing. Stale local branches `fix/release-workflow-permissions`,
+  `feat/stdio-supervisor`, `upgrade-alpha19-console` and `ci/alpha33`
+  deleted; `f7712ec1` kept reachable as the local tag `ci-alpha33-engine`.

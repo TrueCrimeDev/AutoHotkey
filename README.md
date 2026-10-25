@@ -5,7 +5,7 @@ errors go to `stderr` (as text **or** JSON), failures return meaningful exit cod
 can be suppressed, and the debugger speaks DBGp so an LLM can drive it. Everything else is
 stock AutoHotkey.
 
-![engine](https://img.shields.io/badge/engine-2.1--alpha.36%2BConsole-5B9FEF)
+![engine](https://img.shields.io/badge/engine-2.1--alpha.37%2BConsole-5B9FEF)
 ![based on](https://img.shields.io/badge/based%20on-AutoHotkey%20v2.1--alpha-22D3EE)
 [![Build AutoHotkey](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml/badge.svg)](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml)
 ![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/TrueCrimeDev/AutoHotkey/badges/coverage.json)
@@ -60,7 +60,7 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 | **stdout helper** | `FileOpen("*","w")` boilerplate | `Print(fmt, args*)` — UTF-8, `Format`-aware |
 | **Debugger** | DBGp (desktop-oriented) | Same DBGp, wired to an MCP server for LLM-driven debugging |
 
-None of this touches the language. The engine is upstream `v2.1-alpha.36` (see [`docs/alpha/v2.1-alpha.36.md`](docs/alpha/v2.1-alpha.36.md)),
+None of this touches the language. The engine is upstream `v2.1-alpha.37` (see [`docs/alpha/v2.1-alpha.37.md`](docs/alpha/v2.1-alpha.37.md)),
 so scripts that run on that upstream code run here unchanged; the additions are flags,
 subcommands, and a few opt-in built-ins.
 

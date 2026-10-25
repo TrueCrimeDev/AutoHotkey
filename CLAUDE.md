@@ -438,16 +438,19 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
 
 ---
 
-# Current State & Open Items (updated 2026-10-21)
+# Current State & Open Items (updated 2026-10-25)
 
-- Target language version: `2.1-alpha.36+Console`, based on upstream
-  `v2.1-alpha.36` (`0b8e6fa3`; merged 2026-10-21, `docs/alpha/v2.1-alpha.36.md`;
-  alpha.34/35 notes beside it). Always verify the actual executable's
-  `--version` and hash; historical files in `bin/` or `bin_harness/` may be
-  stale. Since 2026-10-22 `bin/` holds the local MSVC x64 build of
-  `165d73849eb0` (`2.1-alpha.36+Console`, the alpha.36 merge plus the
-  struct-view fix); `bin/*.a41db9a1.bak` are the alpha.36 engines installed
-  the day before (without that fix), `bin/*.56f57edb.bak`
+- Target language version: `2.1-alpha.37+Console`, based on upstream
+  `upstream/alpha` `279247ee` (the content of `v2.1-alpha.37`, announced
+  2026-10-25 before its tag was pushed; merged 2026-10-25 on
+  `m1/upstream-alpha37`, `docs/alpha/v2.1-alpha.37.md`; alpha.34/35/36 notes
+  beside it). Always verify the actual executable's `--version` and hash;
+  historical files in `bin/` or `bin_harness/` may be stale. Since 2026-10-25
+  `bin/` holds the local MSVC x64 build of `6460921b7672`
+  (`2.1-alpha.37+Console`, the alpha.37 merge commit); `bin/*.165d7384.bak`
+  are the alpha.36 engines (`165d73849eb0`, the alpha.36 merge plus the
+  struct-view fix) installed 2026-10-22, `bin/*.a41db9a1.bak` the alpha.36
+  engines without that fix, `bin/*.56f57edb.bak`
   the alpha.35 engines, `bin/*.f14d7427.bak` the CI engines of
   `f14d7427` (run 37807040408), and `bin/*.alpha33.bak` the `f7712ec15171` ones.
   Alpha.35's `Script::GetSearchPath` bug (every library directory after the
@@ -461,7 +464,9 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   debugger-clients job (x64 after one rerun of a PowerShell cold-start
   timeout; WORKLOG Session 18). The same upstream change also left every
   struct view able to own properties; fixed here in `f24c23d1` (section 7 of
-  the same test, WORKLOG Session 19).
+  the same test, WORKLOG Session 19). Alpha.37 (WORKLOG Session 20) merged
+  without conflicts; `qa/tests/test_alpha37.ahk` (26 asserts) pins its
+  release-note items, and CI run 40216066837 on `6460921b` passed every job.
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.
@@ -551,6 +556,23 @@ skipped, as on any non-tag run) and are marked [x] below with how they were veri
 - [x] FIXED 2026-10-08 (`ec684fd0`): `--coverage=` into a missing directory wrote nothing, printed nothing and exited 0. `WriteWholeFile` (`source/coverage.cpp`) now creates every missing level (`FileCreateDir`) and `ReportWriteFailure` prints one stderr line when the report still cannot be written, leaving the exit code alone. Verified: `qa/tests/test_coverage_missing_dir.ahk` 41/41; `out/a/b/probe.lcov` (relative, forward slashes) was created under `run` and `test`, also on an uncaught-error exit 10; a path under a file printed `Coverage report "<path>" not written: could not create its directory (Win32 error 183: ...)`, a directory path `... not written (Win32 error 5: Access is denied.)`, `--diag=json` one `"type":"OSError"` warning record with the path in `extra`, `/StdErrFile` mirrored it, and exit codes stayed 0 and 3 (`ExitApp(3)`).
 - [x] FIXED upstream 2026-10-18 (`65189b9c`, v2.1-alpha.36): `File`, `Func`, `BoundFunc`, `Closure`, `Enumerator` and `RegExMatchInfo` had no factory of their own, so `X()` and `(Object.Call)(X)` built a plain Object on the native prototype (same class as the `JSON()` bug). `Object::GetStructInfo` no longer lets a native class prototype inherit `Object`'s factory. Verified on `a41db9a12322` (`qa/tests/test_alpha36.ahk` section 4): all twelve calls throw `ValueError` "Invalid base."; `JSON()` still throws the fork's `TypeError`, `(Object.Call)(JSON)` "Invalid base.", and `ProcessPipe`, `SyntaxError`, `JSONError`, `(Object.Call)(Error)` and script subclasses of `Map` still construct. Side effect: `(Object.Call)(Struct)` now returns a `Struct` (it threw "Invalid base." on alpha.35).
 - [x] FIXED 2026-10-22 (`f24c23d1`): struct views accepted own properties (upstream alpha.36 regression, `7aa2e0ea`). `Object::CreateStructPtr` tested `obj->IsOfType(Object::sStructPrototype)` before `SetBase`, so `CannotOwnProps` was never set and `Pt.At(ptr).foo := 1`, `Int32.At(ptr).foo := 1`, a `Pt.Ptr` dereference and an `ObjCreateWithDataPtr` struct accepted them (alpha.35 threw `PropertyError`; `Pt()` always threw). Same on the official zip; no memory damage seen. The test now runs after `SetBase` (`source/script_object.cpp:188`-`193`). Verified: `qa/tests/test_alpha36.ahk` section 7 (five struct asserts fail on `a41db9a1`, pass after; `ObjCreateWithDataPtr` on `Map` and a script class still own properties). In the upstream report `docs/upstream/alpha36-createstructptr-offset.md` (not yet sent).
+- [ ] `DllCall(..., Int32.Ptr, Any.Prototype)` (any struct pointer type with an
+  object whose base is null) exits 11 "Invalid memory read/write.":
+  `Object::IsCArrayOf` (`source/script_object.cpp`) dereferences
+  `aCandidate->Base()` without a null check, reached from the alpha.34
+  array-decay branch in `source/lib/DllCall.cpp`. Raised by Copilot on PR
+  #32; reproduced on alpha.35, alpha.36 and alpha.37 (2026-10-25). Upstream
+  code; fix is a null guard before `IsCArrayOf`, then report upstream.
+- [ ] x86 `stdcall` callbacks: `CallbackCreate` (`source/lib/CCallback.cpp`)
+  guards the parameter count at 31 before expanding 64-bit parameters to two
+  four-byte slots, so 16 `Int64` parameters give 32 slots and the generated
+  `add esp, imm8` wraps to -128. Raised by Copilot on PR #32; from source,
+  not reproduced (needs the Win32 engine). Upstream code.
+- [x] FIXED upstream 2026-10-25 (`2cdf79a6`, alpha.37): `NumGet(buf, "")` and
+  `NumPut({}, 123, buf)` read or wrote a pointer-sized integer instead of
+  throwing (Copilot, PR #32; reproduced on alpha.35 and alpha.36). Both now
+  throw `ValueError` "Invalid parameter(s)."; `qa/tests/test_alpha37.ahk`
+  section 7 pins it.
 - [ ] DBGp has no `eval` command (`source/Debugger.cpp:47` command table; `eval` answers error 4) and `breakpoint_set` rejects `--` conditions (`:771`, error 3), as upstream alpha.33 does: clients read paths with `property_get`.
 - [ ] Native `source_outline`/`workspace_symbols` match functions with one line regex (`source/mcp_server.cpp:930`-`931`, `MatchFuncDecl`), so they miss a function whose default parameters contain parentheses and every fat-arrow function: on `qa/Harness.ahk` they skip `RunQaChild` (line 25) and `SnippetOut` (line 118), which `ast_outline` finds (same on alpha.31). Engine fix: balance nested parentheses and accept `=>` bodies.
 - [x] FIXED 2026-10-09 (`m1/cli-help`): `--help` (`source/AutoHotkey.cpp:86`) listed only slash options. It now lists every spelling `ParseCmdLineArgs` accepts, grouped as commands, information, options and command switches: `/Debug[=host[:port]|stdio]`, the Git Bash aliases (`--headless`, `--diag`, `--eval`, `--trace`, `--check`, `--test`, `--crashlog=`, `--stderrfile=`, `--coverage=`), `/ErrorStdOut:color|nocolor`, `/version`, `/restart`, `/script`, `/validate` and `/iLib file`. `tests/test_console_cli.py` pins that list and also scans the parser's own `_T("/...")`/`_T("--...")` literals, so an option added to the parser without help text fails the gate. `--capabilities` carries no options list and gained none.
