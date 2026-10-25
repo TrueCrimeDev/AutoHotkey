@@ -1,6 +1,6 @@
 # Updates — Fork Changes Reference
 
-This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.36` in this fork. Use it as the entry point for "what's new and how do I use it."
+This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.37` in this fork. Use it as the entry point for "what's new and how do I use it."
 
 ## Overview at a glance
 
@@ -24,7 +24,7 @@ This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.
 | Interactive / pipe-driven REPL | `repl` subcommand (see §16) | n/a — explicit mode |
 | Debugger connection notices | `Debugger error: ...` line or JSON warning instead of a modal prompt (see §22) | Always on |
 
-Everything else inherited from upstream `v2.1-alpha.36` works as documented upstream (implicit `export` for names defined inside a `#Module`, tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc.). The per-release notes are in `docs/alpha/`; `v2.1-alpha.36.md` covers the latest merge (2026-10-21), including the fork's fix to `ObjCreateWithDataPtr` on native classes. `examples/Alpha31_Example.ahk` remains the runnable showcase of the alpha.31 changes.
+Everything else inherited from upstream `v2.1-alpha.37` works as documented upstream (implicit `export` for names defined inside a `#Module`, tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc.). The per-release notes are in `docs/alpha/`; `v2.1-alpha.37.md` covers the latest merge (2026-10-25: `unset` as a null DllCall pointer, `Struct.__New(fieldValues*)`, `IsSet(a.b)`, `Struct.At(ptr)`); `v2.1-alpha.36.md` includes the fork's fix to `ObjCreateWithDataPtr` on native classes. `examples/Alpha31_Example.ahk` remains the runnable showcase of the alpha.31 changes.
 
 ---
 
@@ -353,7 +353,7 @@ Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] ke
 ### Example log
 
 ```
-[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.36+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64Console.exe /CrashLog=C:\logs\ahk.log app.ahk"
+[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.37+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64Console.exe /CrashLog=C:\logs\ahk.log app.ahk"
 [2026-05-13 21:43:22] [ERROR] pid=12345 type=MethodError mode=Return
   Message: This value of type "String" has no method named "DoStuff".
   File: C:\Users\me\Lib\Clip.ahk

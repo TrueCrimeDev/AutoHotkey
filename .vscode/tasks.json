@@ -255,8 +255,8 @@
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "RawAhkVersion": "2.1-alpha.36+Console",
-                    "AhkVersionN": "2,1,0,36"
+                    "RawAhkVersion": "2.1-alpha.37+Console",
+                    "AhkVersionN": "2,1,0,37"
                 },
                 "shell": {
                     "executable": "cmd.exe",
@@ -281,8 +281,8 @@
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "RawAhkVersion": "2.1-alpha.36+Console",
-                    "AhkVersionN": "2,1,0,36"
+                    "RawAhkVersion": "2.1-alpha.37+Console",
+                    "AhkVersionN": "2,1,0,37"
                 },
                 "shell": {
                     "executable": "cmd.exe",
@@ -307,8 +307,8 @@
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "RawAhkVersion": "2.1-alpha.36+Console",
-                    "AhkVersionN": "2,1,0,36"
+                    "RawAhkVersion": "2.1-alpha.37+Console",
+                    "AhkVersionN": "2,1,0,37"
                 },
                 "shell": {
                     "executable": "cmd.exe",

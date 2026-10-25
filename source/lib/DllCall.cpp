@@ -300,7 +300,7 @@ void DynaCall(void *aFunction, DYNAPARM aParam[], int aParamCount, DWORD &aExcep
 
 
 
-void ConvertDllArgType(LPTSTR aBuf, DYNAPARM &aDynaParam)
+void ConvertDllArgType(LPTSTR aBuf, DYNAPARM &aDynaParam, bool &aIsPtr)
 // Helper function for DllCall().  Updates aDynaParam's type and other attributes.
 {
 	LPTSTR type_string = aBuf;
@@ -360,7 +360,7 @@ void ConvertDllArgType(LPTSTR aBuf, DYNAPARM &aDynaParam)
 			return;
 		}
 		break;
-	case 'p': if (!_tcsicmp(buf, _T("Ptr")))	{ aDynaParam.type = Exp32or64(DLL_ARG_INT, DLL_ARG_INT64); return; } break;
+	case 'p': if (!_tcsicmp(buf, _T("Ptr")))	{ aDynaParam.type = Exp32or64(DLL_ARG_INT, DLL_ARG_INT64); aIsPtr = true; return; } break;
 	case 's': if (!_tcsicmp(buf, _T("Str"))
 				&& !aDynaParam.is_unsigned)		{ aDynaParam.type = DLL_ARG_STR; return; }
 			  if (!_tcsicmp(buf, _T("Short")))	{ aDynaParam.type = DLL_ARG_SHORT; return; } break;
@@ -654,7 +654,8 @@ BIF_DECL(BIF_DllCall)
 		}
 		else
 		{
-			ConvertDllArgType(return_type_string, return_attrib);
+			bool _;
+			ConvertDllArgType(return_type_string, return_attrib, _);
 			if (return_attrib.type == DLL_ARG_INVALID && !_tcsicmp(return_type_string, _T("Void")))
 				return_attrib.type = DLL_ARG_VOID;
 		}
@@ -704,7 +705,8 @@ has_valid_return_type:
 		// Store each arg into a dyna_param struct, using its arg type to determine how.
 		DYNAPARM &this_dyna_param = dyna_param[arg_count];
 		Object *param_proto = nullptr;
-		
+		bool arg_type_is_ptr = false;
+
 		ExprTokenType &value_param = *aParam[i + 1];
 		IObject *this_param_obj = TokenToObject(value_param);
 		if (IObject *obj = TokenToObject(*aParam[i]))
@@ -759,13 +761,18 @@ has_valid_return_type:
 							param_proto = pointed_proto;
 						}
 					}
+					else if (this_param_obj && this_dyna_param.type != DLL_ARG_STRUCT)
+					{
+						this_dyna_param.type = DLL_ARG_STRUCT;
+						this_dyna_param.struct_size = (int)param_proto->StructSize();
+					}
 				}
 			}
 		}
 		else
 		{
 			arg_type_string = TokenToString(*aParam[i]); // aBuf not needed since floating-point and "" are equally invalid.
-			ConvertDllArgType(arg_type_string, this_dyna_param);
+			ConvertDllArgType(arg_type_string, this_dyna_param, arg_type_is_ptr);
 		}
 		if (this_dyna_param.type == DLL_ARG_INVALID)
 			_f_throw_value(ERR_INVALID_ARG_TYPE);
@@ -781,7 +788,7 @@ has_valid_return_type:
 				aParam[i + 1]->SetVarRef(varref);
 				this_param_obj = varref->ToObject();
 			}
-			else if (this_dyna_param.type == Exp32or64(DLL_ARG_INT, DLL_ARG_INT64) && ctoupper(*arg_type_string) == 'P')
+			else if (arg_type_is_ptr)
 			{
 				// Support Buffer.Ptr, but only for "Ptr" type.  All other types are reserved for possible
 				// future use, which might be general like obj.ToValue(), or might be specific to DllCall
@@ -794,7 +801,20 @@ has_valid_return_type:
 		}
 		ExprTokenType &this_param = *aParam[i + 1]; // Take a new reference since it might have been updated above.
 		if (this_param.symbol == SYM_MISSING && this_dyna_param.type != DLL_ARG_STRUCT) // Permit struct classes with __value to handle unset.
+		{
+			if (this_dyna_param.passed_by_address || this_dyna_param.type == DLL_ARG_WSTR || this_dyna_param.type == DLL_ARG_ASTR)
+			{
+				// Allow unset to mean nullptr for more flexibility with "Str", "int*", etc.
+				// Pass 0, not the address of a variable containing 0, distinct from "str*",&v:=unset.
+				// Make it a plain pointer-sized integer: on Win32 an "Int64*" or "Double*" must occupy one slot,
+				// and an "AStr" must not be counted among the translated strings (pStr/nxStr) it never allocated.
+				this_dyna_param.struct_size = 0; // Clears passed_by_address, is_unsigned and is_hresult.
+				this_dyna_param.type = DLLARGTYPE_INTPTR;
+				this_dyna_param.ptr = nullptr;
+				continue;
+			}
 			_f_throw(ERR_PARAM_REQUIRED);
+		}
 
 		switch (this_dyna_param.type)
 		{
