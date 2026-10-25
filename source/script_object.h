@@ -416,7 +416,7 @@ protected:
 
 	Object *GetThisForTypedValue(ResultToken &aResultToken, int aFlags, name_t aName, ExprTokenType &aThisToken);
 	ResultType GetTypedValue(ResultToken &aResultToken, int aFlags, TypedProperty &aProp);
-	ResultType SetTypedValue(ResultToken &aResultToken, int aFlags, name_t aName, TypedProperty &aProp, ExprTokenType &aValue);
+	ResultType SetTypedValue(ResultToken &aResultToken, int aFlags, TypedProperty &aProp, ExprTokenType &aValue);
 	ResultType GetBoxedPointer(ResultToken &aResultToken, UINT_PTR aPtr, Object *aPrototype, size_t aNestOffset);
 	ResultType SetBoxedPointer(ResultToken &aResultToken, ExprTokenType &aValue, UINT_PTR &aPtr, Object *aPrototype, size_t aNestOffset, Object *aPointerClass);
 
@@ -615,7 +615,7 @@ public:
 
 	bool GetStructArgInfo(DYNAPARM &aType, Object *&aPointedClass);
 	bool GetNumGetArgInfo(size_t &aSize, BOOL &aIsInt, BOOL &aIsSigned);
-	MdType GetStructMdType();
+	bool GetStructCallbackArgInfo(MdType &aType, Object *&aStructProto);
 
 	bool CanSetBase(); // Can Base be changed for this Object?
 	bool CanSetBase(Object *aNewBase); // Is aNewBase a valid Base for this Object?
@@ -695,6 +695,7 @@ public:
 	void Error_Show(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 
 	enum { M_Struct_Ptr, M_Struct_Size, M_CArray_Length };
+	void StructNew(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 	void StructGet(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 	void StructPtrInvoke(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 	void CArrayItem(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);

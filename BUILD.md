@@ -1,6 +1,6 @@
 # Building AHK Console
 
-This fork targets AutoHotkey `2.1-alpha.36+Console` (upstream `v2.1-alpha.36`). CMake supports MSVC x64,
+This fork targets AutoHotkey `2.1-alpha.37+Console` (upstream `v2.1-alpha.37`, merged from `279247ee` before the tag was pushed). CMake supports MSVC x64,
 MSVC Win32, and mingw-w64 GCC x64. CI builds and tests the actual Console
 executable for all three, and tag builds publish non-draft releases with
 checksums. Nothing is published by a local build.

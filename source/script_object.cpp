@@ -861,6 +861,8 @@ ResultType Object::CallProperty(ResultToken &aResultToken, int aFlags, name_t aN
 	auto result = GetMethodValue(method_token, aFlags, aName, aThisToken);
 	if (result != INVOKE_NOT_HANDLED)
 	{
+		if (method_token.symbol == SYM_MISSING) // Property getter returned unset.
+			return aResultToken.UnsetError(ERR_RETURNED_UNSET, aName);
 		if (result == OK)
 			result = CallAsMethod(method_token, aResultToken, aThisToken, aParam, aParamCount);
 		method_token.Free();
@@ -955,7 +957,7 @@ ResultType Object::SetProperty(ResultToken &aResultToken, int aFlags, name_t aNa
 	if (field && field->symbol == SYM_TYPED_FIELD)
 	{
 		auto that = GetThisForTypedValue(aResultToken, aFlags, aName, aThisToken);
-		return that ? that->SetTypedValue(aResultToken, aFlags, aName, *field->tprop, **aParam) : FAIL;
+		return that ? that->SetTypedValue(aResultToken, aFlags, *field->tprop, **aParam) : FAIL;
 	}
 	
 	if (field && field->symbol == SYM_DYNAMIC || (aFlags & (IF_SUBSTITUTE_THIS | IF_SUPER)))
@@ -1101,7 +1103,7 @@ ResultType Object::GetBoxedPointer(ResultToken &aResultToken, UINT_PTR aPtr, Obj
 }
 
 
-ResultType Object::SetTypedValue(ResultToken &aResultToken, int aFlags, name_t aName, TypedProperty &aProp, ExprTokenType &aValue)
+ResultType Object::SetTypedValue(ResultToken &aResultToken, int aFlags, TypedProperty &aProp, ExprTokenType &aValue)
 {
 	auto ptr = DataPtr() + aProp.data_offset;
 	if (aProp.class_object)
@@ -1196,6 +1198,25 @@ bool Object::IsCArrayOf(IObject *aCandidate, Object *aPrototype)
 }
 
 
+void Object::StructNew(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
+{
+	if (!aParamCount)
+		return;
+	auto &si = *mBase->GetStructInfo();
+	int i;
+	TypedProperty *tp;
+	for (i = 0, tp = si.last_field; tp; tp = tp->prev_field, ++i);
+	// Require aParamCount == field count to try to future-proof and limit risk.
+	// For instance, X(Y) intended as a "typecast" won't implicitly assign to a
+	// permissive field of type Struct.Ptr unless that's the only field.
+	if (i != aParamCount)
+		_o_throw(ERR_PARAM_COUNT_INVALID);
+	for (tp = si.last_field; tp; tp = tp->prev_field)
+		if (!SetTypedValue(aResultToken, 0, *tp, *aParam[--i]))
+			return;
+}
+
+
 void Object::StructGet(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount)
 {
 	switch (aID)
@@ -1240,7 +1261,7 @@ void Object::CArrayItem(ResultToken &aResultToken, int aID, int aFlags, ExprToke
 	if (IS_INVOKE_GET)
 		GetTypedValue(aResultToken, 0, tp);
 	else
-		SetTypedValue(aResultToken, 0, _T("__Item"), tp, *aParam[0]);
+		SetTypedValue(aResultToken, 0, tp, *aParam[0]);
 	tp.class_object = nullptr;
 }
 
@@ -2155,6 +2176,8 @@ bool Object::DefineMethod(name_t aName, IObject *aFunc)
 	if (auto prop = DefineProperty(aName))
 	{
 		prop->SetMethod(aFunc);
+		if (!prop->Getter())
+			prop->NoParamGet = true;
 		return true;
 	}
 	return false;
@@ -2319,12 +2342,18 @@ UINT_PTR Object::StructSize()
 	return ((StructInfo*)(this + 1))->size;
 }
 
-MdType Object::GetStructMdType()
+bool Object::GetStructCallbackArgInfo(MdType &aType, Object *&aStructProto)
 {
 	if (!(mFlags & StructInfoInitialized))
-		return MdType::Void;
+		return false;
 	auto &si = *(StructInfo*)(this + 1);
-	return si.item_count == 0 ? si.native_type : MdType::Void;
+	if (si.item_count != 0)
+		aType = MdType::Array, aStructProto = this;
+	else if (si.native_type == MdType::Void)
+		aType = MdType::Struct, aStructProto = this;
+	else
+		aType = si.native_type, aStructProto = nullptr;
+	return true;
 }
 
 ResultType FillPropertyFlags(IObject *aObj, bool aSetter, Property &aProp, ResultToken &aResultToken)
@@ -4336,6 +4365,7 @@ ObjectMember PropRef::sMembers[]
 
 ObjectMember Object::sStructMembers[]
 {
+	Object_Method_(__New, 0, MAXP_VARIADIC, StructNew, IT_CALL),
 	Object_Method1(__Ref, 1, 1),
 	Object_Member(Ptr, StructGet, M_Struct_Ptr, IT_GET),
 	Object_Member(Size, StructGet, M_Struct_Size, IT_GET)
