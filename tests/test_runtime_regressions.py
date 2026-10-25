@@ -13,6 +13,15 @@ import xml.etree.ElementTree as ET
 
 ENGINE = Path(sys.argv.pop(1)).resolve()
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+# Schema-2 diagnostic record fields, in emission order.
+DIAG_KEYS = ["kind", "format", "schema", "severity", "type", "code", "message", "extra",
+             "what", "file", "line", "column", "source", "stack"]
+# Longer than every former fixed buffer: the 16384-character field cap and the
+# 87298-character text report. Built in-script by StrReplace over a zero-padded number.
+LONG_MESSAGE = "0123456789" * 30720  # 300 KB
+LONG_EXTRA = "abcdefghij" * 10240  # 100 KB
+LONG_MESSAGE_EXPR = 'StrReplace(Format("{:030720}", 0), "0", "0123456789")'
+LONG_EXTRA_EXPR = 'StrReplace(Format("{:010240}", 0), "0", "abcdefghij")'
 
 
 def packets(data):
@@ -87,7 +96,9 @@ class RuntimeRegressions(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory(prefix="ahk-runtime-")
         self.addCleanup(self.folder.cleanup)
-        self.root = Path(self.folder.name)
+        # resolve() expands an 8.3 short name (%TEMP% is C:\Users\RUNNER~1\... on
+        # GitHub runners) to the long form the engine reports in paths and stacks.
+        self.root = Path(self.folder.name).resolve()
 
     def script(self, source, name="sample.ahk"):
         path = self.root / name
@@ -223,6 +234,31 @@ Print(Eval("Eval('6*7')"))
         self.assertEqual(records["sample.ahk"], ["DA:3,1"])
         self.assertEqual(records["helper.ahk"], ["DA:3,1", "DA:6,0"])
 
+    MODULE_REF_PRELUDE = '#Module Mod\nglobal X := 1\n#Module __Main\n#Import Mod\n'
+
+    def test_module_var_ref_held_at_exit_exits_zero(self):
+        # ScriptModule::__Ref must AddRef the VarRef it returns: without it the
+        # held reference and the module variable double-freed it in cleanup
+        # (exit 0xC0000374 after "done" had been printed).
+        source = self.MODULE_REF_PRELUDE + 'ref := &Mod.X\n%ref% := %ref% + 1\nPrint(Mod.X)\nPrint("done")\n'
+        result = self.run_script(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [b"2", b"done"])
+
+    def test_module_var_ref_byref_and_release_keep_the_variable(self):
+        # Same defect through a ByRef parameter: the callee's write landed, then
+        # the Release of the __Ref result freed the VarRef the variable aliased,
+        # so the next read of Mod.X was an UnsetError and the exit code was
+        # still 0xC0000374 (the error exit's cleanup double-freed it).
+        source = (self.MODULE_REF_PRELUDE
+                  + 'Bump(&v) {\n    v += 10\n}\n'
+                  + 'Bump(&Mod.X)\nPrint(Mod.X)\n'
+                  + 'ref := &Mod.X\nref := ""\nPrint(Mod.X)\n'
+                  + 'Mod.X := 3\nPrint(Mod.X)\nPrint("done")\n')
+        result = self.run_script(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [b"11", b"11", b"3", b"done"])
+
     def test_check_shared_child_preserves_results_and_never_runs_the_body(self):
         marker = self.root / "executed.txt"
         source = f'''sentinel := 42
@@ -245,6 +281,130 @@ Print(JSON.Stringify({{ok:valid.Ok, validDiagnostics:valid.Diagnostics.Length,
         self.assertTrue(record["hasRaw"])
         self.assertEqual(record["sentinel"], 42)
         self.assertFalse(marker.exists())
+
+    def uncaught_report(self, source):
+        result = self.run_script(source)
+        self.assertEqual(result.returncode, 10, result.stderr)
+        return result.stderr.decode("utf-8", "replace")
+
+    def uncaught_diagnostic(self, source):
+        result = self.run_script(source, "/Diag=json")
+        self.assertEqual(result.returncode, 10, result.stderr)
+        lines = result.stderr.decode("utf-8", "replace").splitlines()
+        record = json.loads(next(line for line in lines if line.startswith("{")))
+        self.assertEqual(record["kind"], "diagnostic")
+        self.assertEqual(Path(record["file"]).name, "sample.ahk")
+        return record
+
+    def test_uncaught_plain_object_with_file_and_line_but_no_message_is_reported(self):
+        # Script::ShowError read an uninitialized token as the file name when the thrown
+        # object had own File and Line but neither Message nor Extra: the process died with
+        # 0xC0000409 and printed nothing.
+        source = 'x := 1\nthrow {File: "nonexistent.ahk", Line: 7}\n'
+        self.assertIn("sample.ahk (2) : ==> Unhandled exception.", self.uncaught_report(source))
+        record = self.uncaught_diagnostic(source)
+        self.assertEqual((record["message"], record["line"]), ("Unhandled exception.", 2))
+        self.assertEqual(record["source"], 'throw {File: "nonexistent.ahk", Line: 7}')
+        # A File and Line that name a loaded line are reported instead of the throw site.
+        source = 'x := 1\nthrow {File: A_LineFile, Line: 1}\n'
+        self.assertIn("sample.ahk (1) : ==> Unhandled exception.", self.uncaught_report(source))
+        self.assertEqual(self.uncaught_diagnostic(source)["line"], 1)
+
+    def test_uncaught_error_report_names_the_error_line_not_the_throw_line(self):
+        # The report passed Message or Extra to GetLine as the file name, so Error.File and
+        # Error.Line were never resolved and the throw site was always shown.
+        source = 'x := 1\ny := 2\ne := Error("made on 3")\nz := 3\nw := 4\nthrow e\n'
+        text = self.uncaught_report(source)
+        self.assertIn("sample.ahk (3) : ==> made on 3", text)
+        self.assertIn("sample.ahk (6) : [] throw(e)", text)  # The call stack keeps the throw site.
+        record = self.uncaught_diagnostic(source)
+        self.assertEqual((record["type"], record["line"]), ("Error", 3))
+        self.assertEqual(record["source"], 'e := Error("made on 3")')
+        source = 'x := 1\ny := 2\nz := 3\nthrow {File: A_ScriptFullPath, Line: 2, Message: "m"}\n'
+        self.assertIn("sample.ahk (2) : ==> m", self.uncaught_report(source))
+        record = self.uncaught_diagnostic(source)
+        self.assertEqual((record["message"], record["line"], record["source"]), ("m", 2, "y := 2"))
+
+    def test_uncaught_object_without_a_loaded_location_reports_the_throw_site(self):
+        cases = [
+            ('x := 1\nthrow {Message: "m", File: A_ScriptFullPath, Line: 999999}\n', "m", ""),
+            ('x := 1\nthrow {Line: 3}\n', "Unhandled exception.", ""),
+            ('x := 1\nthrow 42\n', "Unhandled exception.", "42"),
+            ('x := 1\nthrow "text"\n', "Unhandled exception.", "text"),
+        ]
+        for source, message, extra in cases:
+            with self.subTest(source=source):
+                self.assertIn(f"sample.ahk (2) : ==> {message}", self.uncaught_report(source))
+                record = self.uncaught_diagnostic(source)
+                self.assertEqual((record["message"], record["extra"], record["line"]),
+                                 (message, extra, 2))
+        # A dynamic File property is never invoked, so a getter that throws cannot interfere.
+        source = ('o := {Line: 2}\no.DefineProp("File", {Get: (*) => ThrowIt()})\n'
+                  'ThrowIt() {\n    throw Error("getter")\n}\nthrow o\n')
+        self.assertIn("sample.ahk (6) : ==> Unhandled exception.", self.uncaught_report(source))
+        record = self.uncaught_diagnostic(source)
+        self.assertEqual((record["message"], record["line"]), ("Unhandled exception.", 6))
+
+    def diagnostic(self, source, *options):
+        """Run under /Diag=json; return the result and its one schema-2 record."""
+        result = self.run_script(source, "/Diag=json", *options)
+        lines = result.stderr.decode("utf-8").splitlines()
+        self.assertEqual(len(lines), 1, result.stderr[:400])
+        record = json.loads(lines[0])
+        self.assertEqual(list(record), DIAG_KEYS)
+        return result, record
+
+    def test_diag_json_record_keeps_a_300kb_message(self):
+        result, record = self.diagnostic(f'msg := {LONG_MESSAGE_EXPR}\nthrow Error(msg, , "ctx")\n')
+        self.assertEqual(result.returncode, 10, result.stderr[:400])
+        self.assertEqual(len(record["message"]), len(LONG_MESSAGE))
+        self.assertEqual(record["message"], LONG_MESSAGE)
+        self.assertEqual(record["extra"], "ctx")
+        self.assertEqual((record["type"], record["code"], record["line"]), ("Error", 10, 2))
+
+    def test_diag_json_record_keeps_a_100kb_extra(self):
+        result, record = self.diagnostic(
+            f'extra := {LONG_EXTRA_EXPR}\nthrow Error("short message", , extra)\n')
+        self.assertEqual(result.returncode, 10, result.stderr[:400])
+        self.assertEqual(record["message"], "short message")
+        self.assertEqual(len(record["extra"]), len(LONG_EXTRA))
+        self.assertEqual(record["extra"], LONG_EXTRA)
+
+    def test_diag_json_deep_stack_record_is_complete(self):
+        source = ("Recurse(n) {\n"
+                  "    if (n = 0)\n"
+                  f'        throw Error({LONG_MESSAGE_EXPR}, , "deep extra")\n'
+                  "    Recurse(n - 1)\n"
+                  "}\n"
+                  "Recurse(120)\n")
+        result, record = self.diagnostic(source)
+        self.assertEqual(result.returncode, 10, result.stderr[:400])
+        self.assertEqual(record["message"], LONG_MESSAGE)
+        self.assertEqual(record["extra"], "deep extra")
+        self.assertEqual(record["line"], 3)
+        self.assertTrue(record["source"].lstrip().startswith("throw Error("), record["source"])
+        stack = record["stack"]
+        self.assertTrue(stack.startswith(str(self.root / "sample.ahk") + " (3) : [Recurse] throw("), stack[:200])
+        # Whole frames up to the thread marker, or up to Error.Stack's "... N more" cap.
+        self.assertRegex(stack, r"(?:\(6\) : \[\] Recurse\(120\)\r\n> Auto-execute\r\n|\[Recurse\] Recurse\(n - 1\)\r\n\.\.\. \d+ more)$")
+
+    def test_text_report_keeps_a_300kb_message(self):
+        result = self.run_script(f'msg := {LONG_MESSAGE_EXPR}\nthrow Error(msg, , "ctx")\n')
+        self.assertEqual(result.returncode, 10, result.stderr[:400])
+        header, _, rest = result.stderr.decode("utf-8").partition("\n")
+        self.assertIn("sample.ahk (2) : ==> ", header)
+        message = header.partition(" : ==> ")[2]
+        self.assertEqual(len(message), len(LONG_MESSAGE), header[-80:])
+        self.assertEqual(message, LONG_MESSAGE)
+        self.assertTrue(rest.startswith("     Specifically: ctx\n"), rest[:200])
+        self.assertIn("     Call stack:\n", rest)
+        self.assertTrue(rest.endswith("> Auto-execute\n"), rest[-200:])
+
+    def test_stderr_file_mirrors_a_long_record(self):
+        mirror = self.root / "stderr.txt"
+        result, record = self.diagnostic(f"throw Error({LONG_MESSAGE_EXPR})\n", f"/StdErrFile={mirror}")
+        self.assertEqual(record["message"], LONG_MESSAGE)
+        self.assertEqual(mirror.read_bytes(), result.stderr)
 
 
 if __name__ == "__main__":

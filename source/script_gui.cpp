@@ -282,14 +282,15 @@ ObjectMemberMd GuiType::sMembers[] =
 	md_member(GuiType, Submit, CALL, (In_Opt, Bool32, Hide), (Ret, Object, RetVal)),
 	
 	md_member		(GuiType, __Item, GET, (In, Variant, Index), (Ret, Variant, RetVal)),
-	md_property_get	(GuiType, Hwnd, UInt32),
-	md_property		(GuiType, Title, String),
-	md_property		(GuiType, Name, String),
-	md_property_get	(GuiType, FocusedCtrl, Object),
 	md_property		(GuiType, BackColor, Variant),
+	md_property_get	(GuiType, FocusedCtrl, Object),
+	md_property_get	(GuiType, FontHandle, UInt32),
+	md_property_get	(GuiType, Hwnd, UInt32),
 	md_property		(GuiType, MarginX, Int32),
 	md_property		(GuiType, MarginY, Int32),
-	md_property_opt	(GuiType, MenuBar, Variant)
+	md_property_opt	(GuiType, MenuBar, Variant),
+	md_property		(GuiType, Name, String),
+	md_property		(GuiType, Title, String)
 };
 
 int GuiType::sMemberCount = _countof(sMembers);
@@ -464,6 +465,13 @@ FResult GuiType::get_FocusedCtrl(IObject *&aRetVal)
 }
 
 
+FResult GuiType::get_FontHandle(UINT &aRetVal)
+{
+	aRetVal = (UINT)(UINT_PTR)sFont[mCurrentFontIndex].hfont;
+	return OK;
+}
+
+
 FResult GuiType::get_Margin(int &aRetVal, int &aMargin)
 {
 	if (aMargin == COORD_UNSPECIFIED)
@@ -573,10 +581,10 @@ FResult GuiType::Move(optl<int> aX, optl<int> aY, optl<int> aWidth, optl<int> aH
 	GetWindowRect(mHwnd, &rect);
 	rect.right -= rect.left; // Convert to width.
 	rect.bottom -= rect.top; // Convert to height.
-	if (HWND parent = GetParent(mHwnd)) // Allow for +Parent.
-		ScreenToClient(parent, (LPPOINT)&rect); // Must do this before the loop, as coord[] already contains client coords.
-	if (aX.has_value())			rect.left = Scale(aX.value());
-	if (aY.has_value())			rect.top = Scale(aY.value());
+	if (GetWindowLong(mHwnd, GWL_STYLE) & WS_CHILD) // Allow for +Parent.
+		ScreenToClient(GetParent(mHwnd), (LPPOINT)&rect); // Must do this before the loop, as coord[] already contains client coords.
+	if (aX.has_value())			rect.left = aX.value();
+	if (aY.has_value())			rect.top = aY.value();
 	if (aWidth.has_value())		rect.right = Scale(aWidth.value());
 	if (aHeight.has_value())	rect.bottom = Scale(aHeight.value());
 	MoveWindow(mHwnd, rect.left, rect.top, rect.right, rect.bottom, TRUE);

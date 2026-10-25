@@ -5,7 +5,7 @@ errors go to `stderr` (as text **or** JSON), failures return meaningful exit cod
 can be suppressed, and the debugger speaks DBGp so an LLM can drive it. Everything else is
 stock AutoHotkey.
 
-![engine](https://img.shields.io/badge/engine-2.1--alpha.31%2BConsole-5B9FEF)
+![engine](https://img.shields.io/badge/engine-2.1--alpha.36%2BConsole-5B9FEF)
 ![based on](https://img.shields.io/badge/based%20on-AutoHotkey%20v2.1--alpha-22D3EE)
 [![Build AutoHotkey](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml/badge.svg)](https://github.com/TrueCrimeDev/AutoHotkey/actions/workflows/build.yml)
 ![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/TrueCrimeDev/AutoHotkey/badges/coverage.json)
@@ -53,15 +53,16 @@ the *plumbing around it* so AHK fits into pipes, scripts, and tooling.
 | **Exit code on failure** | `0` | Distinct non-zero codes per failure class (10–14, 64, 130) |
 | **Unattended runs** | Dialogs block forever | `/Headless` suppresses the engine's own prompts (script `MsgBox` calls still show) |
 | **Syntax checking** | Run it and see | `check` subcommand: parse-only, exit `0`/`13` |
-| **Single-script tests** | Roll your own | `test` subcommand: exit `0`/`14` |
+| **Single-script tests** | Roll your own | `test` subcommand: exit `0` on pass; failures keep their codes ([`test` exit codes](#exit-codes)) |
 | **Crash forensics** | Lost when the window closes | `/CrashLog=` append-only event log that survives hard crashes |
 | **Inline evaluation** | — | `Eval("expr")` runs an expression in live scope (opt-in) |
 | **Interactive session** | — | `repl` subcommand: persistent eval loop over stdin/stdout |
 | **stdout helper** | `FileOpen("*","w")` boilerplate | `Print(fmt, args*)` — UTF-8, `Format`-aware |
 | **Debugger** | DBGp (desktop-oriented) | Same DBGp, wired to an MCP server for LLM-driven debugging |
 
-None of this touches the language. Scripts that run on upstream `v2.1-alpha.31` run here
-unchanged; the additions are flags, subcommands, and a few opt-in built-ins.
+None of this touches the language. The engine is upstream `v2.1-alpha.36` (see [`docs/alpha/v2.1-alpha.36.md`](docs/alpha/v2.1-alpha.36.md)),
+so scripts that run on that upstream code run here unchanged; the additions are flags,
+subcommands, and a few opt-in built-ins.
 
 ---
 
@@ -69,30 +70,28 @@ unchanged; the additions are flags, subcommands, and a few opt-in built-ins.
 
 ### Build (Windows)
 
-GCC (**mingw-w64** via [MSYS2](https://www.msys2.org)) is the canonical compiler. Install the
-toolchain once:
+CMake is the supported build route. [`BUILD.md`](BUILD.md) has the prerequisites and
+commands for MSVC x64, MSVC Win32, and mingw-w64 GCC x64 (the three configurations CI
+builds, syntax-checks and gates), and how to verify the exact executable you built. The
+two x64 routes produce the console engine `AutoHotkey64Console.exe`, which the examples in
+this README use, and the GUI `AutoHotkey64.exe`; the Win32 route produces
+`AutoHotkey32Console.exe` and `AutoHotkey32.exe`.
 
-```bash
-pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
-```
-
-then build from the repo root:
-
-```powershell
-.\build.bat
-```
-
-Output lands in `bin\AutoHotkey64.exe`. MSVC is still supported as an alternative
-(`build_local.bat`) and produces the CI release binary. Full details — both toolchains, manual
-invocations, and the CMake flags — are in [`BUILD.md`](BUILD.md) and [`updates.md` §12](updates.md).
+- **Output directory.** CMake's `AHK_OUTPUT_DIR` defaults to `bin\`. BUILD.md's commands
+  pass isolated directories (`out\msvc\x64`, `out\mingw\x64`) so a build never overwrites
+  the engine in `bin\`. Copy a tested build into `bin\` when you want the examples below,
+  `tools/ahk.ps1`, and the Claude Code setup (`.mcp.json`, hooks) to use it.
+- **`build.bat`** is a convenience wrapper for the mingw-w64 route: it builds in
+  `build_gcc\` and writes both executables straight into `bin\`.
+- **`AutoHotkeyx.sln` / `build_local.bat`** remain available for the GUI executable only.
 
 ### First run
 
 ```powershell
-bin\AutoHotkey64.exe script.ahk
+bin\AutoHotkey64Console.exe script.ahk
 ```
 
-Use `bin\AutoHotkey64.exe --help` to discover commands, `--version` to identify the
+Use `bin\AutoHotkey64Console.exe --help` to discover commands, `--version` to identify the
 engine, compiler, architecture, and source revision, or `--capabilities` for JSON.
 An uncommitted source build reports its base revision with a `-dirty` suffix.
 
@@ -111,24 +110,24 @@ ahk repl                  # Type .exit to return to PowerShell
 ```
 
 The console executable reports script errors in the terminal by default. The
-standard `AutoHotkey64.exe` remains available for GUI launches. See the
+standard `AutoHotkey64.exe` remains available for GUI launches; PowerShell does not
+wait for it unless its output is piped, so its exit code is lost. See the
 [PowerShell repair notes](docs/powershell-cli-20260907.md) for troubleshooting.
 
-The four current executables in `bin/` share the same source: x64/x86 and
-console/GUI launch options. For everyday terminal use, choose
-`AutoHotkey64Console.exe` through `ahk`. Older local executables are kept under
-`bin/archive/`; `bin/archive-index.json` maps their original names to archived
-paths and hashes. Keep future backup copies in the archive so they do not obscure
-the current launchers. `bin/README.txt` provides a short guide beside the files.
+Git tracks only `bin/tree-sitter-ahk.dll`; everything else in `bin/` is local, so a
+fresh clone has no engine there until you build one or copy a release console engine
+in. Executables in `bin/` can also be older than the source, and the x64 and x86 or
+GUI and console files need not come from the same build, so check `--version` on the
+one you run. For everyday terminal use, choose `AutoHotkey64Console.exe` through `ahk`.
 
 ### Confirm the console behavior
 
 ```powershell
-bin\AutoHotkey64.exe /ErrorStdOut tests/test_errorstdout.ahk 1>out.txt 2>err.txt
+bin\AutoHotkey64Console.exe tests\test_console.ahk 1>out.txt 2>err.txt
 ```
 
-Normal output ends up in `out.txt`; the runtime error lands in `err.txt`. That split — stdout
-for results, stderr for diagnostics — is the whole point.
+Normal output ends up in `out.txt`; the runtime error lands in `err.txt`, and the process
+exits `10`. That split — stdout for results, stderr for diagnostics — is the whole point.
 
 ---
 
@@ -138,31 +137,62 @@ One executable, selected into different modes by its first arguments:
 
 | Invocation | Mode |
 |---|---|
-| `AutoHotkey64.exe script.ahk` | Normal run |
-| `AutoHotkey64.exe /Debug script.ahk` | Connect to a DBGp debugger on port 9000 |
-| `AutoHotkey64.exe /ErrorStdOut script.ahk` | Runtime errors → `stderr` as text |
-| `AutoHotkey64.exe /ErrorStdOut:color script.ahk` | …with ANSI color |
-| `AutoHotkey64.exe /ErrorStdOut=UTF-8 script.ahk` | …with an explicit encoding |
-| `AutoHotkey64.exe /Headless script.ahk` | Suppress all dialogs (non-interactive) |
-| `AutoHotkey64.exe /Diag=json script.ahk` | Runtime errors → `stderr` as JSON |
-| `AutoHotkey64.exe check script.ahk` | Parse only — exit `0` (ok) / `13` (fail) |
-| `AutoHotkey64.exe test script.ahk` | Run as a test — exit `0` (pass) / `14` (fail) |
-| `AutoHotkey64.exe repl [script.ahk]` | Interactive / pipe-driven eval session ([REPL](#repl)) |
-| `AutoHotkey64.exe mcp` | Native local tools over stdin/stdout |
-| `AutoHotkey64.exe --help` | Commands, flags, and usage |
-| `AutoHotkey64.exe --version` | Engine version and build identity |
-| `AutoHotkey64.exe --capabilities` | Machine-readable feature and protocol information |
+| `AutoHotkey64Console.exe script.ahk` | Normal run; runtime errors → `stderr` as text |
+| `AutoHotkey64Console.exe /Debug script.ahk` | Connect to a DBGp debugger (default `localhost:9000`; `/Debug=host:port` for another). With no listener, or when it goes away, the script runs on and `stderr` says `Debugger error: ... continuing without the debugger.` |
+| `AutoHotkey64Console.exe /ErrorStdOut script.ahk` | Runtime errors → `stderr` as text (the console engine's default) |
+| `AutoHotkey64Console.exe /ErrorStdOut:color script.ahk` | …with ANSI color |
+| `AutoHotkey64Console.exe /ErrorStdOut=UTF-8 script.ahk` | …with an explicit encoding |
+| `AutoHotkey64Console.exe /Headless script.ahk` | Report the engine's error and warning prompts on `stderr` instead of dialogs (a script's own `MsgBox`, `InputBox`, and `Gui` still show) |
+| `AutoHotkey64Console.exe /Diag=json script.ahk` | Runtime errors → `stderr` as JSON |
+| `AutoHotkey64Console.exe check script.ahk` | Parse only — exit `0` (ok) / `13` (fail) |
+| `AutoHotkey64Console.exe test script.ahk` | Run as a test — exit `0` (pass), `10` (uncaught error), `12` (parse error), `14` (`ExitApp(14)`, a persistent script, or an execution failure) |
+| `AutoHotkey64Console.exe repl [script.ahk]` | Interactive / pipe-driven eval session ([REPL](#repl)) |
+| `AutoHotkey64Console.exe mcp` | Native local tools over stdin/stdout |
+| `AutoHotkey64Console.exe --help` | Commands, flags, and usage |
+| `AutoHotkey64Console.exe --version` | Engine version and build identity |
+| `AutoHotkey64Console.exe --capabilities` | Machine-readable feature and protocol information |
 | `AutoHotkey64Console.exe /Trace script.ahk` | Stream readable executing statements to stderr; quiet while idle ([trace notes](docs/console-trace-20260907.md)) |
+
+The GUI `AutoHotkey64.exe` accepts the same commands and flags; use the console engine
+from a terminal, CI job, or agent so the shell waits for it and receives its output.
 
 Flags compose. A typical unattended invocation:
 
 ```powershell
-bin\AutoHotkey64.exe /Headless /Diag=json script.ahk 2>diagnostics.jsonl
+bin\AutoHotkey64Console.exe /Headless /Diag=json script.ahk 2>diagnostics.jsonl
 ```
 
 Global flags can precede a command: `/Headless /Diag=json check script.ahk`.
 Arguments after the script filename belong to the script. Use `--` before a script
 filename which would otherwise be interpreted as a command or flag.
+
+`--help` lists every spelling the parser accepts, with its value syntax. The same list:
+
+| Option | Effect |
+|---|---|
+| `/Headless`, `--headless` | Report the engine's prompts on `stderr` instead of dialogs |
+| `/Diag[=text\|json]`, `--diag[=text\|json]` | Diagnostic format on `stderr` (default `text`) |
+| `/ErrorStdOut[=encoding]` | Diagnostic text encoding: `UTF-8`, `UTF-16`, `CPnnn` or `nnn` |
+| `/ErrorStdOut:color\|nocolor` | Force ANSI color on or off (`nocolor` also `none`, `off`) |
+| `/Trace[=text\|json]`, `--trace[=text\|json]` | Stream executing statements to `stderr` (`json`: one event per line) |
+| `/Eval`, `--eval` | Enable `Eval()` in the script |
+| `/Debug[=host[:port]\|stdio]` | Connect to a DBGp debugger (default `localhost:9000`); `stdio` speaks DBGp over stdin/stdout |
+| `/CrashLog=path`, `--crashlog=path` | Append crash and process lifecycle events ([Crash logging](#crash-logging)) |
+| `/StdErrFile=path`, `--stderrfile=path` | Mirror diagnostics to a file |
+| `/Coverage=path`, `--coverage=path` | Write LCOV line coverage at exit ([Line coverage](#line-coverage)) |
+| `/include file` | Include one file before the script (at most once) |
+| `/CPnnn` | Script source code page |
+| `/force` | Replace an existing instance of the script |
+| `/restart` | Mark the launch as a restart (`Reload` uses it): an existing instance is closed instead of prompting |
+| `/script` | Run the script named on the command line even when the executable embeds one |
+| `--` | Treat the next argument as the script filename |
+| `/Check`, `--check`; `/Test`, `--test` | Switch forms of `check` and `test` (still one command per invocation) |
+| `/validate`; `/iLib file` (deprecated) | Load and parse only: exit `0`, or `12` on a parse error; nothing is printed on success |
+| `--help` (`help`, `-h`, `--h`, `-help`, `/help`, `/?`), `--version` (`/version`), `--capabilities` | Information; nothing is loaded |
+
+Git Bash rewrites any argument that starts with `/` into a path, so from Git Bash use
+the `--` aliases above, or double the slash for a switch without one
+(`//Debug`, `//ErrorStdOut`, `//include`). PowerShell and cmd pass `/Flag` unchanged.
 
 ---
 
@@ -239,6 +269,13 @@ Failures are distinguishable by exit code alone — no output scraping required:
 
 `ExitApp(n)` with any other `n` passes that code straight through.
 
+Under `test`, a script that runs to its end exits `0` and prints `TEST PASS`. An uncaught
+error still exits `10` and a parse error `12`. Code `14` comes from an explicit
+`ExitApp(14)` (the [`Test.ahk`](tests/Test.ahk) framework uses it for failed cases), a
+persistent script (`TEST FAIL: test mode requires a non-persistent script.`), or an
+execution failure. Other `ExitApp(n)` codes pass through, `0` included, without the
+`TEST PASS` line. `--capabilities` lists the codes under `exitCodes`.
+
 ---
 
 ## Language additions
@@ -261,7 +298,7 @@ Print("{ok: true}")                 ; single-arg form is literal — braces surv
 ### `Eval(expr)` — evaluate an expression in live scope *(opt-in)*
 
 Runs any AHK expression string against the caller's variables — reads and writes locals, calls
-methods, supports alpha.31 expression features. Gated behind `#EnableEval` (or the `/Eval`
+methods, supports v2.1-alpha expression features (maybe operator, unset propagation). Gated behind `#EnableEval` (or the `/Eval`
 flag) so it can never run unless you ask for it.
 
 ```ahk
@@ -275,16 +312,24 @@ Bad input throws `SyntaxError`; missing identifiers throw `UnsetError`.
 
 ### `SyntaxError` — parse-failure exception
 
-A real `Error` subclass (`Message`, `What`, `Extra`, `Line`, `Column`), thrown by `Eval` on
-parse failure and available for your own parsers to throw.
+An `Error` subclass, thrown by `Eval` on parse failure and available for your own parsers
+to throw. One thrown by `Eval` carries only `Message`, `File` (`"_Eval"`), `Line` (`0`) and
+`Column` (`0`). It has no `What`, `Extra` or `Stack`, so reading `e.What` raises a
+`PropertyError` inside the handler; check `e.HasProp("What")` first. A `SyntaxError` your
+script constructs has the usual `Error` properties (`What`, `Extra`, `File`, `Line`, `Stack`)
+but no `Column`. Details: [`updates.md` §3](updates.md).
 
 ### `_ScriptGetLines(File, Line, Range?)` — source context
 
-Returns source-text lines around a position — the primitive the debugger tooling uses to show
-surrounding code:
+Returns the parsed lines around a position as an Array of `{File, Number, Text}` — the
+primitive the debugger tooling uses to show surrounding code. `Text` is the engine's rendering
+of the line, and comments and blank lines are skipped. A negative or omitted `Range` returns
+only the given line. A line with no code returns no Array (an empty string, or no value under
+a `#Requires AutoHotkey v2.1-...` at the top level of the calling module's own file; one in an
+`#Include` file or a function no longer sets the mode), so guard the call:
 
 ```ahk
-for line in _ScriptGetLines(A_LineFile, A_LineNumber, -3)   ; 3 lines either side
+for line in (_ScriptGetLines(A_LineFile, A_LineNumber, 3) ?? "") || []   ; up to 3 parsed lines either side
     Print("{:03}: {}", line.Number, line.Text)
 ```
 
@@ -302,11 +347,13 @@ Print(JSON.Stringify(values)) ; ["edited",false,null]
 
 Parsed arrays preserve untouched boolean/null types through edits, insertion,
 removal, resizing, and cloning. Assignment clears the original element's type tag;
-use `JSON.True`, `JSON.False`, or `JSON.Null` when explicitly assigning those types.
+use `JSON.True`, `JSON.False`, or `JSON.Null` (read-only singletons) when explicitly
+assigning those types. `JSON` itself is not a constructor: `JSON()` throws `TypeError`;
+create objects with `JSON.Parse`.
 String values support embedded NUL characters. Object keys containing NUL are
 rejected with `UnsupportedKey` to prevent truncation and key collisions.
 
-`bin\AutoHotkey64.exe mcp` provides the native MCP tools to a local client over
+`bin\AutoHotkey64Console.exe mcp` provides the native MCP tools to a local client over
 stdin/stdout. It does not need a network listener. `--capabilities` reports the
 supported protocol versions and engine features. The optional bundled tree-sitter
 grammar DLL supports x64 only.
@@ -319,8 +366,8 @@ on the `Eval` machinery, so the loaded script's globals, functions and classes a
 live.
 
 ```text
-$ bin\AutoHotkey64.exe repl
-AutoHotkey v2.1-alpha.31+Console REPL - one expression per line; .help for commands
+$ bin\AutoHotkey64Console.exe repl
+AutoHotkey v2.1-alpha.36+Console REPL - one expression per line; .help for commands
 >>> x := 10
 10
 >>> x * 4
@@ -361,16 +408,22 @@ last events survive even a hard crash. It works regardless of how the script was
 including launchers that discard `stderr`.
 
 ```text
-[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.31+Console script=C:\app\app.ahk ...
-[2026-05-13 21:43:22] [ERROR] pid=12345 type=TypeError mode=Exit
+[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.36+Console script=C:\app\app.ahk ...
+[2026-05-13 21:43:22] [ERROR] pid=12345 type=MethodError mode=Return
   Message: This value of type "String" has no method named "DoStuff".
   File: C:\app\Lib\Clip.ahk
   Line: 142
+  What:
+  Extra:
   Stack:
-    C:\app\Lib\Clip.ahk (142) : [Clip.Foo]
-    > Auto-execute
+C:\app\Lib\Clip.ahk (142) : [Clip.Foo] s.DoStuff()
+C:\app\app.ahk (33) : [] Clip.Foo()
+> Auto-execute
 [2026-05-13 21:43:22] [EXIT] pid=12345 code=10 reason=Error
 ```
+
+The `Stack:` lines are the error's own `Stack` text, written unindented with CRLF endings,
+so a record runs until the next `[YYYY-MM-DD` header line.
 
 Event types, reason names, `OnError` interaction, and limitations: [`updates.md` §4](updates.md).
 
@@ -382,10 +435,15 @@ Event types, reason names, `OnError` interaction, and limitations: [`updates.md`
 parser supplies the executable lines, the interpreter's per-line dispatch counts the hits,
 and alpha-only syntax is counted correctly because the engine itself is the source of truth.
 
-```bat
-bin\AutoHotkey64.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
+```powershell
+bin\AutoHotkey64Console.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
 python tools\lcov_summary.py "coverage/**/*.lcov" --include "^Lib/" --badge coverage\badge.json
 ```
+
+The engine creates a missing report directory, every level of it. If the report still
+cannot be written (say, the path runs through an existing file), one stderr line names
+the report and the Win32 error (a warning record under `/Diag=json`), and the exit code
+is the script's own ([`updates.md` §17](updates.md)).
 
 ```text
 SF:C:\lib\Async.ahk
@@ -452,9 +510,12 @@ the `test` subcommand.
 runs-on: windows-latest
 steps:
   - uses: actions/checkout@v4
-  - run: gh release download -R TrueCrimeDev/AutoHotkey -p AutoHotkey64.exe -D bin
+  - run: gh release download -R TrueCrimeDev/AutoHotkey -p AutoHotkey64Console.exe -D bin
     env: { GH_TOKEN: ${{ github.token }} }
 ```
+
+This needs a published `v*` tag release; until one exists, `gh release download` fails
+with `release not found`, so build the engine per [`BUILD.md`](BUILD.md) instead.
 
 **2. Write `tests/run.ahk`** that `#Include`s the framework and every `tests/*.test.ahk`
 (copy [`tests/Test.ahk`](tests/Test.ahk) and [`tests/run.ahk`](tests/run.ahk) from this
@@ -466,12 +527,14 @@ Test.Case("rejects garbage", () => Assert.Throws(() => JSON.Parse("{"), JSONErro
 ```
 
 `Test.Run()` prints one line per case, exits 14 on any failure, emits `::error` annotations
-under GitHub Actions, and writes JUnit XML when `AHK_TEST_JUNIT` is set.
+under GitHub Actions, and writes JUnit XML when `AHK_TEST_JUNIT` is set. The subprocess
+suite `qa/run.ahk` writes the same shape (one `testsuite` per test file, one `testcase` per
+assertion) when `AHK_QA_JUNIT` is set.
 
 **3. Run it** with coverage and machine-readable diagnostics:
 
 ```yaml
-  - run: bin\AutoHotkey64.exe /Headless /Diag=json /Coverage=coverage.lcov test tests\run.ahk 2>diag.jsonl
+  - run: bin\AutoHotkey64Console.exe /Headless /Diag=json /Coverage=coverage.lcov test tests\run.ahk 2>diag.jsonl
   - if: failure()
     shell: pwsh
     run: |
@@ -483,34 +546,48 @@ Uncaught errors become PR annotations for free. For a README number, feed `cover
 to `codecov/codecov-action`, or copy this repo's no-third-party route from
 [`build.yml`](.github/workflows/build.yml): `tools/lcov_summary.py` computes `LH/LF`,
 writes a shields.io endpoint JSON, and the workflow force-pushes it to a `badges` branch
-that `img.shields.io/endpoint` reads. A separate `check` job
-(`python tools/check_all.py bin/AutoHotkey64.exe`) parses every `.ahk` in two seconds
-before the test job starts.
+that `img.shields.io/endpoint` reads. Each build job also has a syntax-check step
+(`python tools/check_all.py` on the engine that job just built) that parses every `.ahk` in
+a couple of seconds; the test job needs the MSVC build jobs, so it does not start after a
+parse failure there.
 
 ---
 
 ## AI-assisted debugging
 
-The fork preserves AutoHotkey's DBGp debugger and pairs it with an MCP server
-([`debugger-tool/mcp-server/`](debugger-tool/mcp-server/)) that exposes it to LLM tools such as
-Claude Code and Cursor. Combined with the structured errors above, this closes a tight loop:
+`AutoHotkey64Console.exe mcp` is the primary MCP surface. The engine serves MCP over
+stdin/stdout itself, with no Node bridge and no network listener. Its `check`, `run` and
+`test` tools spawn the engine on a file and return the exit code, captured streams and JSON
+diagnostics ([`updates.md` §21](updates.md)); on the current build `tools/list` also reports
+`ast_outline`, `get_source_context`, `server_status`, `source_outline` and
+`workspace_symbols`. The checked-in [`.mcp.json`](.mcp.json) registers it for Claude Code as
+`ahk-mcp`, and `tests/test_mcp_protocol.py` pins the protocol envelope.
+
+The fork also preserves AutoHotkey's DBGp debugger. The legacy DBGp bridge
+([`debugger-tool/mcp-server/`](debugger-tool/mcp-server/)) is a separate Node MCP server that
+drives it for LLM tools such as Claude Code and Cursor; until roadmap A1 completes the
+debugger protocol, breakpoints, stepping, stack and variable inspection and error capture
+live only there. Combined with the structured errors above, this closes a tight loop:
 
 ```
 run script → capture structured error → inspect source / variables → apply fix → re-run
 ```
 
-The MCP server speaks DBGp on port 9000 and surfaces ~22 tools:
+The bridge speaks DBGp on port 9000, or supervises the engine over `/Debug=stdio` with
+`launch_script`, and surfaces 28 tools:
 
 | Group | Tools |
 |---|---|
-| Execution | `debug_run`, `debug_step_into` / `_over` / `_out`, `debug_stop`, `debug_status` |
+| Supervision | `launch_script`, `terminate_script`, `get_script_output` |
+| Execution | `debug_run`, `debug_step_into` / `_over` / `_out`, `debug_stop`, `debug_status`, `debug_command` |
 | Breakpoints | `breakpoint_set`, `breakpoint_remove`, `breakpoint_list` |
 | Inspection | `variables_get`, `evaluate`, `stack_trace`, `watch_add` / `_remove` / `_list` |
-| Source intel | `get_source_context`, `source_outline`, `workspace_symbols` |
+| Source intel | `get_source_context`, `source_outline`, `ast_outline`, `workspace_symbols` |
 | Error loop | `capture_error`, `analyze_error`, `apply_fix` |
 | Queue | `list_errors`, `clear_errors` |
 
-**Start it** (the server must be listening before the script connects):
+**Start it** (the server must be listening before the script connects; otherwise the
+script runs without the debugger and says so on `stderr`):
 
 ```powershell
 cd debugger-tool\mcp-server
@@ -519,7 +596,7 @@ node build/index.js
 ```
 
 ```powershell
-bin\AutoHotkey64.exe /Debug your_script.ahk    # connects to localhost:9000
+bin\AutoHotkey64Console.exe /Debug your_script.ahk    # connects to localhost:9000
 ```
 
 Tool-by-tool usage lives in [`debugger-tool/mcp-server/README.md`](debugger-tool/mcp-server/README.md).
@@ -533,13 +610,13 @@ For Claude Code, the [ClautoHotkey](https://github.com/TrueCrimeDev/ClautoHotkey
 | Path | Purpose |
 |---|---|
 | [`source/`](source/) | AutoHotkey engine source (C++) — fork changes live here |
-| [`debugger-tool/mcp-server/`](debugger-tool/mcp-server/) | MCP server bridging LLM tools to AutoHotkey's DBGp debugger |
+| [`debugger-tool/mcp-server/`](debugger-tool/mcp-server/) | Legacy DBGp bridge: a Node MCP server for breakpoints, stepping and error capture |
 | [`debugger-tool/ahk-error-agent/`](debugger-tool/ahk-error-agent/) | Headless error-capture and fix-automation agent |
 | [`examples/`](examples/) | Runnable feature demos — `alpha21/`, `alpha22/`, plus structs, GUIs, and ANSI showcases |
 | `examples/Alpha22_Example.ahk` … `examples/Alpha30_Example.ahk` | Per-version language showcases |
 | `tests/` | `run.ahk` + `*.test.ahk` single-process suite, `Test.ahk` framework, Python console-gate suites |
 | [`qa/`](qa/) | Subprocess-per-test interpreter regression suite |
-| `tools/` | `check_all.py` (parse every `.ahk`), `lcov_summary.py` (merge coverage, badge JSON) |
+| `tools/` | `check_all.py` (parse every `.ahk`), `lcov_summary.py` (merge coverage, badge JSON), `vscode/` (AutoHotkey2 LSP syntaxes generator and a `tasks.json` template with the `/Diag=json` problem matcher; see [`docs/VSCODE_SETUP.md`](docs/VSCODE_SETUP.md)) |
 | [`BUILD.md`](BUILD.md) | Build instructions |
 | [`updates.md`](updates.md) | Complete fork reference |
 
@@ -556,6 +633,7 @@ For Claude Code, the [ClautoHotkey](https://github.com/TrueCrimeDev/ClautoHotkey
 | [`CLAUDE.md`](CLAUDE.md) | Project orientation for AI agents |
 | [`V3_MILESTONE_STATUS.md`](docs/V3_MILESTONE_STATUS.md) | Milestone implementation status |
 | [`docs/TREE_SITTER.md`](docs/TREE_SITTER.md) | Vendored tree-sitter AHK grammar DLL: exports, DllCall usage |
+| [`docs/VSCODE_SETUP.md`](docs/VSCODE_SETUP.md) | VS Code: tasks, launch configurations, the `/Diag=json` problem matcher, and workspace-wide fork declarations for the AutoHotkey2 LSP (`AutoHotkey2.Syntaxes`) |
 | `debugger-tool/mcp-server/README.md` | MCP tool reference and setup |
 
 ---

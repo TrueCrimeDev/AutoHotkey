@@ -1,18 +1,21 @@
 ; ============================================================
-; alpha.21 Feature: Lazy module initialization
+; alpha.21: module initialization order and forward references
 ; ============================================================
-; Modules now execute on first reference, not at load time.
-; This means:
-;   - Faster startup (unused modules don't run)
-;   - Forward references work (module A can import from B
-;     even if B imports from A, as long as they don't create
-;     a circular dependency at init time)
-;   - Import order no longer matters for name resolution
+; The alpha.21 notes called module init lazy. It is not: every
+; module still runs at startup, in reverse order of creation,
+; before __Main's auto-execute section, even a module nothing
+; imports (upstream design: Script::AutoExecSection in
+; source/script.cpp runs them all). What alpha.21 (c0ab7108)
+; added is that a first reference to a module's name runs that
+; module early, if it has not run yet.
+;   - Forward references work: #Import resolves a name
+;     regardless of where the exporting module is declared.
+;   - Import order no longer matters for name resolution.
+;   - Startup is not faster: unused modules still run.
 ; ============================================================
 
 ; Define modules that reference each other's names.
-; In alpha.20, this required careful ordering.
-; In alpha.21, it "just works" because modules init lazily.
+; Logger imports from Formatter, which is declared after it.
 
 #Module Logger
 
@@ -46,17 +49,18 @@ FormatNumber(n, decimals := 2)
 #Import Logger {Log}
 #Import Formatter {FormatNumber}
 
-; Logger module initializes only when Log() is first called.
-; At that point, Formatter is also initialized (because Logger imports from it).
+; Logger and Formatter have already run by now: modules run at
+; startup in reverse order of creation (NeverUsed, Formatter,
+; Logger), then __Main, so calling Log() runs no module code.
 msg := Log("Application started")
 MsgBox msg
 
 MsgBox "Formatted: " FormatNumber(3.14159, 4)
 
 ; A module nothing imports.
-; alpha.21 documented that such a module never initializes. Observed on the
-; alpha.31 engine: it DOES run, and before __Main's auto-execute section, so
-; this MsgBox appears first. Do not rely on "unused" modules staying inert.
+; It still runs at startup, and first of all (it was created last), so this
+; MsgBox appears before __Main's. That is upstream's design, not a fork bug
+; (rechecked on alpha.33). Do not rely on "unused" modules staying inert.
 #Module NeverUsed
 
 MsgBox "NeverUsed initialized (nothing imports this module)"

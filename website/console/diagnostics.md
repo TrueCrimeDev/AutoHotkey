@@ -32,6 +32,8 @@ The uncaught runtime error is expected to exit `10`; `test` mode instead maps a 
 | `file`, `line`, `column` | Location; column can be zero or best-effort |
 | `source`, `stack` | Source text and stack when available |
 
+A record is always one complete line: `message` and `extra` carry the thrown `Message` and `Extra` whole, however long. `stack` follows `Error.Stack`, so past 2048 characters it ends in `... N more`.
+
 The successful `check` verdict is a separate record: `{"kind":"check","status":"pass"}`. Warnings are diagnostics too; distinguish severity from process success.
 
 ## In ClautoHotkey

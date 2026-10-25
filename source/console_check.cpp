@@ -11,7 +11,8 @@
 // Parse in a child so the host's variables and parser state remain untouched.
 // The shared runner owns the process tree and bounds execution/captured output.
 // Check mode never executes the script body. Raw combines stderr then stdout;
-// records within each stream retain their order.
+// records within each stream retain their order. A failure reports one diagnostic,
+// built from the first error record (see CheckFindDiagRecord).
 namespace { // Check() file-static helpers
 
 static const int kCheckFieldCap = 4096;
@@ -198,6 +199,30 @@ static Object *CheckSyntheticDiag(LPCTSTR aMessage)
 	return d;
 }
 
+// The record to report: the first error-class one ("error" or "critical"), else the
+// first of any severity, so a load-time warning printed before the failure (such as
+// VarUnset) cannot stand in for it. Each record is one line, and escaped values
+// cannot contain either needle, so a record's own severity precedes its newline.
+static const char *CheckFindDiagRecord(const char *aCaptured)
+{
+	static const char kKind[] = "\"kind\":\"diagnostic\"";
+	static const char kSeverity[] = "\"severity\":\"";
+	const char *first = strstr(aCaptured, kKind);
+	for (const char *record = first; record; record = strstr(record + 1, kKind))
+	{
+		const char *eol = strchr(record, '\n');
+		const char *severity = strstr(record, kSeverity);
+		if (!severity)
+			break; // No later record has a severity either.
+		if (eol && severity > eol)
+			continue; // That severity belongs to a later record.
+		severity += _countof(kSeverity) - 1;
+		if (!strncmp(severity, "error\"", 6) || !strncmp(severity, "critical\"", 9))
+			return record;
+	}
+	return first;
+}
+
 static bool CheckAppendDiag(Array *aDiags, Object *d)
 {
 	if (!d)
@@ -259,7 +284,7 @@ bif_impl FResult Check(StrArg aSource, IObject *&aRetVal)
 			diagnostic = CheckSyntheticDiag(_T("Check: validator exceeded the 30-second timeout."));
 		else if (child.output_limit_exceeded)
 			diagnostic = CheckSyntheticDiag(_T("Check: validator exceeded the 8 MiB output limit."));
-		else if (const char *record = strstr(captured.c_str(), "\"kind\":\"diagnostic\""))
+		else if (const char *record = CheckFindDiagRecord(captured.c_str()))
 			diagnostic = CheckBuildDiag(record, child.exit_code);
 		else
 		{

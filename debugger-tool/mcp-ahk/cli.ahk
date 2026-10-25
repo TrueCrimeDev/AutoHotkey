@@ -4,12 +4,16 @@
 cli.ahk — command-line front-end for the AHK MCP tools.
 
 Run a tool and print its result, no server / protocol involved (it calls MCP()
-in-process). Use the ahkmcp.cmd / ahkmcp launchers so you can just type `ahkmcp`.
+in-process). Use the ahkmcp.cmd / ahkmcp launchers so you can just type `ahkmcp`;
+README.md describes how they pick the engine and handle paths.
 
-Usage:
-  AutoHotkey64.exe cli.ahk <tool> [positional...] [key=value...] [--raw]
-  AutoHotkey64.exe cli.ahk list          list available tools
-  AutoHotkey64.exe cli.ahk help          this help
+Usage (this fork's console engine; stock AutoHotkey lacks TSParse and Print):
+  AutoHotkey64Console.exe cli.ahk <tool> [positional...] [key=value...] [--raw]
+  AutoHotkey64Console.exe cli.ahk list          list available tools
+  AutoHotkey64Console.exe cli.ahk help          this help
+
+The engine starts this script with its working directory set to this folder,
+so give absolute paths when calling it directly.
 
 Examples:
   ahkmcp ast_outline C:\x.ahk

@@ -15,7 +15,9 @@
 ;
 ; Output is plain text via Print(). Under GitHub Actions each failure is also
 ; emitted as a `::error file=...,line=...::` workflow command so it shows up as
-; an annotation on the PR diff. Set AHK_TEST_JUNIT=<path> to write JUnit XML.
+; an annotation on the PR diff. Set AHK_TEST_JUNIT=<path> to write JUnit XML;
+; a relative path resolves against the directory the engine was started from
+; (A_InitialWorkingDir), not the script's own directory.
 
 class AssertionError extends Error {
 }
@@ -155,11 +157,25 @@ class Test {
         }
         Print("")
         Print("tests: {} passed, {} failed, {} errors ({} ms)", passed, failed, errored, A_TickCount - started)
-        junit := EnvGet("AHK_TEST_JUNIT")
-        if junit != ""
-            Test.WriteJUnit(junit, passed, failed, errored, A_TickCount - started)
+        junit := Test.FromInitialDir(EnvGet("AHK_TEST_JUNIT"))
+        if junit != "" {
+            try Test.WriteJUnit(junit, passed, failed, errored, A_TickCount - started)
+            catch as error
+                Print('tests: JUnit report "{}" not written: {}', junit, error.Message)
+        }
         if failed || errored
             ExitApp(14)
+    }
+
+    ; The engine sets the working directory to the script's directory before
+    ; the auto-execute section runs, so a relative path from the environment
+    ; would land beside the test file. Resolve it against the directory the
+    ; engine was started from; absolute and rooted paths pass through.
+    static FromInitialDir(path) {
+        path := StrReplace(path, "/", "\")
+        if path = "" || RegExMatch(path, "^(?:[A-Za-z]:|\\)")
+            return path
+        return A_InitialWorkingDir "\" path
     }
 
     static RelPath(path) {

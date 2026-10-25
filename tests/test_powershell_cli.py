@@ -8,6 +8,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -20,6 +21,18 @@ options, remaining = parser.parse_known_args()
 if options.engine and not options.wrapper:
     parser.error("--engine requires --wrapper")
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def expected_version():
+    """RAW_AHK_VERSION from source/ahkversion.h, read as tests/test_console_cli.py
+    reads it, so a version bump needs no test edit. The +Console metadata is kept:
+    the `ahk` profile must resolve to this fork's console build, not a plain engine
+    of the same upstream version."""
+    text = (ROOT / "source/ahkversion.h").read_text(encoding="utf-8")
+    return re.search(r'#define RAW_AHK_VERSION "([^"]+)"', text).group(1)
+
+
+EXPECTED_VERSION = expected_version()
 SHELLS = [p for p in (shutil.which("pwsh"),
     str(Path(os.environ["WINDIR"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"))
     if p and Path(p).is_file()]
@@ -30,7 +43,16 @@ def quote(value):
 
 
 class PowerShellCliTests(unittest.TestCase):
-    def run_ps(self, shell, command, cwd=None):
+    @classmethod
+    def setUpClass(cls):
+        # The first Windows PowerShell 5.1 launch on a fresh CI runner can take
+        # longer than a case's 12 s (run 39685156323 timed out test_bare_command
+        # while every later launch passed), so start each shell once up front.
+        for shell in SHELLS:
+            cls.run_ps(shell, "exit 0", timeout=120)
+
+    @staticmethod
+    def run_ps(shell, command, cwd=None, timeout=12):
         bootstrap = "[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)\n$OutputEncoding = [Text.UTF8Encoding]::new($false)\n"
         args = [shell, "-NoLogo", "-NonInteractive"]
         if options.wrapper:
@@ -41,7 +63,7 @@ class PowerShellCliTests(unittest.TestCase):
         if options.engine:
             env["AHK_CONSOLE_EXE"] = str(options.engine.resolve())
         return subprocess.run([*args, "-EncodedCommand", encoded], cwd=cwd or ROOT, env=env,
-                              capture_output=True, timeout=12)
+                              capture_output=True, timeout=timeout)
 
     def check_all(self, command, expected, code=0, cwd=None):
         for shell in SHELLS:
@@ -53,7 +75,7 @@ class PowerShellCliTests(unittest.TestCase):
                 self.assertIn(expected, out + err)
 
     def test_bare_command(self):
-        self.check_all("ahk", "2.1-alpha.31+Console")
+        self.check_all("ahk", "AutoHotkey v" + EXPECTED_VERSION)
 
     def test_help_spellings(self):
         for spelling in ("help", "-h", "--h", "-help", "--help"):

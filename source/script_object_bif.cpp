@@ -54,7 +54,7 @@ BIF_DECL(BIF_ObjXXX)
 	aResultToken.InitInvokeRetVal();
 	
 	Object *obj = dynamic_cast<Object*>(TokenToObject(*aParam[0]));
-	if (obj)
+	if (obj && obj->CanOwnProps())
 		obj->CallBuiltin(_f_callee_id, aResultToken, aParam + 1, aParamCount - 1);
 	else
 		_f_throw_type(_T("Object"), *aParam[0]);
@@ -287,14 +287,15 @@ BIF_DECL(BIF_GetMethod)
 
 BIF_DECL(StructClass_At)
 {
+	bool is_objcreate = _f_callee_id;
 	auto class_ = ParamIndexToObject(0);
 	auto proto = class_ && class_->IsOfType(Object::sPrototype) ? ((Object*)class_)->ClassGetPrototype() : nullptr;
-	if (!proto || !proto->IsDerivedFrom(Object::sStructPrototype))
+	if (!proto || !(is_objcreate ? proto->CanConstruct() : proto->IsDerivedFrom(Object::sStructPrototype)))
 		_f_throw(_T("Invalid class"));
 	auto ptr = (UINT_PTR)ParamIndexToInt64(1);
-	if (ptr < 65536)
-		return (void)aResultToken.ParamError(0, aParam[1]);
-	_f_return(Object::CreateStructPtr(proto, ptr));
+	if (ptr < 65536 && (ptr || !is_objcreate) && proto->StructSize())
+		return (void)aResultToken.ParamError(0 + int(is_objcreate), aParam[1]);
+	_f_return(Object::CreateStructPtr(proto, ptr, is_objcreate));
 }
 
 

@@ -442,9 +442,11 @@ public:
 	static Object *Create(ExprTokenType *aParam[], int aParamCount, ResultToken *apResultToken = nullptr);
 	static Object *CreateStruct(Object *aBase, UINT_PTR aPtr = NULL, UINT aFlags = 0);
 	static Object *CreateStructCopyNoDelete(Object *aBase, UINT_PTR aPtr) { return CreateStruct(aBase, aPtr, NoCallDelete); }
-	static Object *CreateStructPtr(Object *aBase, UINT_PTR aPtr, UINT aFlags = NoCallDelete);
+	static Object *CreateStructPtr(Object *aBase, UINT_PTR aPtr, bool aCallDelete = false);
 	static void NewInstance(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
 	static ResultType CreateStruct(ResultToken &aResultToken, Object *aBase, ExprTokenType *aParam[] = nullptr, int aParamCount = 0);
+	
+	static bool IsCArrayOf(IObject *aCandidate, Object *aPrototype);
 
 	static ResultType ApplyParams(ResultToken &aThisResultToken, int aFlags, ExprTokenType *aParam[], int aParamCount);
 
@@ -492,6 +494,7 @@ public:
 		return true;
 	}
 
+	bool CanOwnProps() { return (mFlags & CannotOwnProps) == 0; }
 	bool HasOwnProps() { return mFields.Length(); }
 	bool HasOwnProp(name_t aName)
 	{
@@ -596,8 +599,8 @@ public:
 	}
 	
 	Property *DefineProperty(name_t aName, bool aEnumerable = true);
-	TypedProperty *DefineTypedProperty(name_t aName);
-	FResult DefineTypedProperty(name_t aName, Object *aClass, size_t aPack, size_t aOffset);
+	TypedProperty *DefineTypedProperty(name_t aName, bool aEnumerable = true);
+	FResult DefineTypedProperty(name_t aName, Object *aClass, size_t aPack, size_t aOffset, bool aEnumerable = true);
 	bool DefineMethod(name_t aName, IObject *aFunc);
 	void DefineClass(name_t aName, Object *aClass, bool aIsStructPtrClass = false);
 	
@@ -611,6 +614,7 @@ public:
 	UINT_PTR LockStructSize() { auto si = GetStructInfo(); return si ? si->size : 0; }
 
 	bool GetStructArgInfo(DYNAPARM &aType, Object *&aPointedClass);
+	bool GetNumGetArgInfo(size_t &aSize, BOOL &aIsInt, BOOL &aIsSigned);
 	MdType GetStructMdType();
 
 	bool CanSetBase(); // Can Base be changed for this Object?
@@ -624,6 +628,8 @@ public:
 			mBase->Release();
 		mBase = aNewBase;
 	}
+
+	bool CanConstruct() { return GetStructInfo(true)->create != nullptr; }
 
 	bool IsClassPrototype() { return mFlags & ClassPrototype; }
 	bool IsNativeClassPrototype() { return mFlags & NativeClassPrototype; }
@@ -765,6 +771,7 @@ public:
 	enum : index_t
 	{
 		BadIndex = UINT_MAX, // Always >= mLength.
+		BadIndexType = UINT_MAX - 1,
 		MaxIndex = INT_MAX // This would need 32GB RAM just for mItem, assuming 16 bytes per element.  Not exceeding INT_MAX might avoid some issues.
 	};
 
@@ -885,7 +892,7 @@ class Map : public Object
 
 public:
 	Map() {}
-	static Map *Create(ExprTokenType *aParam[] = NULL, int aParamCount = 0);
+	static Map *Create();
 
 	bool HasItem(ExprTokenType &aKey)
 	{
@@ -943,22 +950,20 @@ public:
 		return item->Assign(aValue);
 	}
 
+	bool SetItem(ExprTokenType &aKey, IObject *aValue)
+	{
+		ExprTokenType v(aValue); return SetItem(aKey, v); // Named temporary: GCC rejects binding a temporary to ExprTokenType&.
+	}
+
+	// Fork: string-keyed convenience for native callers (json.cpp).
 	bool SetItem(LPTSTR aKey, ExprTokenType &aValue)
 	{
 		ExprTokenType k(aKey); return SetItem(k, aValue);
 	}
 
-	bool SetItem(LPTSTR aKey, __int64 aValue)
-	{
-		ExprTokenType v(aValue); return SetItem(aKey, v);
-	}
-
-	bool SetItem(LPTSTR aKey, IObject *aValue)
-	{
-		ExprTokenType v(aValue); return SetItem(aKey, v);
-	}
-
-	ResultType SetItems(ExprTokenType *aParam[], int aParamCount);
+	ResultType ValidateKey(ResultToken &aResultToken, ExprTokenType &aKey);
+	ResultType SetItem(ResultToken &aResultToken, ExprTokenType &aKey, ExprTokenType &aValue);
+	ResultType SetItems(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
 
 	// Methods callable by script.
 	void __Item(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);

@@ -366,3 +366,457 @@ unlogged loop session between 3 and now.)
   Scripts now derive locations from their own path with `AHK_*` overrides;
   `.mcp.json` uses `./bin/AutoHotkey64.exe` (verified to answer `initialize`
   from the repo root); `.claude/settings.local.json` untracked and ignored.
+
+### Session 11 (2026-10-06) — Claude Code agent setup audit and repair
+- Audited the agent setup (hooks, SessionStart context, `.mcp.json`, local
+  settings, `uia` skill, CLAUDE.md, `.vscode/`) with parallel fact-gatherers,
+  per-area auditors and adversarial verifiers: 89 findings, all confirmed.
+- Root causes: every hook parsed JSON with `python3`, which is the Microsoft
+  Store stub on this host, so the post-edit syntax gate never ran; Git Bash
+  rewrites a bare `/Diag=json` into a path, so even a working parser checked
+  `C:\Program Files\Git\Diag=json` (exit 13). The SessionStart context taught
+  alpha.30, a WSL path, hidden or legacy `ahk` tools, and "`/Headless`
+  suppresses all dialogs". `.mcp.json` launched the stale GUI build
+  `bin/AutoHotkey64.exe` (ef2047d4, pre-a551fcd4): 5 MCP tools, no
+  check/run/test, no Inspect/ProcessPipe//Coverage.
+- Hooks rebuilt on the contract read from the installed Claude Code 2.1.287
+  binary (PostToolUse carries `tool_response`; exit 2 + stderr reaches
+  Claude; context goes in `hookSpecificOutput`). They are bash-only (no
+  python/jq), ASCII, and resolve the engine as `AHK_CUSTOM_EXE`, then
+  `bin/AutoHotkey64Console.exe`, then `bin/AutoHotkey64.exe`. An exe without
+  the fork's marker text is refused: stock AutoHotkey pops modal #Warn
+  dialogs, because upstream `/ErrorStdOut` does not cover warnings.
+  Registration moved to the committed `.claude/settings.json`;
+  `.mcp.json` now starts `./bin/AutoHotkey64Console.exe mcp` (8 tools).
+- `bash .claude/hooks/test-hooks.sh`: 147 passed, 0 failed, 0 skipped.
+  SessionStart: 35 ASCII lines in ~0.4 s.
+- Found outside this repo, not changed: the user-wide `ahk` server's
+  `AHK_PATH` is stock alpha.32, so `AHK_Eval` and `uia_*` fail; its
+  `capture_error` can never capture (`queueError` has no live caller);
+  `--coverage=` into a missing directory writes nothing and exits 0. No
+  build toolchain is installed on this machine, so no task was build-tested.
+
+### Session 12 (2026-10-07) — DBGp guidance synced with the ahk-mcp capture fix
+- The ahk-mcp capture fix makes the `ahk` server's `capture_error` and
+  `evaluate` work; a running server loads it only after a restart. It is on
+  ahk-mcp's local branch `fix/dbgp-capture-error` (not pushed or merged;
+  `dist/` rebuilt), so a checkout elsewhere gets `master`, which lacks it.
+  Driven in-process
+  from that `dist/` against `bin/AutoHotkey64Console.exe` (43776299d43a-dirty)
+  with `/Debug=localhost:9437 /Headless`:
+  - `capture_error` before `start`: `not_listening` in 1 ms. `start` with
+    `port:9437` bound 9437 (with no `port` it moves past the held 9000).
+  - Without `run`, `capture_error` started a script paused at line 1 and
+    returned its ZeroDivisionError (line 5) in 2 ms; the engine exited 10. A
+    second call after that exit timed out (2016 ms): the run's error was
+    already returned, so the call waits for the next launch.
+  - A step that reached a throw answered `break (error: ...)`. `capture_error`
+    returned the queued error in 2 ms and the script was still paused 1.5 s
+    later (`engine_state` `break`) until `run` (exit 10).
+  - At a breakpoint, `evaluate` read `a`, `obj.name`, `obj.list[2]`, `m["k"]`
+    and `obj.list.Length` in 0-1 ms and rejected `a + b` at once; a
+    `breakpoint_set` `condition` was rejected at once (DBGp error 3). ahk-mcp
+    `master`'s client (bundled with esbuild) failed both with
+    `Command timeout` after 10020 and 10000 ms; `context_get` worked.
+  - `throw ValueError("named what", "Inner", "some extra")` inside `Inner()`:
+    `line` 5 (`Error.Line`), `stack_trace[0]` line 9, captured once
+    (`list_errors` count 0 after exit 10). A thrown string has `extra` but
+    no `what` or `ahk_stack`.
+  - A second script (`#SingleInstance Off`) launched while a `Sleep(5000)`
+    script was attached: `capture_error` timed out with
+    `waiting_connections:1` and a `note`; the next call returned the first
+    script's `session_ended` `{stopped, ok}` with `waiting_connections:1`,
+    and the next the second script's ValueError (session 2). A relaunch of
+    the same script does not wait like this: see Session 13.
+  - An error queued after `run` with nobody waiting came back first after a
+    relaunch, which was started at once (exit 10 within 1.5 s). A script that
+    ended while nobody waited was reported once, as `session_ended` after the
+    0.5 s grace (501 ms); the call after that timed out.
+- Engine bug (this fork only): the uncaught-error report (stderr text and
+  `--diag=json`) names the line the throw ran, not `Error.Line`, when they
+  differ. `source/error.cpp:1797` passes `TokenToString(t)` to `GetLine` as the
+  file name, and `t` last held `Extra` (else `Message`), so the lookup fails
+  and the throw line stays; it should pass `file`. Repro: the same throw with
+  an OnError callback added above it (prints `Error.Line`, returns 0) printed
+  `Error.Line=6`, and the report said `what_line.ahk (10) : ==> named what`
+  (`"line":10` with `--diag=json`), exit 10. Upstream
+  v2.1-alpha.31 and .32 look the line up by file index; the call came with
+  d8217d1a (`_ScriptGetLines`, the linecontext merge). By reading only: when
+  neither `Message` nor `Extra` is an own property, `t` is read uninitialized.
+- `JSON.Array` keyword tags, run on the same engine: `Push`, `InsertAt`,
+  `RemoveAt`, `Pop`, `Length` and `Clone` keep each remaining item's tag
+  (`[true,null,false,1]` grown to 6 gave `[true,null,false,1,null,null]`), and
+  assigning an element drops only its tag (`h[2] := 0` gave
+  `[true,0,false,1]`). CLAUDE.md said a length change drops all tags.
+- CLAUDE.md (DBGp Protocol, the `ahk` bullet, the JSON bullet), the three DBGp
+  hooks, `test-hooks.sh` and the hooks README now say this. `capture_error`
+  resumes a paused script only when nothing is queued; its timeout guidance
+  names the "error already returned" cause, the port `start` or `status`
+  reports, and adds notes for `waiting_connections` and
+  `unconfirmed_reports`. `evaluate` and conditional breakpoints are described
+  per build, with PostToolUse guidance when an older build times out.
+- Corrections after review (same engine and `dist/`; the DBGp run on port 9447):
+  - The docs said `/Headless` was needed or an uncaught error would open a
+    modal error box. Not on the console engine: without `/Headless` or a
+    debugger a divide by zero printed its report on stderr and exited 10 in
+    77 ms (`SetErrorStdOut(nullptr)` at console start, `error.cpp:1165`). The
+    real modal prompt is the debugger's: with no listener on the port,
+    `Debugger.cpp:2725`/`2751` call `FatalError`, which shows a "Failed to
+    connect to an active debugger client. Continue running the script
+    without the debugger?" MessageBox, with or without `/Headless` (only
+    `/Debug=stdio` prints it instead); a connection lost mid-run shows the
+    same kind of box. `/Headless` under `/Debug` only turns prompts such as
+    `#SingleInstance` into stderr text (a refused relaunch then exits 64;
+    see Session 13). Read from source, not run, to keep a dialog off the
+    desktop.
+  - A `run` that answered `Status: stopped` (clean script, exit 0) made the
+    next `capture_error` wait out its timeout (3001 ms, `reason:"timeout"`);
+    without that `run`, `capture_error` returned `session_ended`
+    `{stopped, ok}` in 1 ms. The docs said only "returns session_ended when
+    the script ends first".
+  - The hooks no longer name the branch; they test for `error_capture` in
+    `status` and point at CLAUDE.md. The SessionStart DBGp section is three
+    lines (896 bytes, from 2103), since the debug toolset is hidden by default
+    and the DBGp hooks carry the details; `test-hooks.sh` caps it.
+- `bash .claude/hooks/test-hooks.sh`: 170 passed, 0 failed, 0 skipped. Seven
+  mutations that restore an old claim (on a scratch copy of the hooks) each
+  fail 1 to 11 cases. SessionStart: 34 ASCII lines, 5231 bytes.
+
+### Session 13 (2026-10-07) — relaunch semantics, BIF corrections, open engine bugs
+- A relaunch does not wait behind an attached run of the same script.
+  `#SingleInstance` (default `Prompt`, `globaldata.cpp:78`) is checked before
+  the debugger connects (`AutoHotkey.cpp:234`, connect at `:637`); under
+  `/Headless` it prints `Another instance is already running. Use
+  #SingleInstance Force or /force.` and exits 64 (`AutoHotkey.cpp:556`).
+  Driven from ahk-mcp's `dist/` (local branch `fix/dbgp-capture-error`)
+  against `bin/AutoHotkey64Console.exe` (43776299d43a-dirty) with
+  `/Debug=localhost:9611 /Headless` (9612 for the waiting cases):
+  - The same script relaunched while its first run was paused at a throw
+    after a step, or still running: exit 64 with that text, never connected,
+    `status` `waiting_connections:0`. A `capture_error` sent then returned
+    the old run's `session_ended` `{stopped, ok}` when it ended.
+  - `run` on the paused run (it exited 10), `clear_errors`, then the same
+    relaunch: it connected as session 2 and `capture_error` returned its
+    ValueError.
+  - A different script, or a second copy of a `#SingleInstance Off` script,
+    launched while a `Sleep(6000)` script ran: `status` and a timeout showed
+    `waiting_connections:1` with the `note`; the next call returned the first
+    script's `session_ended` with `waiting_connections:1`, the next the
+    second's.
+  - `clear_errors` while a script ran, then the script ended: the next
+    `capture_error` still returned `session_ended` (509 ms) and the one after
+    timed out. A script that ended unobserved, then `clear_errors`:
+    `capture_error` timed out (1521 ms). `clear_errors` drops queued errors
+    and a remembered end, not the end of a run still going.
+- CLAUDE.md (DBGp Protocol), the three DBGp hooks and the hooks README now say
+  this: let the old run exit (`run`, or `stop` then `start`) before a
+  relaunch; the timeout guidance names the refused relaunch;
+  `waiting_connections` means another script (or a `#SingleInstance Off`
+  copy) is waiting; `clear_errors` acts on a run only after it ended. The
+  ahk-mcp fix is described as a local branch (not pushed or merged).
+- CLAUDE.md BIF bullets, each rechecked on the same engine:
+  - An `Eval` `SyntaxError` has own `Message`, `File` `_Eval`, `Line` 0,
+    `Column` 0, and `What`/`Extra`/`Stack` throw `PropertyError`;
+    `SyntaxError("m", "w", "ex")` has `What`, `Extra`, `File`, `Line`,
+    `Stack` and no `Column`.
+  - `JSON.Array` tags: `Push`, `InsertAt`, `RemoveAt`, `Pop`, `Length`,
+    `Capacity` and `Clone` keep the remaining tags, new items have none
+    (`Push(true)` emits `1`), and assigning (even `h[1] := h[1]`) or `Delete`
+    drops that element's keyword.
+  - `Check` on a source with a VarUnset warning on line 1 and a `Goto` to a
+    missing label on line 3 gives `Ok=0` and one diagnostic, the line-1
+    warning; a warning-only source gives `Ok=1` and no diagnostics; a
+    nonzero exit with no record gets a synthetic `Check:` diagnostic
+    (`console_check.cpp:264`, from source).
+- CLAUDE.md Open items now lists the engine bugs found this session, one line
+  each with its source location; none is fixed.
+- `test-hooks.sh`: the SessionStart DBGp-section cap counted the engine path,
+  printed twice, so the copied-engine case failed with a long `TMPDIR` (1250
+  bytes). It now measures the fixed text only (841 bytes, cap 1000). New
+  assertions cover the refused relaunch and `clear_errors` wording; restoring
+  the old `msg_fixed` and PreToolUse text on a scratch copy fails 14 cases.
+- `tests/crashlog_check.ahk`, `test_ahkmon.ahk` and `test_check_bif.ahk` usage
+  comments name `bin\AutoHotkey64Console.exe`. All three pass `check`;
+  `test_check_bif.ahk` passes on the console engine, and `crashlog_check.ahk`
+  exits 0, 14 and 64 as its comment says.
+- `bash .claude/hooks/test-hooks.sh`: 170 passed, 0 failed, 0 skipped with the
+  default `TMPDIR` and with a long scratch `TMPDIR`. SessionStart: 34 ASCII
+  lines, 5231 bytes, 0.3 s.
+
+### Session 14 (2026-10-08) — alpha.33 re-verification
+(The 2026-10-08 workflow asked for "Session 13"; that number is already the
+2026-10-07 entry above, so this one is 14.)
+- Engine: `bin/AutoHotkey64Console.exe` and `bin/AutoHotkey64.exe` both report
+  `2.1-alpha.33+Console`, revision `f7712ec15171` (MSVC, CI branch
+  `ci/alpha33`) with `inspect`, `processPipe` and `coverage`;
+  `bin/*.alpha31.bak` hold the previous alpha.31 engines. A session `ahk-mcp`
+  server started before the rebuild still reported `2.1-alpha.31+Console` in
+  `server_status`.
+- Totals on alpha.33: qa 764 passed, 0 failed, 0 crashed across 13 files
+  (762 + 2 new pins); console gate 14/14 suites; `test-hooks.sh` 170 passed,
+  0 failed, 0 skipped; `check fork.d.ahk` CHECK PASS (exit 0, the usual
+  `=> void` warnings); every tracked `examples/` file passes `check` (47/47).
+  `tools/check_all.py` gives 227/229 and exit 1: both failures are stale
+  copies under the orphaned `.kilo/worktrees/vanilla-toad` worktree, none in
+  the repo itself.
+- `qa/tests/test_alpha31.ahk` section 11: upstream alpha.32 `40a82a67` makes
+  `a := src` (src a virtual reference) copy `__Value`. The note now says so and
+  two asserts pin `Integer` 42; the alpha.31 backup engine fails exactly those
+  two (`expected: Integer actual: QaCell`).
+- Docs: README badge, intro and Eval line, updates.md base version, Eval
+  line and crash-log sample now name alpha.33; `fork.d.ahk` `@since` for
+  `Inspect` and `ProcessPipe` restored to `2.1-alpha.31+Console` (both came in
+  `a551fcd4`, which reported alpha.31). The v2.1 no-value mode is described as
+  coming from a top-level `#Requires` in the module's own file (upstream
+  `47eabd41`, `08beacf1`): probes give v2.0 mode for one in an `#Include` or a
+  function, v2.1 for one at the top level or in an included file that declares
+  its own `#Module`. CLAUDE.md drops the `launch_script` advice (legacy,
+  unregistered adapter) for `mcp__ahk-mcp__run`/`test` plus stdin forms checked
+  in both shells (`'Print("hi")' | & $engine *`; Git Bash needs `'*'`, and the
+  old `/ErrorStdOut *` line exits 12 there). `docs/AHK_V2_WORKFLOW_TECHNICAL.md`
+  sections 6-8, `docs/VSCODE_SETUP.md`, and the function-named references in
+  `docs/AHK_CONSOLE_STDOUT_PROCESS.md` follow suit.
+- Module init: every module runs at startup in reverse creation order
+  (`script.cpp:1042`); a first reference only runs one early (`c0ab7108`,
+  `var.cpp:1444`). Probes: `NeverUsed` body, then `Used`, then `__Main`;
+  `Y body start`, `X body ran`, `Y reads XVal=1`, `__Main`. Upstream design,
+  not a fork regression; `docs/alpha/v2.1-alpha.21.md` no longer calls it lazy.
+- CLAUDE.md open items: every engine-bug entry rechecked on alpha.33 with
+  current `file:line` (error.cpp moved +6: `:1784`, `:1803`); none fixed. New
+  entries: the `source_outline`/`workspace_symbols` regex scan
+  (`mcp_server.cpp:930`), `--help` omitting `/Debug` and the `--` aliases,
+  and follow-ups outside this pass's scope (`test_alpha33.ahk`, hard-coded
+  version pins, `check_all` walking `.kilo/`, upstream `.github` files,
+  `.vscode/launch.json:54`).
+
+### Session 15 (2026-10-08) — engine fixes via CI
+- Five commits on `fix/engine-bugs`, merged into
+  `feat/console-cleanup-20260919` at `4e9349b5`. No local C++ toolchain, so CI
+  was the first compile of each:
+  - `7b1a23b6` json: `JSON()` and subclass calls throw `TypeError`, the generic
+    `(Object.Call)` paths `ValueError` "Invalid base.", and
+    `JSON.True`/`False`/`Null` are getter-only. Test
+    `qa/tests/test_json_class.ahk`.
+  - `76973889` debugger: a lost DBGp connection is reported on stderr instead
+    of the Yes/No prompt. Test `tests/test_debugger_fatal.py`, added to the
+    console gate.
+  - `ec684fd0` coverage: a missing report directory is created and a failed
+    write prints one stderr line (a warning record under `/Diag=json`); the
+    exit code is unchanged. Test `qa/tests/test_coverage_missing_dir.ahk`
+    rewritten.
+  - `47bc3fcb` check: `Check()` builds its diagnostic from the first error
+    record. Test `qa/tests/test_check_severity.ahk`.
+  - `f14d7427` debugger: no Abort/Retry/Ignore box on a refused connect; the
+    notice names the client and goes through `PrintErrorStdOut`.
+    `test_debugger_fatal.py` exits 77 without starting an engine that lacks
+    the notice text; the gate counts that as a skip, or a failure under
+    `CI=true`.
+- CI (workflow_dispatch): run 37801628398 (head `47bc3fcb`) and run
+  37807040408 (head `f14d7427`) both succeeded: build (x64), build (Win32),
+  build-mingw, debugger-clients and test green, badge and release skipped,
+  console gate 15/15 on all three compilers.
+- `bin/` now holds run 37807040408's artifacts: the four `bin/` exes match the
+  run's sha256 files, and `AutoHotkey64Console.exe --version` reports revision
+  `f14d74270a2b`. The previous `f7712ec15171` engines and capabilities files
+  are `bin/*.alpha33.bak`.
+- Local results on the new engines (the lead's run, on the merge `4e9349b5`):
+  console gate 15/15 on the x64 and x86 Console exes and `test-hooks.sh` 170
+  passed. After this docs pass, the same engine gives qa 862 passed, 0 failed,
+  0 crashed across 15 files and `test-hooks.sh` 171 passed (the merge's
+  `test_alpha31.ahk` pins and a new hooks README check).
+- Docs pass, rechecked on `bin/AutoHotkey64Console.exe` (`f14d74270a2b`):
+  `test_json_class` 48, `test_coverage_missing_dir` 41 and
+  `test_check_severity` 22 passed, `test_debugger_fatal.py` 3/3 OK, and
+  `check fork.d.ahk` passes. Probes on ports bound and then closed (never
+  9000) gave `Debugger error: Could not connect to localhost:PORT; continuing
+  without the debugger.` with no flags, `/Headless` and `/ErrorStdOut=UTF-16`,
+  byte-identical in `/StdErrFile`; an RST after the init packet gave
+  `Connection to localhost:PORT lost; ...`, stdin EOF under `/Debug=stdio`
+  `Connection to stdio lost; ...`, and `--diag=json` one warning record
+  (`what` "Debugger", `extra` the client); `detach` printed nothing, and every
+  run printed its output and exited 0. Construction-only probes show `File`,
+  `Func`, `BoundFunc`, `Closure`, `Enumerator` and `RegExMatchInfo` still
+  build a plain Object on their native prototype from `X()` and
+  `(Object.Call)(X)` (no method called).
+- Docs updated: CLAUDE.md (Running and testing, `Check()` and `JSON`
+  bullets, DBGp section, open items: five fixed, new ones added, the
+  debugger-prompt trade-off recorded), `fork.d.ahk`, `updates.md` §17 and new
+  §22, README, `docs/TREE_SITTER.md`, `docs/AHK_V2_WORKFLOW_TECHNICAL.md`,
+  `tests/run.ahk`, the coverage test header, `.vscode/launch.json`,
+  `examples/alpha21/README.md` and the example 05 comments (a Print copy runs
+  `NeverUsed`, `Formatter`, `Logger`, then `__Main`). The coverage note in
+  Session 11 and the debugger-dialog note in Session 12 describe engines
+  before these fixes.
+- Still open (CLAUDE.md): two notices when the init packet cannot be sent;
+  an out-of-memory `ReceiveCommand` reported as a lost connection; the
+  hand-copied JSON escapers in `Debugger.cpp` and `coverage.cpp`; the latent
+  factory bug in `File`/`Func`/`RegExMatchInfo` and kin; a test guard that
+  cannot see a reverted connect break; `Check()` field extraction reading past
+  its record; and the earlier engine items (`&Module.Var`, JSON `MaxDepth`
+  and `AllowTopLevelScalar` positions, `WritePropertyData`, the `error.cpp`
+  `GetLine` and uninitialized-token pair, report truncation, crash-log
+  `Stack`, Eval's `SyntaxError` and scope, `--help`, the outline regex, a qa
+  pin for module order, zero-byte `FileRead`). By design, no build shows a
+  debugger prompt now, because `mErrorStdOut` defaults to true (a GUI session
+  continues silently).
+
+### Session 16 (2026-10-08) — test runs on a hidden desktop
+
+- `tools/run_hidden.py` runs a command on a hidden Win32 desktop
+  (`CreateDesktop`, `STARTUPINFO.lpDesktop`) that every child inherits, in a
+  kill-on-close job, sharing the caller's stdio and exit code. It reports each
+  visible, non-minimized window its processes open, with the window's text.
+  Verified with a probe: `MsgBox(..., "T3")` opened there (reported, not shown)
+  and returned `Timeout`; a blocking `MsgBox` was killed at `--timeout` (exit
+  124); `SendInput` from there returns 0 with error 5. AutoHotkey minimizes its
+  hidden main window when there is no foreground window (`source/script.cpp:641`),
+  which is always the case on that desktop, so minimized windows are not reported.
+- `BitBlt` from the screen fails there (error 6), so `test_alpha31.ahk`'s five
+  `PixelSearch` output pins crashed the file. They now run only when
+  `ScreenCopyError()` can make the same 1x1 copy, and print a `SKIP` line
+  otherwise; `qa/run.ahk` echoes `SKIP` lines as it does `FAIL` lines.
+- Results under `run_hidden.py`: console gate 15/15 on the x64 and x86 Console
+  exes (qa 857 passed, 0 failed, 0 crashed, plus the `SKIP` line), `check_all`
+  103/103, native conformance 60/60, `test-hooks.sh` 171 passed. Run directly,
+  `test_alpha31.ahk` still gives 61 passed (the pins ran).
+
+### Session 17 (2026-10-12) — upstream v2.1-alpha.35 merge
+
+- Merged upstream tags `v2.1-alpha.34` and `v2.1-alpha.35` (12 commits after the
+  previous base `47eabd41`) on `m1/upstream-alpha35`. Two conflicts, both in
+  `Map`'s native API (`source/script_object.h`, `.cpp`): upstream dropped the
+  `LPTSTR`-keyed `SetItem` overloads and added `ValidateKey` and `ResultToken`
+  forms of `SetItem`/`SetItems`. Kept one `SetItem(LPTSTR, ExprTokenType&)`
+  for `json.cpp` and the fork's named temporaries (GCC rejects binding
+  `ExprTokenType(...)` to a non-const reference). `ahkversion.h` is
+  `2.1-alpha.35+Console` / `2,1,0,35`; every `2.1-alpha.33+Console` tag in docs,
+  tooling and tests was bumped.
+- **Upstream bug found and fixed**: `Script::GetSearchPath`
+  (`source/script_module.cpp`, new in `3a1291c6`) set its duplicate-check
+  pointer before the directory existence check, so after the first missing
+  entry (`Lib`, for any script with no `Lib` folder) every later entry was
+  compared with itself and dropped: the user and standard libraries and all of
+  `AhkLibPath` were ignored and `#Include <Name>` failed with "Script library
+  not found." Fixed by assigning the pointer only for a kept entry;
+  `docs/upstream/alpha35-searchpath-last-dir.md` is the report.
+- New `qa/tests/test_alpha35.ahk` (29 asserts): `Map` Float keys and `Array`
+  Float/empty indexes throw `TypeError` in v2.1 mode and are accepted (or
+  `IndexError`) in v2.0 mode, `Enumerable: false` hides a property from
+  `Props()` only, `DefineProp` descriptor validation, v2.1 `<A_B>` has no `A.ahk`
+  fallback while v2.0 keeps it, `AhkLibPath` from a `%TEMP%` script (the bug
+  above), and `Print()` / verbatim single-arg / Format form on this engine.
+- Results on the MSVC x64 build (`out/msvc/x64`, also installed into `bin/` and
+  `Documents\Design\Coding\AutoHotkey\bin` with the previous engines kept as
+  `*.f14d7427.bak` / `*.36b223e2.bak`): console gate 17/17 suites, `check_all`
+  104/104, `test_print.ahk` 9/9, `test_alpha35.ahk` 29/29. `Print` output for the
+  seven-case spec script is byte-identical to the `f14d7427` engine, with no
+  flags, `/Headless` and `/ErrorStdOut`. A project MCP server started before the
+  swap still runs the old file (renamed `bin/AutoHotkey64Console.exe.inuse.f14d7427`);
+  reconnect it (`/mcp`) and delete that file.
+- The "missing `Print`" report that started the session was a stale
+  misdiagnosis: every fork engine has `Print`; ahk-mcp's inspector had run
+  stock `C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe` (its `config.js`
+  resolver falls back to Program Files when no `AHK_*` variable is set).
+- CI (2026-10-13, `workflow_dispatch` on `feat/console-cleanup-20260919`): run
+  38342988713 on `56f57edb` failed the Win32 and mingw regression gates (x64
+  cancelled by fail-fast) while the qa suite passed 908/908 on both. Cause: the
+  runner's `%TEMP%` is the 8.3 short name `C:\Users\RUNNER~1\...`, and
+  `test_diag_json_deep_stack_record_is_complete` (`tests/test_runtime_regressions.py`)
+  and `test_generates_bundled_plus_fork_idempotently` (`tests/test_vscode_matcher.py`)
+  compared the raw tempdir with the long form the engine and `gen_syntaxes.py`
+  print. Reproduced locally with `TEMP` pointed at a short-name directory; both
+  fixtures now `resolve()` the path (`d001b0b1`). Run 38343502990 on `d001b0b1`
+  passed all jobs: debugger-clients, build (x64), build (Win32), build-mingw and
+  test; badge and release skipped as on any non-tag, non-`alpha` run.
+
+### Session 18 (2026-10-21) — upstream v2.1-alpha.36 merge
+
+- Merged upstream tag `v2.1-alpha.36` (`0b8e6fa3`, five commits after
+  `3a1291c6`) on `m1/upstream-alpha36` (`cc41eaa8`): `ObjCreateWithDataPtr`
+  (`7aa2e0ea`), invalid constructor calls such as `RegExMatchInfo()`
+  (`65189b9c`), the `#Import` conflicting-local error (`0b8e6fa3`), the
+  `AhkLibPath` fix (`abe3ff20`) and freeing `mSearchPath` after load
+  (`ee7f3514`). One conflict, `Script::GetSearchPath`: upstream's `abe3ff20` is
+  the fork's `57bb8dcc` fix, so upstream's line was taken.
+  `ahkversion.h` is `2.1-alpha.36+Console` / `2,1,0,36`; every
+  `2.1-alpha.35+Console` tag was bumped, and the stale `AhkVersionN 2,1,0,33`
+  in `build_local.bat` and `.vscode/tasks.json` fixed.
+- **Upstream bug found and fixed** (`a41db9a1`): `Object::CreateStructPtr`
+  now constructs through `si.create`, so `ObjCreateWithDataPtr` can build a
+  `Map`, `Array`, `Buffer`, `ProcessPipe` or `JSON.Object`, but it still wrote
+  the pointer at `obj + 1` while `DataPtr()`/`SetDataPtr()` read it at
+  `object_size`. `ObjGetDataPtr` returned garbage, the pointer overwrote the
+  object's first field, and the heap was corrupted (exit 127 on the official
+  `AutoHotkey_2.1-alpha.36.zip`, sha256 `300f9610...5550`; 0xC0000374 in the
+  qa child). Fixed by starting the suffix at `object_size`;
+  `docs/upstream/alpha36-createstructptr-offset.md` is the report.
+- `65189b9c` closes the CLAUDE.md "latent factory bug" item: `RegExMatchInfo`,
+  `File`, `Func`, `BoundFunc`, `Closure` and `Enumerator`, called directly or
+  through `Object.Call`, throw `ValueError` "Invalid base." (alpha.35 returned
+  a plain Object on the native prototype). Fork classes probed on both
+  engines: `JSON()`, `(Object.Call)(JSON)`, `ProcessPipe`, `SyntaxError`,
+  `JSONError`, `(Object.Call)(Error)` and script subclasses are unchanged.
+  New side effect: `(Object.Call)(Struct)` returns a `Struct`.
+  `ObjCreateWithDataPtr(ProcessPipe, 0)` and `(JSON, 0)` skip `__New` but are
+  safe (an unstarted pipe reports "The process was not started.").
+- New `qa/tests/test_alpha36.ahk` (44 asserts): `ObjCreateWithDataPtr` on
+  struct and script classes (Address 0, <65536, `__New` skipped, `__Delete`
+  called), the native-class data pointer (section 3, in a child), the six
+  constructor calls, the `#Import` local/after/alias/parameter conflicts
+  (alpha.35 silently shadowed them), and `AhkLibPath` after a missing
+  directory. On the pre-fix build of `cc41eaa8` only the two section 3
+  asserts fail (child exit 0xC0000374). `test_alpha35.ahk` now expects
+  `A_AhkVersion` instead of a literal version.
+- Results on the MSVC x64 build `a41db9a12322` (`out/msvc/x64`): console gate
+  17/17 suites (qa 947/947 across 18 files), `check_all` 106/106,
+  `.claude/hooks/test-hooks.sh` 171/171. Installed into `bin/` and
+  `Documents\Design\Coding\AutoHotkey\bin`, previous engines kept as
+  `*.56f57edb.bak`; `bin/AutoHotkey64Console.capabilities.json` regenerated;
+  the leftover `bin/AutoHotkey64Console.exe.inuse.f14d7427` deleted. Project
+  MCP servers started before the swap still run the alpha.35 file (now
+  `bin/AutoHotkey64Console.56f57edb.bak`) until reconnected (`/mcp`).
+- **Upstream regression left as is**: the same `CreateStructPtr` change tests
+  `obj->IsOfType(Object::sStructPrototype)` before `SetBase`, so struct views
+  never get `CannotOwnProps`: `Pt.At(ptr).foo := 1` and `Int32.At(ptr).foo := 1`
+  now succeed (alpha.35 `56f57edb`: `PropertyError`); `Pt()` still throws.
+  Same on the official zip, exit 0. Added to the upstream report and CLAUDE.md
+  open items; not fixed, to keep the fork's diff from upstream small.
+- Pushed `feat/console-cleanup-20260919` (`2710a696..83d013e8`). CI
+  (`workflow_dispatch`; the push alone starts no run): run 39685156323 on
+  `83d013e8` passed debugger-clients, build (Win32), build-mingw and test, and
+  build (x64) after one rerun of the failed job; badge and release skipped.
+  The first x64 attempt failed one case: `test_powershell_cli.py`
+  `test_bare_command` timed out after 12 s (`tests/test_powershell_cli.py:57`)
+  on the job's first `powershell.exe` launch, while its other nine cases and
+  the same suite in the Win32 and mingw jobs passed; the rerun passed it. CI
+  counts qa 952/952 against 947 locally: `test_alpha31.ahk`'s five PixelSearch
+  pins skip on the `tools/run_hidden.py` desktop, which cannot copy the screen.
+- Not done: sending the upstream report for `CreateStructPtr`, and the
+  struct-view `CannotOwnProps` fix.
+
+### Session 19 (2026-10-22) — alpha.36 follow-ups
+
+- **Struct views reject own properties again** (`f24c23d1`, branch
+  `m1/alpha36-followups`): `Object::CreateStructPtr` now tests
+  `obj->IsOfType(Object::sStructPrototype)` after `SetBase` instead of
+  before it. Probed on `a41db9a12322` and the new build: `Pt.At`, `Int32.At`,
+  a `Pt.Ptr` `__Value` dereference, `ObjCreateWithDataPtr` on a struct (also
+  Address 0), on `Int32` and on `Struct` accepted `.foo := 1` before and
+  throw `PropertyError` after; `ObjCreateWithDataPtr` on `Map`, `Object` and a
+  script class still accept it; `Pt()` threw throughout. Alpha.35
+  (`56f57edb`) threw for `Pt.At`, `Int32.At` and the dereference. Moving the
+  test was preferred over the report's earlier `aBase->IsDerivedFrom` form,
+  which misses a view of `Struct` itself (`IsDerivedFrom` starts at the
+  base's base); the report now gives the moved test.
+- `qa/tests/test_alpha36.ahk` section 7 (7 asserts, 51 in the file): on
+  `a41db9a1` its five struct asserts fail, on the new build all pass.
+- `tests/test_powershell_cli.py` (`165d7384`): `setUpClass` starts each shell
+  once with a 120-s limit, so the first Windows PowerShell 5.1 launch on a
+  fresh runner (run 39685156323's 12-s timeout) is not charged to a case.
+  Local run: 10/10 in 10 s.
+- Results on the MSVC x64 build `165d73849eb0`: console gate 17/17 suites (qa
+  954/954 across 18 files), `check_all` 106/106, `test-hooks.sh` 171/171.
+  Installed into `bin/` and `Documents\Design\Coding\AutoHotkey\bin`,
+  previous engines kept as `*.a41db9a1.bak`; capabilities JSON regenerated.
+- Still open: sending `docs/upstream/alpha36-createstructptr-offset.md` (now
+  both issues) upstream.

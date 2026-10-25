@@ -1,6 +1,6 @@
 # Building AHK Console
 
-This fork targets AutoHotkey `2.1-alpha.31+Console`. CMake supports MSVC x64,
+This fork targets AutoHotkey `2.1-alpha.36+Console` (upstream `v2.1-alpha.36`). CMake supports MSVC x64,
 MSVC Win32, and mingw-w64 GCC x64. CI builds and tests the actual Console
 executable for all three, and tag builds publish non-draft releases with
 checksums. Nothing is published by a local build.
@@ -84,6 +84,9 @@ The gate runs the QA and framework suites, CLI/REPL/MCP/DBGp checks, coverage an
 trace checks, and the PowerShell wrapper against that exact engine. It applies
 an outer timeout to each suite. QA children use `/Headless` and a default
 30-second timeout; override with `AHK_QA_TIMEOUT_MS` (1–300000 milliseconds).
+`AHK_QA_JUNIT=<path>` makes the QA runner write a JUnit XML report, as
+`AHK_TEST_JUNIT` does for `tests/run.ahk`; a relative path resolves against the
+directory the engine was started from, not the script's directory.
 The gate's output is the current suite inventory, rather than a fixed count in
 this document.
 

@@ -170,18 +170,43 @@ Assert.eq(acc.vals ? acc.vals["QaSelf"] : "<threw>", "loc", "Props(local): value
 ;    (MdFunc.cpp:494 after the merge), which is the code that is live.
 ;    PixelSearch's FoundX/FoundY are ResultToken (Variant) outputs; an
 ;    off-screen region never matches, so the not-found path is deterministic.
-;    Needs a desktop: PixelSearch returns FR_E_WIN32 (an OSError here) when
-;    GetDC(NULL) fails (source/lib/pixel.cpp), so a session-0 / no-desktop run
-;    would throw instead of reporting not-found. Deliberately not guarded: a
-;    try/skip would also hide a real regression on the desktop runner in use.
+;    Needs a screen to copy from: PixelSearch returns FR_E_WIN32 (an OSError
+;    here) when GetDC(NULL) or its BitBlt from the screen fails
+;    (source/lib/pixel.cpp:196, :226), as in session 0, or on a desktop that is
+;    never displayed (tools/run_hidden.py), where BitBlt fails with error 6
+;    "The handle is invalid.". The pins run whenever ScreenCopyError() can make
+;    that same copy, so a regression on a runner with a screen still fails, and
+;    print a SKIP line otherwise. A try/catch around PixelSearch would hide
+;    such a regression instead.
 ; OLD: IsSet(px) = 0 (both outputs left unset).
 ; ============================================================================
-found := PixelSearch(&px, &py, -100000, -100000, -100000, -100000, 0x123456)
-Assert.eq(found, 0, "PixelSearch off-screen: not found")
-Assert.truthy(IsSet(px), "PixelSearch not found: FoundX is set (made blank)")
-Assert.truthy(IsSet(py), "PixelSearch not found: FoundY is set (made blank)")
-Assert.eq(px, "", "PixelSearch not found: FoundX is the empty string")
-Assert.eq(py, "", "PixelSearch not found: FoundY is the empty string")
+if !(screenError := ScreenCopyError()) {
+    found := PixelSearch(&px, &py, -100000, -100000, -100000, -100000, 0x123456)
+    Assert.eq(found, 0, "PixelSearch off-screen: not found")
+    Assert.truthy(IsSet(px), "PixelSearch not found: FoundX is set (made blank)")
+    Assert.truthy(IsSet(py), "PixelSearch not found: FoundY is set (made blank)")
+    Assert.eq(px, "", "PixelSearch not found: FoundX is the empty string")
+    Assert.eq(py, "", "PixelSearch not found: FoundY is the empty string")
+} else {
+    Print("  SKIP PixelSearch output pins (5): the screen cannot be copied (Win32 error {})", screenError)
+}
+
+; 0 when one pixel can be copied from the screen as PixelSearch copies it, else the Win32 error.
+ScreenCopyError() {
+    if !(screen := DllCall("GetDC", "Ptr", 0, "Ptr"))
+        return A_LastError || -1
+    mem := DllCall("CreateCompatibleDC", "Ptr", screen, "Ptr")
+    bitmap := DllCall("CreateCompatibleBitmap", "Ptr", screen, "Int", 1, "Int", 1, "Ptr")
+    prior := DllCall("SelectObject", "Ptr", mem, "Ptr", bitmap, "Ptr")
+    copied := DllCall("BitBlt", "Ptr", mem, "Int", 0, "Int", 0, "Int", 1, "Int", 1
+        , "Ptr", screen, "Int", 0, "Int", 0, "UInt", 0x00CC0020, "Int")  ; SRCCOPY
+    failure := copied ? 0 : (A_LastError || -1)
+    DllCall("SelectObject", "Ptr", mem, "Ptr", prior, "Ptr")
+    DllCall("DeleteObject", "Ptr", bitmap)
+    DllCall("DeleteDC", "Ptr", mem)
+    DllCall("ReleaseDC", "Ptr", 0, "Ptr", screen)
+    return failure
+}
 
 ; ============================================================================
 ; 6. RegExMatch's OutputVar is unset (not "") on no match in v2.1 mode.
@@ -272,10 +297,12 @@ Assert.truthy(InStr(r.out, "Invalid base class."), "forward-ref self-extend: 'In
 ;     clears VAR_ATTRIB_UNINITIALIZED so PerformAssign's fast path proceeds).
 ; OLD: "This parameter has not been assigned a value. Specifically: src"
 ;      thrown at the `a := src` line (exit 10).
-; Note: on alpha.31 the fast path copies the referenced *object* (Type(a) is
+; Note: on alpha.31 the fast path copied the referenced *object* (Type(a) was
 ;      "QaCell", not Integer), while `src + 0`, `(src ?? 0)` and Print(src) all
-;      read __Value. Var::Assign(Var&) documents a VAR_NORMAL precondition that
-;      a VAR_VIRTUAL_OBJ source violates, so that value is not pinned here.
+;      read __Value, so that value was left unpinned. Upstream alpha.32
+;      40a82a67 ("Fixed simple `a := b` assignments where b is a virtual
+;      reference") makes the fast path read __Value too: on alpha.33 `a` is the
+;      Integer 42 (the alpha.31 engine gives "QaCell"), pinned below.
 ; ============================================================================
 class QaCell {
     __New(v) => this._v := v
@@ -289,6 +316,10 @@ QaCopyOut(&src) {
     a := src            ; the simple-assignment fast path (not an expression)
     return IsSet(a)
 }
+QaCopyValue(&src) {
+    a := src            ; same fast path; returns what it copied
+    return a
+}
 QaReadWrite(&src) {
     before := src + 0   ; expression path: reads __Value
     src := 99           ; assignment through the virtual reference
@@ -298,6 +329,9 @@ QaReadWrite(&src) {
 cell := QaCell(42)
 Assert.noThrow(() => QaCopyOut(cell), "a := src (virtual reference): no unset-parameter error")
 Assert.truthy(QaCopyOut(cell), "a := src (virtual reference): a is set afterwards")
+copied := QaCopyValue(cell)
+Assert.eq(Type(copied), "Integer", "a := src (virtual reference): copies __Value, not the object (upstream 40a82a67)")
+Assert.eq(IsObject(copied) ? Type(copied) : copied, 42, "a := src (virtual reference): a holds __Value (upstream 40a82a67)")
 Assert.eq(QaReadWrite(cell), 42, "virtual reference: expression read sees __Value")
 Assert.eq(cell._v, 99, "virtual reference: assignment writes through __Value")
 

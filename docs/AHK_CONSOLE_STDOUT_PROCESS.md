@@ -18,14 +18,16 @@ In this repo, `tests/test_console.ahk` demonstrates this pattern (`tests/test_co
 
 When a script writes to `"*"`:
 
-1. AHK resolves `"*"` as standard output in `TextFile::_Open(...)` (`source/TextIO.cpp:601`).
-2. The mapping uses `STD_OUTPUT_HANDLE` (`source/TextIO.cpp:639`).
-3. Output bytes are written by `TextFile::_Write(...)`, which uses `WriteFile` (`source/TextIO.cpp:688`).
+1. AHK resolves `"*"` as standard output in `TextFile::_Open(...)` (`source/TextIO.cpp`).
+2. The mapping uses `STD_OUTPUT_HANDLE` (the `*aFileSpec == '*'` branch of `TextFile::_Open`).
+3. Output bytes are written by `TextFile::_Write(...)`, which uses `WriteFile`.
 
 Related source notes:
 
-- `FileOpen("*", "r|w")` support is explicitly documented in code comments (`source/TextIO.cpp:629`).
-- `"**"` maps to `STD_ERROR_HANDLE` for stderr (`source/TextIO.cpp:641`).
+- `FileOpen("*", "r|w")` support is explicitly documented in a code comment in that branch ("v1.1.17: Allow FileOpen("*", "r|w") ...").
+- `"**"` maps to `STD_ERROR_HANDLE` for stderr in the same branch.
+
+This note names functions rather than line numbers, which move with every merge.
 
 ## Stdout vs stderr in console mode
 
@@ -43,10 +45,10 @@ FileAppend "error output`n", "**"
 
 `/ErrorStdOut` is historically named, but in this fork runtime error text is formatted and written to stderr (`"**"`), not stdout:
 
-- option parse: `source/AutoHotkey.cpp:131`
-- runtime error redirect logic: `source/error.cpp:835`
-- actual write target: `source/error.cpp:845`
-- compatibility comment: `source/error.cpp:325`
+- option parse: the `/ErrorStdOut` branch of the command-line loop in `source/AutoHotkey.cpp`, which calls `Script::SetErrorStdOut` (`source/error.cpp`)
+- runtime error redirect logic: `Script::ShowError` (`source/error.cpp`), whose `if (mErrorStdOut || mHeadless)` block formats the report
+- actual write target: that block calls `PrintErrorStdOut(buf, ..., _T("**"))`, i.e. stderr
+- compatibility comment: "For backward compatibility, this actually prints to stderr, not stdout." above the line-oriented `Script::PrintErrorStdOut` overload
 
 So:
 
@@ -57,9 +59,9 @@ So:
 
 The debugger engine supports DBGp stream commands `stdout` and `stderr`:
 
-- command registration: `source/Debugger.cpp:73`, `source/Debugger.cpp:74`
-- stream packet writer: `source/Debugger.cpp:2311`
-- hook methods: `source/Debugger.cpp:2333`, `source/Debugger.cpp:2326`
+- command registration: the `stdout` and `stderr` entries of `Debugger::sCommands` (`source/Debugger.cpp`)
+- stream packet writer: `Debugger::WriteStreamPacket`
+- hook methods: `Debugger::OutputStdOut`, `Debugger::OutputStdErr`
 
 This is separate from shell handles. It is for debugger transport (`<stream type="stdout|stderr">` packets), not normal console redirection.
 

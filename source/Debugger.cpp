@@ -1473,7 +1473,7 @@ int Debugger::WritePropertyData(LPCTSTR aData, size_t aDataSize, int aMaxEncoded
 			char_size = 1;
 		else if (wc <= 0x07FF)
 			char_size = 2;
-		else if (IS_SURROGATE_PAIR(wc, utf16_value[i+1]))
+		else if (i + 1 < total_utf16_size && IS_SURROGATE_PAIR(wc, utf16_value[i+1]))
 			char_size = 4;
 		else
 			char_size = 3;
@@ -1489,6 +1489,9 @@ int Debugger::WritePropertyData(LPCTSTR aData, size_t aDataSize, int aMaxEncoded
 				utf8_size = (int)(total_utf8_size - char_size);
 			}
 		}
+
+		if (char_size == 4)
+			++i; // Skip the low surrogate, which was counted above as part of this char.
 	}
 	if (utf8_size == -1) // Data was not limited by aMaxEncodedSize.
 		utf8_size = (int)total_utf8_size;
@@ -1496,16 +1499,19 @@ int Debugger::WritePropertyData(LPCTSTR aData, size_t aDataSize, int aMaxEncoded
 	// Calculate maximum length of base64-encoded data.
 	int space_needed = DEBUGGER_BASE64_ENCODED_SIZE(utf8_size);
 	
-	// Reserve enough space for the data's length, "> and encoded data.
-	if (err = mResponseBuf.ExpandIfNecessary(mResponseBuf.mDataUsed + space_needed + MAX_INTEGER_LENGTH + 2))
+	// Reserve enough space for the data's length, "> and encoded data, plus room beyond the
+	// encoded data for the UTF-8 data.  WriteEncodeBase64() writes forward from mDataUsed and
+	// produces 4 bytes for every 3 it reads, so the UTF-8 data must be placed entirely after
+	// the end of the encoded data or the encoder could overtake its own input.
+	if (err = mResponseBuf.ExpandIfNecessary(mResponseBuf.mDataUsed + space_needed + utf8_size + MAX_INTEGER_LENGTH + 2))
 		return err;
 	
 	// Complete the size attribute by writing the total size, in terms of UTF-8 bytes.
 	if (err = mResponseBuf.WriteF("%u\">", total_utf8_size))
 		return err;
 
-	// Convert to UTF-8, using mResponseBuf temporarily.
-	char *utf8_value = mResponseBuf.mData + mResponseBuf.mDataSize - space_needed;
+	// Convert to UTF-8, using the end of mResponseBuf temporarily.
+	char *utf8_value = mResponseBuf.mData + mResponseBuf.mDataSize - utf8_size;
 	utf8_size = WideCharToMultiByte(CP_UTF8, 0, utf16_value, utf16_size, utf8_value, utf8_size, NULL, NULL);
 	if (!utf8_size && utf16_size) // Conversion failed.
 		return DEBUGGER_E_INTERNAL_ERROR;
@@ -2471,6 +2477,60 @@ int Debugger::SendResponse(size_t aStartOffset)
 // DebugTransport implementations
 // =====================================================================
 
+// The client named in stderr notices: "stdio" or the host:port given to Debugger::Connect.
+static TCHAR sDebuggerClient[256] = _T("");
+
+// The same test as Script::ShowError: when errors go to stderr (the fork's default,
+// see Script::Script) or /Headless is on, nobody may be there to answer a prompt.
+// A failed or lost connection then continues without the debugger, as the dialogs'
+// Ignore and Yes buttons do, and says so on stderr.
+static bool DebuggerErrorsToStdErr()
+{
+	return g_DebugStdio || g_script.mErrorStdOut || g_script.mHeadless;
+}
+
+// Copy aText into aBuf as the body of a JSON string.
+static void DebuggerJsonEscape(LPTSTR aBuf, size_t aBufSize, LPCTSTR aText)
+{
+	size_t n = 0;
+	for ( ; *aText && n + 7 < aBufSize; ++aText) // Leaves room for a \u00XX escape and the terminator.
+	{
+		if (*aText == '"' || *aText == '\\')
+			aBuf[n++] = '\\', aBuf[n++] = *aText;
+		else if ((UINT)*aText < 0x20)
+			n += sntprintf(aBuf + n, int(aBufSize - n), _T("\\u%04X"), (UINT)*aText);
+		else
+			aBuf[n++] = *aText;
+	}
+	aBuf[n] = '\0';
+}
+
+// Report on stderr that the script continues without the debugger: one line, or one
+// warning record under /Diag=json.  PrintErrorStdOut applies /ErrorStdOut's encoding
+// and /StdErrFile as for other diagnostics.  The session is already closed, so the
+// text is not sent to the client's stderr stream.
+static void ReportContinuingWithoutDebugger(bool aConnectFailed)
+{
+	TCHAR message[_countof(sDebuggerClient) + 128];
+	if (aConnectFailed)
+		sntprintf(message, _countof(message), _T("Could not connect to %s; continuing without the debugger."), sDebuggerClient);
+	else
+		sntprintf(message, _countof(message), _T("Connection to %s lost; continuing without the debugger."), sDebuggerClient);
+	TCHAR json_message[_countof(message) * 6], json_client[_countof(sDebuggerClient) * 6];
+	TCHAR text[_countof(json_message) + _countof(json_client) + 256];
+	if (g_script.mDiagJson)
+	{
+		DebuggerJsonEscape(json_message, _countof(json_message), message);
+		DebuggerJsonEscape(json_client, _countof(json_client), sDebuggerClient);
+		sntprintf(text, _countof(text), _T("{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":2,\"severity\":\"warning\",\"type\":\"Warning\",\"code\":0")
+			_T(",\"message\":\"%s\",\"extra\":\"%s\",\"what\":\"Debugger\",\"file\":\"\",\"line\":0,\"column\":0,\"source\":\"\",\"stack\":\"\"}\n")
+			, json_message, json_client);
+	}
+	else
+		sntprintf(text, _countof(text), _T("Debugger error: %s\n"), message);
+	g_script.PrintErrorStdOut(text, (int)_tcslen(text), _T("**")); // ** means stderr.
+}
+
 // --- SocketTransport ---
 
 int SocketTransport::Connect(const char *aAddress, const char *aPort)
@@ -2504,6 +2564,8 @@ int SocketTransport::Connect(const char *aAddress, const char *aPort)
 			err = connect(s, res->ai_addr, (int)res->ai_addrlen);
 			if (err == 0)
 				break;
+			if (DebuggerErrorsToStdErr())
+				break; // Give up as Ignore does: err != 0 closes the socket below, then Debugger::Connect reports it.
 			switch (MessageBox(g_hWnd, DEBUGGER_ERR_FAILEDTOCONNECT, g_script.mFileSpec, MB_ABORTRETRYIGNORE | MB_ICONSTOP | MB_SETFOREGROUND | MB_APPLMODAL))
 			{
 			case IDABORT:
@@ -2720,6 +2782,11 @@ int Debugger::Connect(const char *aAddress, const char *aPort)
 			mTransport = new SocketTransport();
 	}
 
+	if (g_DebugStdio)
+		tcslcpy(sDebuggerClient, _T("stdio"), _countof(sDebuggerClient));
+	else
+		sntprintf(sDebuggerClient, _countof(sDebuggerClient), _T("%hs:%hs"), aAddress, aPort);
+
 	int err = mTransport->Connect(aAddress, aPort);
 	if (err != DEBUGGER_E_OK)
 		return FatalError(DEBUGGER_ERR_FAILEDTOCONNECT DEBUGGER_ERR_DISCONNECT_PROMPT);
@@ -2787,13 +2854,14 @@ int Debugger::FatalError(LPCTSTR aMessage)
 {
 	g_Debugger.Disconnect();
 
-	if (g_DebugStdio)
+	if (DebuggerErrorsToStdErr())
 	{
-		// In stdio mode, write error to stderr instead of showing a dialog.
-		fprintf(stderr, "Debugger error: %ls\n", aMessage);
-		// MinGW's stdio wrapper can buffer redirected stderr until process exit.
-		// A detached persistent script stays alive, so deliver the notice now.
-		fflush(stderr);
+		// Continue without the debugger and say so on stderr, rather than block on a
+		// modal prompt that nobody may be there to answer.  aMessage is the prompt's
+		// text, so here it only selects the notice.  mErrorStdOut is on by default in
+		// this fork (Script::Script) and only an invalid encoding, which ends the run,
+		// clears it, so in practice the prompt below is not reached.
+		ReportContinuingWithoutDebugger(!_tcsncmp(aMessage, DEBUGGER_ERR_FAILEDTOCONNECT, _tcslen(DEBUGGER_ERR_FAILEDTOCONNECT)));
 	}
 	else if (IDNO == MessageBox(g_hWnd, aMessage, g_script.mFileSpec, MB_YESNO | MB_ICONSTOP | MB_SETFOREGROUND | MB_APPLMODAL))
 	{

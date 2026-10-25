@@ -1,6 +1,6 @@
 # Updates — Fork Changes Reference
 
-This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.31` in this fork. Use it as the entry point for "what's new and how do I use it."
+This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.36` in this fork. Use it as the entry point for "what's new and how do I use it."
 
 ## Overview at a glance
 
@@ -22,14 +22,15 @@ This document covers everything added on top of upstream AutoHotkey `v2.1-alpha.
 | Engine tools in the native MCP server | `check`, `run`, `test` tools of the `mcp` verb (see §21) | n/a |
 | External-signal exit code | `code=130` for Ctrl+C / close | Always on (gate is whether crash log is on) |
 | Interactive / pipe-driven REPL | `repl` subcommand (see §16) | n/a — explicit mode |
+| Debugger connection notices | `Debugger error: ...` line or JSON warning instead of a modal prompt (see §22) | Always on |
 
-Everything else inherited from `v2.1-alpha.31` works as documented upstream (implicit `export` for names defined inside a `#Module`, tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc. — see `examples/Alpha31_Example.ahk` for a runnable showcase of the alpha.31 changes).
+Everything else inherited from upstream `v2.1-alpha.36` works as documented upstream (implicit `export` for names defined inside a `#Module`, tail-call unset propagation, maybe-operator short-circuit, default-unset returns in v2.1 mode, etc.). The per-release notes are in `docs/alpha/`; `v2.1-alpha.36.md` covers the latest merge (2026-10-21), including the fork's fix to `ObjCreateWithDataPtr` on native classes. `examples/Alpha31_Example.ahk` remains the runnable showcase of the alpha.31 changes.
 
 ---
 
 ## 1. `Eval(expr)` — runtime expression evaluator
 
-Evaluates an AHK expression string against the caller's live scope. Reads and writes caller locals, calls methods, runs alpha.31 expression features (maybe operator, unset propagation) — anything you could type as the right-hand side of `x := ...` works inside `Eval(...)`.
+Evaluates an AHK expression string against the caller's live scope. Reads and writes caller locals, calls methods, runs v2.1 expression features (maybe operator, unset propagation) — anything you could type as the right-hand side of `x := ...` works inside `Eval(...)`.
 
 ### Quick example
 
@@ -40,11 +41,14 @@ Evaluates an AHK expression string against the caller's live scope. Reads and wr
 x := 10
 y := 20
 
-MsgBox Eval("x + y")              ; -> 30
-Eval("x := x + 1")                ; mutates caller's x
-MsgBox x                          ; -> 11
-MsgBox Eval("[1,2,3].Map(n => n*n).Reduce((a,b) => a+b, 0)")  ; -> 14
+Print(Eval("x + y"))                              ; -> 30
+Eval("x := x + 1")                                ; mutates caller's x
+Print(x)                                          ; -> 11
+Print(Eval("((a, b) => a * a + b * b)(2, 3)"))    ; -> 13
 ```
+
+(`Array` has no `Map` or `Reduce` method, so an expression such as
+`[1,2,3].Map(...)` throws `MethodError`.)
 
 ### Signature
 
@@ -60,7 +64,8 @@ result := Eval(Expression)
 | When | Class | Notes |
 |---|---|---|
 | Gate not enabled | `Error` | Message: `"Eval is disabled (add #EnableEval to your script or pass /Eval)"` |
-| Input doesn't parse | `SyntaxError` | `.Message` carries the parser's diagnostic; `.File = "Eval"`, `.Line = 0`, `.Column = 0` (column info is best-effort and currently always 0) |
+| Input doesn't parse | `SyntaxError` | `.Message` carries the parser's diagnostic, `.What` is `"Eval"`, `.Extra` is the offending token or fragment the parser reported (`""` when it reported none), `.Stack` is the script call stack at the `Eval` call; `.File = "_Eval"`, `.Line = 0`, `.Column = 0` (column info is best-effort and currently always 0). Before 2026-10-09 the object had no `What`, `Extra` or `Stack` (§23). |
+| Input longer than 16,384 UTF-16 code units | `ValueError` | `"Eval expression exceeds the 16384-character limit."`, raised before parsing |
 | Identifier missing in caller scope | `UnsetError` | Same as inline code |
 | Anything raised by the evaluated expression | unchanged | Propagated as-is |
 
@@ -71,8 +76,10 @@ Either route works; they're equivalent. Pick whichever fits your workflow.
 **CLI flag (for ad-hoc runs, third-party launchers, MCP/DBGp scenarios):**
 
 ```bat
-bin\AutoHotkey64.exe /Eval script.ahk
+bin\AutoHotkey64Console.exe /Eval script.ahk
 ```
+
+From Git Bash, which rewrites an argument starting with `/` into a path, write `--eval`.
 
 **Directive (self-documenting; recommended):**
 
@@ -90,11 +97,27 @@ Both flip the same internal flag. If both are set, no conflict.
 `Eval(...)` resolves identifiers in this order:
 
 1. The caller function's locals and parameters.
-2. The caller function's static / closure variables (if any).
+2. The caller function's static variables, and the outer variables a closure
+   captures. A closure captures only the outer variables its own code names, so
+   `inner() => Eval("c")` cannot see the outer `c` and throws
+   `"This dynamic variable is not included in this closure."`.
 3. Globals (including built-ins like `A_AhkVersion`).
 4. Throws `UnsetError` if the name is genuinely missing.
 
-It cannot create new locals — that protects you from accidentally polluting the caller's scope with typos.
+Assigning to a name the caller's scope does not have creates a variable there,
+so a typo in an assignment is not caught:
+
+- At global scope (the auto-execute section), `Eval("n := 7")` creates the
+  global `n`, which a function can then read through a `global n` declaration.
+- Inside a function, it adds a new local to that function. A later `Eval` in the
+  same call reads the value; no global is created or changed. The value is gone
+  when the call returns, so the next call starts with the name unassigned and
+  reading it before assigning throws `UnsetError`.
+- If that name is also a global, the new local hides it from then on: later
+  calls of the same function no longer read the global through `Eval`, and
+  reading the name there before assigning it throws `UnsetError`. Other
+  functions still see the global. Declare `global name` in the function to make
+  `Eval` read and write the global instead.
 
 ### Runtime parser repairs (September 2026)
 
@@ -115,8 +138,9 @@ unset, matching the inline expression. This formerly crashing case is tested in
 - F: alpha.29 features pass through (maybe operator, unset propagation)
 - G: `SyntaxError` with non-empty `Message` and a `Column` property on parse failure
 - H: reentrancy (nested `Eval`)
+- I: the `SyntaxError` carries `What` (`"Eval"`), `Extra` and `Stack` as Strings while `Message`, `File`, `Line` and `Column` are unchanged; a generic `catch Error as e` reads them; `Check("1 +")` records are unchanged
 
-Run it with `bin\AutoHotkey64.exe test tests\test_eval.ahk` (the `#EnableEval` directive at the top of the file enables the BIF; no CLI flag needed).
+Run it with `bin\AutoHotkey64Console.exe test tests\test_eval.ahk` (the `#EnableEval` directive at the top of the file enables the BIF; no CLI flag needed). It prints `all checks passed` and exits 0.
 
 `tests/test_eval_gated.ahk` confirms the gate is closed by default — calling `Eval(...)` without enabling it throws `"Eval is disabled"`.
 
@@ -241,15 +265,30 @@ On instances thrown by `Eval`:
 | Property | Type | Value |
 |---|---|---|
 | `Message` | String | The parser's diagnostic text |
-| `File` | String | `"Eval"` |
+| `What` | String | `"Eval"` (the throwing built-in function, as for any runtime error) |
+| `Extra` | String | The offending token or source fragment the parser reported, e.g. `"+"` for `Eval("1 + + +")`; `""` when it reported none |
+| `File` | String | `"_Eval"` |
 | `Line` | Integer | `0` |
 | `Column` | Integer | `0` (best-effort placeholder for v1) |
+| `Stack` | String | The script call stack at the `Eval` call, in the usual `Error.Stack` format |
+
+The object is built through the engine's own runtime-error constructor
+(`Line::CreateRuntimeException` with the `SyntaxError` prototype), so `What`,
+`Extra` and `Stack` are filled exactly as they are for a `TypeError` or
+`ValueError` thrown by a built-in function; only `File`, `Line` and `Column`
+are then set to the values above. A generic `catch Error as e` handler can
+read all of them without guarding. Before 2026-10-09 the object had only the
+first four, so `e.What` threw a `PropertyError` (§23).
 
 Scripts can also throw their own:
 
 ```ahk
 throw SyntaxError("custom parse failure", "MyParser", 42)
 ```
+
+A `SyntaxError` the script constructs takes the usual `Error` arguments
+(`Message`, `What`, `Extra`) and has the usual `Error` properties (`What`,
+`Extra`, `File`, `Line`, `Stack`), but no `Column`.
 
 ---
 
@@ -264,8 +303,10 @@ Either route. Both routes are equivalent and idempotent.
 **CLI flag:**
 
 ```bat
-bin\AutoHotkey64.exe /CrashLog=C:\logs\ahk.log script.ahk
+bin\AutoHotkey64Console.exe /CrashLog=C:\logs\ahk.log script.ahk
 ```
+
+From Git Bash write `--crashlog='C:\logs\ahk.log'` (quoted, so bash keeps the backslashes).
 
 **Directive (in the script):**
 
@@ -280,7 +321,7 @@ The parent directory must exist; the file itself is created (or appended to) on 
 
 ### File format
 
-Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] key=value …` header line. Multi-line events indent continuation lines two spaces.
+Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] key=value …` header line. Multi-line events indent their field lines (`Message:`, `File:`, …) two spaces. The `Stack:` value is the error's own `Stack` text written as-is: its lines are not indented and end in CRLF, while the rest of the log uses LF. Treat everything up to the next `[YYYY-MM-DD` header line as part of the record.
 
 ### Event types
 
@@ -288,7 +329,7 @@ Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] ke
 |---|---|
 | `[START]` | First write after process launch. Fields: `pid`, `ahk=<version>`, `script=<absolute path>`, `cmdline=<full command line>`. |
 | `[PARSE]` | Parse / load-time error, before auto-exec. Fields: `pid`, `file`, `line` plus indented `Message:` line. |
-| `[ERROR]` | Uncaught script-level exception after all OnError handlers returned 0 / no handler registered. Fields: `pid`, `type=<ErrorClass>`, `mode=<Exit\|Continue>` plus indented `Message:` / `File:` / `Line:` / `What:` / `Extra:` / `Stack:` lines. |
+| `[ERROR]` | Uncaught script-level exception after all OnError handlers returned 0 / no handler registered. Fields: `pid`, `type=<ErrorClass>`, `mode=<Return\|Exit\|ExitApp>` (the mode an OnError callback receives: `Return` for a continuable runtime error such as a `MethodError`, `Exit` for a `throw`) plus indented `Message:` / `File:` / `Line:` / `What:` / `Extra:` / `Stack:` lines. |
 | `[FATAL]` | Interpreter-level SEH fault caught by `SetUnhandledExceptionFilter`. Fields: `pid`, `code=0x<hex>`, `address=0x<hex>` plus indented `LastFile:` / `LastLine:` / `LastHotkey:` lines (currently empty placeholders — see "Known limitations"). |
 | `[EXIT]` | Process termination — written by every exit path. Fields: `pid`, `code`, `reason=<name>`. |
 
@@ -312,17 +353,17 @@ Append-only, UTF-8, plain text. Each event has a `[YYYY-MM-DD HH:MM:SS] [TAG] ke
 ### Example log
 
 ```
-[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.31+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64.exe /CrashLog=C:\logs\ahk.log app.ahk"
-[2026-05-13 21:43:22] [ERROR] pid=12345 type=TypeError mode=Exit
+[2026-05-13 21:35:14] [START] pid=12345 ahk=2.1-alpha.36+Console script=C:\Users\me\app.ahk cmdline="bin\AutoHotkey64Console.exe /CrashLog=C:\logs\ahk.log app.ahk"
+[2026-05-13 21:43:22] [ERROR] pid=12345 type=MethodError mode=Return
   Message: This value of type "String" has no method named "DoStuff".
   File: C:\Users\me\Lib\Clip.ahk
   Line: 142
-  What: Foo
-  Extra: "abc"
+  What:
+  Extra:
   Stack:
-    C:\Users\me\Lib\Clip.ahk (142) : [Clip.Foo]
-    C:\Users\me\app.ahk (33) : [Clip.StartMonitor]
-    > Auto-execute
+C:\Users\me\Lib\Clip.ahk (142) : [Clip.Foo] s.DoStuff()
+C:\Users\me\app.ahk (33) : [Clip.StartMonitor] Clip.Foo()
+> Auto-execute
 [2026-05-13 21:43:22] [EXIT] pid=12345 code=10 reason=Error
 ```
 
@@ -368,8 +409,10 @@ When the script writes anything to stderr (via the existing `/ErrorStdOut` path)
 ### Usage
 
 ```bat
-bin\AutoHotkey64.exe /ErrorStdOut /StdErrFile=C:\logs\ahk.stderr script.ahk
+bin\AutoHotkey64Console.exe /ErrorStdOut /StdErrFile=C:\logs\ahk.stderr script.ahk
 ```
+
+From Git Bash write `//ErrorStdOut --stderrfile='C:\logs\ahk.stderr'`.
 
 The file gets the same byte-for-byte content the terminal's stderr would have received. If `/ErrorStdOut` is not set, this fork's headless paths still emit stderr, so the file still gets the formatted error output.
 
@@ -406,11 +449,17 @@ Existing exit-code taxonomy is preserved unchanged from the fork's prior behavio
 | `64` | CLI usage error | `Usage` |
 | `130` | Ctrl+C / Ctrl+Break / console close / logoff / shutdown | `ExternalSignal` |
 
+Under `test`, a script that runs to its end exits `0` and prints `TEST PASS`.
+An uncaught error still exits `10` and a parse error `12`; `14` comes from an
+explicit `ExitApp(14)` (the `tests/Test.ahk` framework's failure exit), a
+persistent script, or an execution failure. Other `ExitApp(n)` codes pass
+through. `--capabilities` lists these codes under `exitCodes`.
+
 ---
 
 ## 8. CLI flag reference (fork-added flags)
 
-All flags in this list are fork-only additions. Existing AHK flags (`/ErrorStdOut`, `/Headless`, `/Check`, `/Test`, `/Debug`, etc.) still work as documented.
+All flags in this list are fork-only additions. Existing AHK flags (`/ErrorStdOut`, `/Headless`, `/Check`, `/Test`, `/Debug`, etc.) still work as documented. `--help` lists every spelling the parser accepts with its value syntax: the slash forms, the `--` aliases below, `/Debug[=host[:port]|stdio]`, `/validate`, `/iLib file`, `/restart`, `/script`, `/CPnnn` and the information switches (`--help` and its aliases, `--version`/`/version`, `--capabilities`). `tests/test_console_cli.py` checks that text against the parser's own option literals, so an option added to `ParseCmdLineArgs` without help text fails the gate.
 
 | Flag | Effect |
 |---|---|
@@ -419,6 +468,7 @@ All flags in this list are fork-only additions. Existing AHK flags (`/ErrorStdOu
 | `/StdErrFile=<path>` (or `--stderrfile=<path>`) | Duplicate all stderr writes to `<path>`. Off by default. |
 | `/Coverage=<path>` (or `--coverage=<path>`) | Write an LCOV line-coverage report for every loaded script file to `<path>` at exit (§17). Off by default. |
 | `/Trace=json` (or `--trace=json`) | Like `/Trace`, but one JSON event per executed statement (§20). `/Trace=text` is the default text form. |
+| `--headless`, `--diag[=text\|json]`, `--check`, `--test` | Git Bash spellings of `/Headless`, `/Diag`, `/Check` and `/Test` (Git Bash turns a leading `/` into a path). `/Debug`, `/ErrorStdOut` and `/include` have no `--` form: double the slash there (`//Debug`). |
 
 ---
 
@@ -447,17 +497,40 @@ Both directives must appear at top-of-script scope, alongside `#Requires`, `#Sin
 
 ## 11. Tests in this repo
 
-All tests live under `tests/`. Run any of them with:
+The aggregate gate runs the automated suites against one engine: the `qa/`
+runner, `tests/test_eval*.ahk`, the Python checks, and `tests/run.ahk`.
+
+Both script frameworks write JUnit XML on request, resolving a relative path
+against `A_InitialWorkingDir` (the engine makes the script's directory current
+first): `AHK_TEST_JUNIT=<path>` for
+a `tests/Test.ahk` suite (one `testsuite`, one `testcase` per case) and
+`AHK_QA_JUNIT=<path>` for `qa/run.ahk` (a `testsuites` root with one
+`testsuite` per test file and one `testcase` per assertion, written to a temp
+file and moved into place; a write failure is printed and leaves the exit code
+alone). `qa/README.md` gives the qa shape, and CI uploads both reports.
 
 ```bat
-bin\AutoHotkey64.exe test tests\<script>.ahk
+python tests\run_console_gate.py bin\AutoHotkey64Console.exe
 ```
 
-(Exit 0 = pass, exit 14 = fail.)
+Run one `.ahk` suite with the `test` verb, for example
+`bin\AutoHotkey64Console.exe test tests\test_eval.ahk`. It exits 0 on pass; §7
+lists the failure codes. The Python checks take the engine path as their
+argument (`python tests\test_console_coverage.py bin\AutoHotkey64Console.exe`).
+
+The `test_crashlog_*.ahk` files are fixtures, not self-checking suites. Run one
+with `/CrashLog=` and check the log with `crashlog_check.ahk`, which exits 0
+when every substring is present, 14 when one is missing, and 64 on a usage
+error:
+
+```bat
+bin\AutoHotkey64Console.exe /Headless /CrashLog=C:\temp\se.log tests\test_crashlog_start_exit.ahk
+bin\AutoHotkey64Console.exe /Headless tests\crashlog_check.ahk C:\temp\se.log "[START]" "reason=Normal"
+```
 
 | Test | Covers |
 |---|---|
-| `tests/test_eval.ahk` | `Eval` BIF: A–H sections (presence, SyntaxError class, basic expressions, scope read/write, alpha.29 passthrough, SyntaxError column, reentrancy). Uses `#EnableEval`. |
+| `tests/test_eval.ahk` | `Eval` BIF: A–I sections (presence, SyntaxError class, basic expressions, scope read/write, alpha.29 passthrough, SyntaxError column, reentrancy, SyntaxError `What`/`Extra`/`Stack` with unchanged `Check()` records). Uses `#EnableEval`. |
 | `tests/test_eval_gated.ahk` | `Eval` BIF disabled-message when no gate is set. |
 | `tests/test_crashlog_start_exit.ahk` | Clean run produces `[START]` + `[EXIT] reason=Normal`. |
 | `tests/test_crashlog_error.ahk` | Uncaught throw produces `[ERROR]` + `[EXIT] reason=Error`. |
@@ -468,46 +541,83 @@ bin\AutoHotkey64.exe test tests\<script>.ahk
 | `tests/test_crashlog_exitapp_n.ahk` | `ExitApp 7` → `[EXIT] code=7 reason=ExitApp(7)`. |
 | `tests/crashlog_check.ahk` | Verifier harness: asserts a log file contains given substrings. |
 | `tests/run.ahk` | Single-process suite: `#Include`s every `tests/*.test.ahk` (framework in `tests/Test.ahk`), prints results, exits 14 on failure. Run with `test`; add `/Coverage=` for LCOV. |
+| `tests/test_qa_runner.py` | `qa/run.ahk` contracts on a copied runner: empty discovery, summary/exit agreement, the headless flag, timeout and descendant cleanup, and the `AHK_QA_JUNIT` report (suite and case counts equal the summary, failures carry the assertion message and `file:line`, no temp file remains, an unwritable path leaves the exit code alone). |
 | `qa/tests/test_inspect.ahk` | `Inspect`: primitives, depth/MaxItems clamps, arrays/maps/JSON.Object, class getters and methods, native Gui controls, cycles, 60-deep chains, 500-property objects. |
 | `qa/tests/test_processpipe.ahk` | `ProcessPipe`: UTF-8 round trip, timeouts, Kill, stderr separation, 2 MB producer without deadlock, 200 KB line across chunk boundaries, argument quoting, kill-on-release, error paths. |
 | `tests/test_console_coverage.py` | `/Coverage=`: DA/LF/LH consistency, structural lines excluded, per-iteration `while` counts, relative path resolution, report survives uncaught errors and `ExitApp(14)`. |
-| `tests/test_repl.sh` | `repl` subcommand end-to-end (bash; pipes stdin): values, cross-line state, error resilience, JSON mode, `ExitApp` passthrough, script-hosted session. |
+| `qa/tests/test_coverage_missing_dir.ahk` | `/Coverage=` creates a missing directory (absolute, relative, forward slashes) and reports an unwritable path on stderr, as text and under `/Diag=json` (§17). |
+| `qa/tests/test_json_class.ahk` | `JSON()` and the generic constructor paths are refused; `JSON.True`/`False`/`Null` are read-only (§22). |
+| `qa/tests/test_check_severity.ahk` | `Check()` reports the error record when warnings come first (§22). |
+| `tests/test_debugger_fatal.py` | Refused and dropped `/Debug` connections print the stderr notice and the script continues (§22). Exits 77 without starting an engine that lacks the notice text; the gate counts that as a skip, or as a failure under `CI=true`. |
+| `tests/test_debugger_property_data.py` | DBGp `property_get` over `/Debug=stdio`: 90000-, 100000- and 180000-byte ASCII values and a 20000-character emoji/CJK value arrive intact with `size` equal to the UTF-8 byte count, and `-m` limits never split a surrogate pair (§23). |
+| `tests/test_runtime_regressions.py` | Console runtime boundaries: debugger stream packets, an idle `/Debug=stdio` session, crash-log field truncation, oversized `Eval`, coverage of module functions, `Check()` child isolation, and long diagnostics (§23): a 300 KB message and a 100 KB Extra reach `/Diag=json` and the text report whole, a deep-stack record is complete, and `/StdErrFile` mirrors it. |
+| `tests/test_repl.sh` | `repl` subcommand end-to-end (bash under WSL; pipes stdin): values, cross-line state, error resilience, JSON mode, `ExitApp` passthrough, script-hosted session. Pass the engine as its argument. It writes `/Diag=json` and calls `wslpath`, so under Git Bash its JSON-mode and script-hosted checks fail for path reasons; the gate covers the REPL with `tests/test_console_repl.py`. |
 | `tests/manual_*.ahk` | Manual verification scripts (SEH, recursion, long-running for Ctrl+C). Not run automatically. |
 
-The Alpha22-29 feature showcases under `examples/` (`examples/Alpha22_Example.ahk` through `examples/Alpha29_Example.ahk`) exercise upstream alpha features and are unaffected by the fork-only additions.
+The alpha feature showcases under `examples/` (`examples/Alpha22_Example.ahk` through `examples/Alpha31_Example.ahk`) exercise upstream alpha features and are unaffected by the fork-only additions.
 
 ---
 
 ## 12. Build paths
 
-Two build systems coexist; both produce `bin/AutoHotkey64.exe`. **GCC (mingw-w64) is the canonical compiler**; MSVC remains available and still produces the CI release binary.
+CMake is the supported build route. [`BUILD.md`](BUILD.md) documents it for
+MSVC x64, MSVC Win32 and mingw-w64 GCC x64, and `.github/workflows/build.yml`
+builds all three configurations that way, into isolated output directories
+(`out/msvc/x64`, `out/msvc/Win32`, `out/mingw/x64`). Each CI build job
+syntax-checks every `.ahk` and runs `tests/run_console_gate.py` against its
+fresh Console executable; the x64 jobs also run the MCP conformance check. A
+build produces the console engine (`AutoHotkey64Console.exe`, or
+`AutoHotkey32Console.exe` for Win32) and the GUI engine (`AutoHotkey64.exe` /
+`AutoHotkey32.exe`).
 
-### GCC / mingw-w64 (canonical)
+### MSVC
+
+From an x64 developer command prompt:
+
+```cmd
+cmake -S . -B build_msvc_x64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/msvc/x64
+cmake --build build_msvc_x64 --target AutoHotkey64Console AutoHotkey64 --parallel 6
+python tests/run_console_gate.py out/msvc/x64/AutoHotkey64Console.exe
+```
+
+Win32 uses an x86 developer prompt, its own build and output directories, and
+the targets `AutoHotkey32Console` and `AutoHotkey32`. `/Zc:preprocessor`
+(required by `__VA_OPT__` in `script_func_impl.h`) is set in both
+`CMakeLists.txt` and `Config.vcxproj`.
+
+### GCC / mingw-w64
+
+In the MSYS2 MINGW64 shell:
 
 ```bash
-# from the repo root (WSL or a Windows shell):
-cmd.exe /c build.bat                 # append `clean` to force a fresh configure
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+cmake -S . -B build_mingw_x64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/mingw/x64
+cmake --build build_mingw_x64 --target AutoHotkey64Console AutoHotkey64 --parallel 6
 ```
 
-`build.bat` drives MSYS2's mingw-w64 toolchain through CMake — Ninja when present, otherwise MinGW Makefiles — and writes `bin/AutoHotkey64.exe`; the build tree lives in `build_gcc/`. Requires MSYS2 with:
+`build.bat` is a convenience wrapper for this route. It builds in `build_gcc/`
+with CMake's default `AHK_OUTPUT_DIR` (`bin`), so it overwrites
+`bin\AutoHotkey64Console.exe` and `bin\AutoHotkey64.exe`. Set `MSYS2_ROOT` if
+MSYS2 isn't at `C:\msys64`, and append `clean` to force a fresh configure.
 
-```
-pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
-```
+GCC executables link their runtime statically. Some MSVC-only constructs are
+guarded with `#ifdef _MSC_VER`:
 
-Set `MSYS2_ROOT` if MSYS2 isn't at `C:\msys64`. The `build-mingw` job in `.github/workflows/build.yml` builds this route in CI on every push. Statically linked (~3.2 MB). Some MSVC-only constructs are guarded with `#ifdef _MSC_VER`:
-
-- `__try`/`__except` SEH around the crash-log filter's defensive guard (mingw GCC doesn't support that syntax — bare filter still works, just without the inner reentrancy catch).
+- `__try`/`__except` SEH around the crash-log filter's defensive guard (mingw GCC doesn't support that syntax — bare filter still works, just without the inner reentrancy catch). Do not assume identical native exception behavior across compilers.
 - Various goto-init-crossing block wraps and `std::nullptr_t` qualifications throughout `source/` (mingw GCC is stricter than MSVC).
-- ASM stubs (`x64call.asm` / `x64stub.asm`) have GAS-syntax twins (`x64call.s` / `x64stub.s`) for the mingw build.
+- ASM stubs (`source/libx64call/x64call.asm` / `x64stub.asm`) have GAS-syntax twins (`x64call.s` / `x64stub.s`) for the mingw build.
 
-### MSVC (alternative)
+### Other routes and releases
 
-```bat
-build_local.bat
-```
+`AutoHotkeyx.sln`, `build_local.bat` and `build_vs18.cmd` remain available for
+the GUI executable only. Use CMake for the Console target and for isolated
+builds that do not replace the engine in `bin\`.
 
-Uses Visual Studio BuildTools (VS18 / VS2022) → `AutoHotkeyx.sln` / `AutoHotkeyx.vcxproj`. Smaller binary (~1.3 MB) with full SEH crash-log fidelity; this is what the CI `release` job ships. The `Config.vcxproj` includes `/Zc:preprocessor` (required by `__VA_OPT__` in `script_func_impl.h`).
+A `v*` tag publishes a non-draft release only after the compiler gates, the
+coverage tests and the Node debugger-client builds pass. Its assets are the
+MSVC x64 and Win32 GUI and Console executables, the mingw x64 executables with
+`-mingw` filenames, their SHA-256 and `.capabilities.json` files, and the x64
+`tree-sitter-ahk.dll`.
 
 ---
 
@@ -516,7 +626,7 @@ Uses Visual Studio BuildTools (VS18 / VS2022) → `AutoHotkeyx.sln` / `AutoHotke
 ### Headless script with crash logging and stderr capture
 
 ```bat
-bin\AutoHotkey64.exe ^
+bin\AutoHotkey64Console.exe ^
     /Headless ^
     /ErrorStdOut ^
     /CrashLog=C:\logs\ahk.log ^
@@ -533,10 +643,14 @@ bin\AutoHotkey64.exe ^
 
 ; Now Eval() works and any uncaught error lands in C:\logs\ahk.log.
 result := Eval("1 + 2")
-Print "result is " . result
+Print("result is " result)
 ```
 
 ### Interactive REPL (manual session)
+
+For a terminal or an agent's stdin pipe, use the `repl` subcommand (§16). This
+`InputBox` loop is a GUI alternative; it opens a dialog per line, so do not run
+it unattended.
 
 ```ahk
 #Requires AutoHotkey v2.1-alpha.29
@@ -547,11 +661,11 @@ Loop {
     if line.Result != "OK"
         break
     try
-        Print line.Value " = " (Eval(line.Value) ?? "<unset>")
+        Print(line.Value " = " (Eval(line.Value) ?? "<unset>"))
     catch SyntaxError as e
-        Print "syntax error: " e.Message
+        Print("syntax error: " e.Message)
     catch as e
-        Print e.__Class ": " e.Message
+        Print(e.__Class ": " e.Message)
 }
 ```
 
@@ -608,10 +722,13 @@ interpreter state: evaluate expressions in milliseconds, build and poke GUIs
 interactively, and drive it all from a terminal or an agent's stdin pipe.
 
 ```bat
-bin\AutoHotkey64.exe repl                       :: bare session (synthetic empty script)
-bin\AutoHotkey64.exe repl script.ahk            :: load script, run auto-execute, then REPL
-bin\AutoHotkey64.exe repl /Diag=json script.ahk :: JSON result lines on stdout
+bin\AutoHotkey64Console.exe repl                       :: bare session (synthetic empty script)
+bin\AutoHotkey64Console.exe repl script.ahk            :: load script, run auto-execute, then REPL
+bin\AutoHotkey64Console.exe repl /Diag=json script.ahk :: JSON result lines on stdout
 ```
+
+Use the console engine: the session reads stdin and writes stdout, so the shell
+must stay attached. From Git Bash write `repl --diag=json`.
 
 ### Semantics
 
@@ -636,8 +753,10 @@ bin\AutoHotkey64.exe repl /Diag=json script.ahk :: JSON result lines on stdout
 
 ### Output
 
-Text mode: the expression's value prints to stdout; void/unset results print an empty line;
-objects print as `<ClassName object>`; errors print one line to stderr.
+Text mode: the expression's value prints to stdout; an empty string prints an empty line,
+while an unset result (and a blank input line) prints nothing; objects print as one line of
+`Inspect` JSON (§18, depth 1, at most 50 items per list), such as
+`{"type":"Object","properties":{"a":1}}`; errors print one line to stderr.
 
 JSON mode (`/Diag=json`): one stdout result per input line, including blank lines,
 `.help`, and `.exit`. Ordinary script stdout is redirected to stderr before the
@@ -667,15 +786,21 @@ ordered with input and use dynamic, length-aware serialization. Explicit
 ### v1 limitations
 
 - Single-line expressions only (no multi-line blocks; use commas or load a script).
-- No `ToString` dispatch for object results (`<Array object>`, not contents).
+- No `ToString` dispatch for object results: they print as `Inspect` JSON, never
+  through the object's own `ToString`.
+- An expression longer than 16,384 UTF-16 code units is rejected with
+  `ValueError: Eval expression exceeds the 16384-character limit.` on stderr, and
+  the session continues with the next line.
 - Scratch expression allocations remain in the process heap until exit; very long
-  sessions and oversized expressions still need a separate resource-use review.
+  sessions still need a separate resource-use review.
 
-Implementation: `source/error.cpp` (reader thread, mailbox, `ReplDrainInput`,
-`EvalCore` shared with the `Eval` BIF), dispatch via `AHK_REPL_INPUT` in
-`MainWindowProc`. Design: `docs/superpowers/specs/2026-06-12-repl-mode-design.md`.
-Tests: `tests/test_repl.sh`, `tests/test_console_repl.py`. Run the aggregate checks
-with `python tests/run_console_gate.py bin/AutoHotkey64.exe`.
+Implementation: `source/console_repl.cpp` (stdin reader thread, mailbox,
+`Script::ReplDrainInput`), dispatch via `AHK_REPL_INPUT` in `MainWindowProc`
+(`source/script2.cpp`), and `ConsoleEval::Evaluate` in `source/console_eval.cpp`,
+shared with the `Eval` BIF. Design: `docs/superpowers/specs/2026-06-12-repl-mode-design.md`.
+Tests: `tests/test_console_repl.py` (in the gate) and `tests/test_repl.sh` (bash
+under WSL; see §11). Run the aggregate checks with
+`python tests/run_console_gate.py bin/AutoHotkey64Console.exe`.
 
 ---
 
@@ -688,9 +813,32 @@ connects the two and writes a standard LCOV tracefile at exit.
 
 ### Enabling it
 
-```bat
-bin\AutoHotkey64.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
+```powershell
+bin\AutoHotkey64Console.exe /Headless /Coverage=coverage\tests.lcov test tests\run.ahk
 ```
+
+From Git Bash:
+
+```bash
+./bin/AutoHotkey64Console.exe --headless --coverage=coverage/tests.lcov test tests/run.ahk
+```
+
+A missing report directory is created first, every level of it, for an
+absolute or relative path with either separator, so no `mkdir` step is
+needed. When the report still cannot be written (a path under an existing
+file, or one that names a directory), one line on stderr names the report and
+the Win32 error:
+
+```text
+Coverage report "C:\work\blocker.txt\sub\tests.lcov" not written: could not create its directory (Win32 error 183: Cannot create a file when that file already exists.)
+Coverage report "C:\work\isdir" not written (Win32 error 5: Access is denied.)
+```
+
+Under `/Diag=json` that line is a schema-2 record with `"severity":"warning"`,
+`"type":"OSError"`, `"code":0` and the report path in `extra`, and
+`/StdErrFile` mirrors it. The exit code is the script's own either way (0 for
+a passing `test`). `qa/tests/test_coverage_missing_dir.ahk` pins both cases.
+Engines before `ec684fd0` (§22) wrote nothing and printed nothing here.
 
 `--coverage=<path>` is accepted too. A relative path is resolved against the
 working directory at launch, before the script can `SetWorkingDir`. When the
@@ -738,7 +886,8 @@ python tools\lcov_summary.py "coverage/**/*.lcov" --include "^Lib/" --out covera
 ```
 
 `qa/run.ahk` launches one process per test; set `AHK_QA_COVERAGE_DIR=<dir>`
-and every child writes its own `<test>_<pid>_<n>.lcov` there for the merge.
+and every child writes its own `<test>_<pid>_<n>.lcov` there for the merge
+(the runner creates that directory itself).
 Any LCOV consumer (Codecov, `genhtml`, VS Code Coverage Gutters) reads the
 files directly.
 
@@ -785,7 +934,8 @@ Print(Inspect(btn, 1))
 | `circular` | any node | this object is already open further up |
 
 Nested primitives are inlined as JSON values; nested objects are descriptors.
-`Depth` is clamped to 0…32 and `MaxItems` to ≥ 1. Getters are never evaluated:
+`Depth` is clamped to 0…1000 (the JSON nesting limit) and `MaxItems` to ≥ 1.
+`MaxItems` also caps each `getters` / `setters` / `methods` name list. Getters are never evaluated:
 evaluating one could run arbitrary script, so a value that only exists behind a
 getter appears by name only. Read it explicitly if you need it.
 
@@ -847,7 +997,7 @@ Unknown formats exit 64.
 
 ## 21. Native MCP tools: `check`, `run`, `test`
 
-`AutoHotkey64.exe mcp` now covers the whole check / run / test loop without a
+`AutoHotkey64Console.exe mcp` now covers the whole check / run / test loop without a
 Node or Python bridge. Each tool spawns this same executable in a child
 process (`/Headless /Diag=json`), captures both streams, and returns every
 stderr line that parses as a diagnostic:
@@ -856,8 +1006,201 @@ stderr line that parses as a diagnostic:
 |---|---|---|
 | `check` | `file`, `cwd?`, `timeout_ms?` | `ok`, `exitCode` (0/13), `diagnostics[]`, `stdout`, `stderr` |
 | `run` | `file`, `args?[]`, `cwd?`, `timeout_ms?` | same plus `timedOut`; the process tree is killed at `timeout_ms` (default 30000, max 600000) |
-| `test` | as `run` | `exitCode` 0 pass / 14 fail |
+| `test` | as `run` | `exitCode` 0 pass, 10 uncaught error, 12 parse error, 14 for `ExitApp(14)`, a persistent script or an execution failure (§7) |
 
 `diagnostics[]` items are the engine's schema-2 diagnostic objects (`type`,
-`message`, `file`, `line`, `column`, `stack`, …). A persistent script under
-`run` is reported with `timedOut: true` rather than hanging the server.
+`message`, `file`, `line`, `column`, `stack`, …); for an uncaught error,
+`file`, `line` and `source` follow `Error.File` and `Error.Line` when they
+name a loaded line, and the throw site otherwise (§23). A persistent script
+under `run` is reported with `timedOut: true` rather than hanging the server.
+
+---
+
+## 22. Engine fixes of 2026-10-08
+
+Four behavior changes from `fix/engine-bugs`, merged at `4e9349b5` (CI runs
+37801628398 and 37807040408). Engines built before them, such as revision
+`f7712ec15171` (`bin/*.alpha33.bak`), behave as each "Before" line says.
+
+### Debugger connection notices (`76973889`, `f14d7427`)
+
+A `/Debug` session that cannot connect, or whose client goes away, no longer
+opens a modal box. The script continues without the debugger and prints one
+line on stderr:
+
+```text
+Debugger error: Could not connect to localhost:9001; continuing without the debugger.
+Debugger error: Connection to localhost:9001 lost; continuing without the debugger.
+```
+
+The client is the `host:port` passed to `/Debug`, or `stdio` under
+`/Debug=stdio` (for example when stdin closes). A DBGp `detach` prints
+nothing. Under `/Diag=json` the line is one schema-2 warning record instead:
+
+```json
+{"kind":"diagnostic","format":"json","schema":2,"severity":"warning","type":"Warning","code":0,"message":"Could not connect to localhost:9001; continuing without the debugger.","extra":"localhost:9001","what":"Debugger","file":"","line":0,"column":0,"source":"","stack":""}
+```
+
+The notice goes out like other diagnostics: in the `/ErrorStdOut` encoding,
+ending in LF, and mirrored by `/StdErrFile`. It does not change the exit code.
+A refused localhost port is reported after about 2 seconds.
+
+Before: when nothing listened, `SocketTransport::Connect` showed an
+Abort/Retry/Ignore box, and `Debugger::FatalError` then showed a Yes/No
+"Continue running the script without the debugger?" box; a lost connection
+showed the Yes/No box. Both appeared even under `/Headless`; only
+`/Debug=stdio` printed the text.
+
+Both boxes are now reached only when errors do not go to stderr
+(`/Debug=stdio`, `/ErrorStdOut` and `/Headless` each send them there). This
+fork turns `/ErrorStdOut` on by default in both builds, so in practice no
+build prompts: a GUI `AutoHotkey64.exe` session whose debugger is missing or
+dies continues silently, and only `/StdErrFile` shows the notice. Test:
+`tests/test_debugger_fatal.py`.
+
+### `JSON` cannot be constructed; `JSON.True`/`False`/`Null` are read-only (`7b1a23b6`)
+
+| Expression | Now | Before |
+|---|---|---|
+| `JSON()`, `JSON(1, 2, 3)`, `X()` for `class X extends JSON` | `TypeError` "JSON cannot be constructed. Use JSON.Parse() to create a JSON.Object." | A fake `JSON.Object` whose `Set`, `Count` and `Keys` could crash the process |
+| `(Object.Call)(JSON)`, `(Object.Call)({Prototype: JSON.Prototype})` | `ValueError` "Invalid base." | The same fake object |
+| `JSON.True := 5` (also `False` and `Null`, and on a subclass) | `Error` "Property is read-only." | Replaced the singleton, so native-mode values no longer matched it |
+
+`v is JSON` still identifies a parsed `JSON.Object`. The singletons are now
+getter properties (`JSON.True.Get` and so on), so `Inspect(JSON)` lists them
+under `getters`, `JSON.Stringify(JSON)` skips them, and `JSON.OwnProps()`
+calls the getters. `DefineProp` and `DeleteProp` can still replace or remove
+them, as with any built-in member; Parse and Stringify keep using the
+originals. Test: `qa/tests/test_json_class.ahk`.
+
+### `/Coverage=` creates the report directory (`ec684fd0`)
+
+A missing directory is created, and a report that still cannot be written is
+named on stderr with its Win32 error (a warning record under `/Diag=json`);
+§17 has the text and the record. The exit code is unchanged. Before: nothing
+was written and nothing was printed. Test:
+`qa/tests/test_coverage_missing_dir.ahk`.
+
+### `Check()` reports the error, not an earlier warning (`47bc3fcb`)
+
+`Diagnostics[1]` is built from the first `error` or `critical` record in
+`Raw`; the first record of any severity is used only when none is an error.
+`Raw` still holds every record.
+
+```autohotkey
+r := Check("x := neverAssigned`nGoto NoSuchLabel`n")
+d := r.Diagnostics[1]
+Print("{} {} line {}: {}", d.Severity, d.Code, d.Line, d.Message)
+; error 13 line 2: Label not found in current scope.
+```
+
+Before: the first record won, so the VarUnset warning that load prints before
+a missing `Goto` label or a `break` outside a loop came back as
+`Severity` "warning", `Code` 0. Test: `qa/tests/test_check_severity.ahk`.
+
+## 23. DBGp property data arrives intact (2026-10-09)
+
+`property_get` and `property_value` return long and non-BMP string values
+exactly, over sockets and `/Debug=stdio` alike. Two defects in
+`Debugger::WritePropertyData` (`source/Debugger.cpp`), both also in upstream
+alpha.33 and v2.0, are fixed:
+
+- The UTF-8 sizing loop tested each UTF-16 unit for a surrogate pair without
+  skipping the low surrogate, so a pair counted as 4 + 3 bytes: the `size`
+  attribute was wrong for any emoji or other non-BMP character (three emoji
+  reported `size="21"` for 12 bytes), and a `-m` limit that fell on a pair
+  cut it in half, which arrived as U+FFFD. The loop now steps past the low
+  surrogate it has counted, so `size` is the UTF-8 byte count and a limit
+  sends the longest prefix of whole characters that fits.
+- The UTF-8 scratch copy sat at the response buffer's tail only as far from
+  the write position as the buffer's doubling happened to leave, while
+  base64 encoding writes 4 bytes for every 3 it reads. When the buffer had
+  grown to just the reserved size the output overtook the input and the data
+  was corrupted from some offset on (a 90000-byte value from byte 32721, a
+  180000-byte one from 65925, while 100000 bytes arrived intact). The
+  reservation now includes the UTF-8 size, so the scratch copy lies beyond
+  the encoded data's end.
+
+Before: as described in each item. Test: `tests/test_debugger_property_data.py`,
+which drives `/Debug=stdio` with a breakpoint and checks each value's `size`
+and base64-decoded data against the same string built in Python.
+---
+
+## 24. Engine fixes of 2026-10-09
+
+### Uncaught-error report resolves `Error.File` and `Error.Line`
+
+The uncaught-error report (the stderr text, the `/Diag=json` record and the
+GUI dialog) shows the line the thrown object names when its own `File` and
+`Line` resolve to a loaded line, and the throw site otherwise. `e :=
+Error("m")` on line 3, thrown on line 6, is reported at line 3 (`line` 3,
+`source` the `Error(...)` line; the call stack still ends at line 6). A
+`File` that is not loaded, a `Line` with no code, a missing `File`, a dynamic
+`File` property (it is never invoked) and a non-object value all report the
+throw line. The exit code is 10 in every case.
+
+Before: `Script::ShowError` (`source/error.cpp`) handed `GetLine` the last
+token it had read, `Extra` or else `Message`, as the file name, so no source
+file ever matched and the throw site always won; with neither property the
+token was uninitialized, and `throw {File: A_LineFile, Line: 1}` from any
+other line died with 0xC0000409 and printed nothing. Test:
+`tests/test_runtime_regressions.py` (`test_uncaught_*`).
+
+---
+
+## 25. Engine fixes of 2026-10-09
+
+### Diagnostic reports are never cut (`6690ba29`)
+
+A `/Diag=json` record and the plain-text error report grow with their
+content. `message` and `extra` carry the thrown `Message` and `Extra` whole,
+however long, and the record stays one valid JSON line in the schema-2 field
+order; the text report keeps its `Specifically:`, source-context and
+`Call stack:` lines after a long message, and `/StdErrFile` mirrors the whole
+record. `stack` is unchanged: it follows `Error.Stack`'s 2048-character cap
+and ends in `... N more` when frames are dropped.
+
+```autohotkey
+throw Error(StrReplace(Format("{:030720}", 0), "0", "0123456789"))  ; a 307200-character message
+```
+
+Under `/Diag=json` that is one 307782-byte line whose `message` parses back
+to the full 307200 characters; without it, the report's header line carries
+the whole message and `Specifically:`, the source lines and the call stack
+follow.
+
+Before: every escaped JSON field was cut at 16384 characters and the text
+report at 87298, silently, so a long message came back shortened and the
+text report lost everything after it. The records were also assembled in
+stack buffers of up to 175 KB on every error path; they are heap strings
+now. Test: `tests/test_runtime_regressions.py`
+(`test_diag_json_record_keeps_a_300kb_message` and the four cases after it).
+
+### `Eval` `SyntaxError` carries `What`, `Extra` and `Stack` (roadmap Track C item 5)
+
+`ConsoleEval::Evaluate` (`source/console_eval.cpp`) used to build the
+`SyntaxError` by hand with only `Message`, `File`, `Line` and `Column`. It now
+takes the parser's `Message` and `Extra` and rebuilds the object through
+`Line::CreateRuntimeException` with the `SyntaxError` prototype, the path every
+built-in function's runtime error takes, so `Error.__New` fills `What`
+(`"Eval"`, the throwing built-in), `Extra` (the token or source fragment the
+parser reported) and `Stack` (the script call stack at the `Eval` call);
+`File` (`"_Eval"`), `Line` (0) and `Column` (0) are then set as before.
+
+```autohotkey
+#EnableEval
+try Eval("1 + + +")
+catch Error as e
+    Print("{} {}: {} near '{}'`n{}", Type(e), e.What, e.Message, e.Extra, e.Stack)
+; SyntaxError Eval: Missing operand. near '+'
+; C:\...\script.ahk (3) : [Eval] Eval("1 + + +")
+; C:\...\script.ahk (3) : [] Eval("1 + + +")
+; > Auto-execute
+```
+
+Before: `e.What`, `e.Extra` and `e.Stack` threw `PropertyError` (`This value
+of type "SyntaxError" has no property named "What".`), so a generic
+`catch Error as e` logger had to guard them with `HasProp`. Unchanged: the
+uncaught-error report of an `Eval` outside `try`, `Check()` records, and the
+REPL's `SyntaxError` line, which prints only the type and message. Test:
+`tests/test_eval.ahk` section I.

@@ -94,6 +94,7 @@ FuncEntry g_BIF[] =
 	BIF1(NumPut, 3, NA),
 	BIFn(ObjAddRef, 1, 1, BIF_ObjAddRefRelease),
 	BIF1(ObjBindMethod, 1, NA),
+	BIFi(ObjCreateWithDataPtr, 2, 2, StructClass_At, true),
 	BIFn(ObjFromPtr, 1, 1, BIF_ObjPtr),
 	BIFn(ObjFromPtrAddRef, 1, 1, BIF_ObjPtr),
 	BIFn(ObjGetBase, 1, 1, BIF_Base),
@@ -476,6 +477,14 @@ Script::~Script() // Destructor.
 
 
 
+void Script::FreePreparseBuffers()
+{
+	free(mSearchPath); // This is essentially just a cache, and isn't needed during execution.
+	mSearchPath = nullptr;
+}
+
+
+
 ResultType Script::Init(LPTSTR aScriptFilename, IObject *aArgs)
 // Returns OK or FAIL.
 // Caller has provided an empty string for aScriptFilename if this is a compiled script.
@@ -594,7 +603,6 @@ ResultType Script::Init(LPTSTR aScriptFilename, IObject *aArgs)
 	// Up to this point, mCurrentModule == &mBuiltinModule for initialization of built-ins.
 	// From this point, declarations should add names to a script module, not mBuiltinModule.
 	mCurrentModule = &mDefaultModule;
-	mDefaultModule.mSelfFileIndex = 0;
 
 	if (aArgs) // Caller-provided command-line args.
 	{
@@ -1514,7 +1522,7 @@ UINT Script::LoadFromFile(LPCTSTR aFileSpec)
 
 	// Do some processing of local variables to support closures.
 	// This must be done after PreparseExpressions() has resolved all variable references.
-	if (!PreprocessLocalVars(mFuncs))
+	if (!FinalizeFuncs(mFuncs))
 		return LOADING_FAILED;
 
 	// Set the working directory to the script's directory.  This must be done after the above
@@ -1527,6 +1535,8 @@ UINT Script::LoadFromFile(LPCTSTR aFileSpec)
 
 	if (!PreparseCommands())
 		return LOADING_FAILED; // Error was already displayed by the above calls.
+
+	FreePreparseBuffers();
 	
 #ifndef AUTOHOTKEYSC
 	if (mValidateThenExit)
@@ -2297,6 +2307,12 @@ process_completed_line:
 						mClassPropertyDef = NULL;
 					}
 				}
+				else if (mClassStructUnion)
+				{
+					mClassStructUnion = false;
+					free(mClassTypedPropSuffix);
+					mClassTypedPropSuffix = nullptr;
+				}
 				else
 				{
 					// End of class definition.
@@ -2427,11 +2443,26 @@ process_completed_line:
 					goto continue_main_loop;
 				}
 			}
-			return ScriptError(ERR_INVALID_LINE_IN_PROPERTY_DEF, buf);
+			if (mClassPropertyStatic || !mClassPropertyEmpty || mClassStructUnion
+				|| 0 != _tcsicmp(mClassPropertyDef, _T("union.Get()")))
+				return ScriptError(ERR_INVALID_LINE_IN_PROPERTY_DEF, buf);
+			// Reinterpret this as an anonymous union{}.
+			mClassStructUnion = true;
+			if (!(mClassProperty->Getter() || mClassProperty->Setter() || mClassProperty->Method()))
+				mClassObject[mClassObjectCount - 1]->ClassGetPrototype()->DeleteOwnProp(_T("union"));
+			mClassProperty = NULL;
+			free(mClassPropertyDef);
+			mClassPropertyDef = NULL;
 		}
 
 		if (mClassObjectCount && !g->CurrentFunc) // Inside a class definition (and not inside a method).
 		{
+			if (mClassStructUnion)
+			{
+				if (!DefineClassVars(buf, false))
+					return FAIL;
+				goto continue_main_loop;
+			}
 			LPTSTR id = buf;
 			bool is_static = false;
 			if (!_tcsnicmp(id, _T("Static"), 6) && IS_SPACE_OR_TAB(id[6]))
@@ -3620,7 +3651,7 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 				// Save the working directory; see the similar line below for details.
 				LPTSTR prev_dir = GetWorkingDir();
 				// Attempt to find the script file in a Lib folder:
-				auto path = FindLibraryFile(parameter, parameter_end - parameter);
+				auto path = FindLibraryFile(parameter);
 				// Attempt to include the file if found:
 				bool error_was_shown = path && !LoadIncludedFile(path, false, ignore_load_failure);
 				// Restore the working directory.
@@ -4035,7 +4066,7 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 					{
 						if (set_bc_mode)
 						{
-							if (!mCurrentModule->mBackCompatModeWasSet)
+							if (!mCurrentModule->mBackCompatModeWasSet && !g->CurrentFunc && mCurrentModule->IsFileMain(mCurrFileIndex))
 							{
 								mCurrentModule->mBackCompatModeWasSet = true;
 								mCurrentModule->mBackCompatMode = bc_mode;
@@ -4078,7 +4109,7 @@ inline ResultType Script::IsDirective(LPTSTR aBuf)
 
 	if (IS_DIRECTIVE_MATCH(_T("#Import")))
 	{
-		if (mLineParent || mClassObjectCount)
+		if (mLineParent ? !mLineParent->mAttribute : mClassObjectCount)
 			return ScriptError(ERR_UNEXPECTED_DIRECTIVE, aBuf);
 		if (!ParseImportDirective(parameter))
 			return ScriptError(_T("Invalid import"), aBuf);
@@ -6226,6 +6257,8 @@ ResultType Script::DefineFunc(LPTSTR aBuf, bool aStatic, FuncDefType aIsInExpres
 				return ConflictingDeclarationError(_T("parameter"), this_param.var);
 			if (   !(this_param.var = AddVar(param_start, param_length, varlist, insert_pos, VAR_DECLARE_LOCAL | VAR_LOCAL_FUNCPARAM))   )	// Pass VAR_LOCAL_FUNCPARAM as last parameter to mean "it's a local but more specifically a function's parameter".
 				return FAIL; // It already displayed the error, including attempts to have reserved names as parameter names.
+			if (this_param.is_byref)
+				this_param.var->Scope() |= VAR_BYREF;
 			param_start = omit_leading_whitespace(param_end);
 		}
 		else
@@ -6647,6 +6680,7 @@ ResultType Script::DefineClassProperty(LPTSTR aBuf, bool aStatic, bool &aBufHasB
 	}
 	mClassProperty = class_object->DefineProperty(aBuf);
 	mClassPropertyStatic = aStatic;
+	mClassPropertyEmpty = true;
 	if (!mClassProperty)
 		return ScriptError(ERR_OUTOFMEM);
 
@@ -6680,6 +6714,7 @@ ResultType Script::DefineClassPropertyXet(LPTSTR aBuf, LPTSTR aEnd)
 		mClassProperty->NoParamGet = g->CurrentFunc->mParamCount == 1 && !g->CurrentFunc->mIsVariadic;
 		mClassProperty->NoEnumGet = g->CurrentFunc->mMinParams > 1;
 	}
+	mClassPropertyEmpty = false;
 	if (*aEnd && !AddLine(ACT_BLOCK_BEGIN)) // *aEnd is '{' or '='.
 		return FAIL;
 	if (*aEnd == '=') // => expr
@@ -6733,9 +6768,9 @@ ResultType Script::DefineClassVars(LPTSTR aBuf, bool aStatic)
 			name_end = item_end;
 		}
 		item_end = omit_leading_whitespace(item_end);
+		LPTSTR type_name = nullptr, type_name_end = nullptr;
 		if (!item_name_has_dot)
 		{
-			LPTSTR type_name = nullptr, type_name_end = nullptr;
 			if (*item_end == ':' && item_end[1] != '=' && !aStatic)
 			{
 				// A type declaration could consist of any expression that returns
@@ -6789,11 +6824,20 @@ ResultType Script::DefineClassVars(LPTSTR aBuf, bool aStatic)
 					//    the current point in the script.
 					auto type_end_char = *type_name_end;
 					*type_name_end = '\0';
-					_sntprintf(type_buf, _countof(type_buf), _T("DefineProp(this.Prototype,'%s',{Type:%s,Pack:%i})")
-						, item, type_name, mClassStructPack[mClassObjectCount]);
+					_sntprintf(type_buf, _countof(type_buf), _T("DefineProp(this.Prototype,'%s',{Type:%s,Pack:%i%s})")
+						, item, type_name, mClassStructPack[mClassObjectCount]
+						, mClassTypedPropSuffix ? mClassTypedPropSuffix : _T(""));
 					if (!DefineClassVarInit(type_buf, true, class_object, ACT_EXPRESSION))
 						return FAIL;
 					*type_name_end = type_end_char;
+					if (mClassStructUnion && !mClassTypedPropSuffix)
+					{
+						size_t size = item_end - item + 11;
+						mClassTypedPropSuffix = tmalloc(size);
+						if (!mClassTypedPropSuffix)
+							return ScriptError(ERR_OUTOFMEM);
+						_sntprintf(mClassTypedPropSuffix, size, _T(",Offset:\"%s\""), item);
+					}
 				}
 				// Store the unset marker in prototype.%item% to allow duplicate declarations to be detected:
 				if (!prototype->SetOwnProp(item, unset_token))
@@ -6801,6 +6845,9 @@ ResultType Script::DefineClassVars(LPTSTR aBuf, bool aStatic)
 				*name_end = orig_char; // Undo termination.
 			}
 		}
+
+		if (mClassStructUnion && !type_name)
+			return ScriptError(ERR_INVALID_CLASS_VAR, item);
 						
 		// This section is very similar to the one in ParseAndAddLine() which deals with
 		// variable declarations, so maybe maintain them together:
@@ -7014,98 +7061,30 @@ bool Script::ResolveBaseClass(LPCTSTR aClassName, bool aStruct, Object *&aClass,
 
 #ifndef AUTOHOTKEYSC
 
-#define FUNC_LIB_EXT EXT_AUTOHOTKEY
-#define FUNC_LIB_EXT_LENGTH (_countof(FUNC_LIB_EXT) - 1)
-#define FUNC_LOCAL_LIB _T("\\Lib\\") // Needs leading and trailing backslash.
-#define FUNC_LOCAL_LIB_LENGTH (_countof(FUNC_LOCAL_LIB) - 1)
-#define FUNC_USER_LIB _T("\\AutoHotkey\\Lib\\") // Needs leading and trailing backslash.
-#define FUNC_USER_LIB_LENGTH (_countof(FUNC_USER_LIB) - 1)
-#define FUNC_STD_LIB _T("\\Lib\\") // Needs leading and trailing backslash.
-#define FUNC_STD_LIB_LENGTH (_countof(FUNC_STD_LIB) - 1)
-
-#define FUNC_LIB_COUNT 3
-
-void Script::InitFuncLibraries(FuncLibrary aLib[])
+LPTSTR Script::FindLibraryFile(LPTSTR aFuncName)
 {
-	// Local lib in script's directory.
-	InitFuncLibrary(aLib[0], mFileDir, FUNC_LOCAL_LIB);
-
-	// User lib in Documents folder.
-	PWSTR docs_dir = GetDocumentsFolder();
-	InitFuncLibrary(aLib[1], docs_dir, FUNC_USER_LIB);
-	CoTaskMemFree(docs_dir);
-
-	// Std lib in AutoHotkey directory.
-	InitFuncLibrary(aLib[2], mOurEXEDir, FUNC_STD_LIB);
-}
-
-void Script::InitFuncLibrary(FuncLibrary &aLib, LPTSTR aPathBase, LPTSTR aPathSuffix)
-{
-	TCHAR buf[T_MAX_PATH + 1]; // +1 to ensure truncated paths are filtered out due to being too long for GetFileAttributes().  It would probably have to be intentional due to MAX_PATH limits elsewhere, but this +1 costs nothing.
-	int length = sntprintf(buf, _countof(buf), _T("%s%s"), aPathBase, aPathSuffix);
-	DWORD attr = GetFileAttributes(buf); // Seems to accept directories that have a trailing backslash, which is good because it simplifies the code.
-	if (attr == 0xFFFFFFFF || !(attr & FILE_ATTRIBUTE_DIRECTORY)) // Directory doesn't exist or it's a file vs. directory. Relies on short-circuit boolean order.
+	auto search_path = GetSearchPath(SearchPathForInclude);
+	
+	FileIndexType file_index;
+	switch (FindIncludeFileIndex(aFuncName, search_path, file_index, mCurrFileIndex, false))
 	{
-		aLib.path = _T("");
-		return;
+	case OK: return Line::sSourceFile[file_index];
+	case FAIL: return nullptr;
 	}
-	// Allow room for appending each candidate file/function name.  This could be exactly
-	// MAX_PATH on ANSI builds since no path longer than that would work, but doing it this
-	// way simplifies length checks later (and Unicode builds support much longer paths).
-	size_t buf_size = length + MAX_VAR_NAME_LENGTH + FUNC_LIB_EXT_LENGTH + 1;
-	aLib.path = SimpleHeap::Alloc<TCHAR>(buf_size);
-	tmemcpy(aLib.path, buf, length + 1);
-	aLib.length = length;
-}
 
-LPTSTR Script::FindLibraryFile(LPTSTR aFuncName, size_t aFuncNameLength, bool aIsModule)
-// If aFuncNameLength is 0, the entire length of aFuncName is used.
-// Returns the path; valid only until the next call to this function.
-{
-	int i;
-	DWORD attr;
-
-	static FuncLibrary sLib[FUNC_LIB_COUNT] = {0};
-
-	if (!sLib[0].path) // Allocate & discover paths only upon first use because many scripts won't use anything from the library. This saves a bit of memory and performance.
-		InitFuncLibraries(sLib);
-	// Above must ensure that all sLib[].path elements are non-NULL (but they can be "" to indicate "no library").
-
-	if (!aFuncNameLength) // Caller didn't specify, so use the entire string.
-		aFuncNameLength = _tcslen(aFuncName);
-	if (aFuncNameLength > MAX_VAR_NAME_LENGTH) // Too long to fit in the allowed space, and also too long to be a valid function name.
+	if (!LoadTimeBackCompatMode())
 		return nullptr;
 
-	TCHAR *dest;
-	LPTSTR naked_filename = aFuncName;               // Set up for the first iteration.
-	size_t naked_filename_length = aFuncNameLength; //
-
-		for (i = 0; i < FUNC_LIB_COUNT; ++i)
-		{
-			if (!*sLib[i].path) // Library is marked disabled, so skip it.
-				continue;
-
-			dest = (LPTSTR) tmemcpy(sLib[i].path + sLib[i].length, naked_filename, naked_filename_length); // Append the filename to the library path.
-			_tcscpy(dest + naked_filename_length, FUNC_LIB_EXT); // Append the file extension.
-
-			attr = GetFileAttributes(sLib[i].path); // Testing confirms that GetFileAttributes() doesn't support wildcards; which is good because we want filenames containing question marks to be "not found" rather than being treated as a match-pattern.
-			if (attr == 0xFFFFFFFF || (attr & FILE_ATTRIBUTE_DIRECTORY)) // File doesn't exist or it's a directory.
-				continue;
-
-			// Since above didn't "continue", a file exists whose name matches that of the requested library.
-			return sLib[i].path; // Only valid until the next call to this function.
-		} // for() each library directory.
-
-	if (aIsModule)
+	// Since we're in v2.0 mode, search for A.ahk if this is something like #Include <A_B>.
+	auto cp = _tcsrchr(aFuncName, '_');
+	if (!cp)
 		return nullptr;
 
-	// The legacy behaviour for #Include <A_B> is that all Libs are searched for A_B.ahk before
-	// searching for A.ahk, which means that A_B.ahk takes precedence over A.ahk even if A.ahk
-	// is defined in the local Lib and A_B.ahk is not.
-	for (i = 0; i < (int)aFuncNameLength; ++i)
-		if (aFuncName[i] == '_')
-			return FindLibraryFile(aFuncName, i);
-	return nullptr;
+	// Caller provides a modifiable buffer, so may as well take advantage.
+	*cp = '\0';
+	auto r = FindLibraryFile(aFuncName);
+	*cp = '_';
+	return r;
 }
 
 #endif
@@ -7939,21 +7918,6 @@ ResultType Script::PreparseExpressions(FuncList &aFuncs)
 		g->CurrentFunc = &func;
 		if (!PreparseExpressions(func.mJumpToLine)) // Preparse this function's body.
 			return FAIL;
-		// Now that expressions have been preparsed, remove any parameter default expressions
-		// from the normal flow of execution by adjusting the function's mJumpToLine.  (This
-		// wasn't done earlier because the original value is needed above.)
-		if (mLastParamInitializer)
-		{
-			// Search to back to 0 even if mMinParams > 0, for cases like F(a:=b(), c).
-			for (int i = func.mParamCount; --i >= 0; )
-			{
-				if (func.mParam[i].default_type == PARAM_DEFAULT_EXPR)
-				{
-					func.mJumpToLine = func.mParam[i].default_expr->mNextLine;
-					break;
-				}
-			}
-		}
 		// Nested functions will be preparsed next, due to the fact that they immediately
 		// follow the outer function in aFuncs.
 	}
@@ -7981,11 +7945,11 @@ ResultType Script::PreparseCommands(ScriptModule *aModule)
 {
 	// Terminate each module with a Line so that all labels have a target and
 	// all control flow statements that need it have a non-null mRelatedLine.
-	if (aModule->mLastLine)
+	if (mLastLine = aModule->mLastLine)
 	{
-		mPendingRelatedLine = aModule->mLastLine->mParentLine;
-		mCombinedLineNumber = aModule->mLastLine->mLineNumber + 1; // +1 to distinguish it from the last executable line when debugging.
-		mCurrFileIndex = aModule->mLastLine->mFileIndex;
+		mPendingRelatedLine = mLastLine->mActionType == ACT_UNTIL ? mLastLine : mLastLine->mParentLine;
+		mCombinedLineNumber = mLastLine->mLineNumber + 1; // +1 to distinguish it from the last executable line when debugging.
+		mCurrFileIndex = mLastLine->mFileIndex;
 	}
 	if (!AddLine(ACT_END_MODULE))
 		return FAIL;
@@ -9869,12 +9833,13 @@ standard_pop_into_postfix: // Use of a goto slightly reduces code size.
 		
 		case SYM_MAYBE:
 		{
-			if (stack[stack_count - 1]->symbol == SYM_OPAREN && this_infix->symbol == SYM_CPAREN // (...?)
-				&& !((this_infix[1].symbol == SYM_DOT || this_infix[1].symbol == SYM_FUNC) && (this_infix[1].callsite->flags & EIF_STACK_MEMBER))) // not a.%b?% or a.%b?%()
-				//&& *stack[stack_count - 1]->marker != g_DerefChar) // This would exclude %a?%, which we don't want to exclude.
+			if (stack[stack_count - 1]->symbol == SYM_OPAREN && this_infix->symbol == SYM_CPAREN) // (...?)
 			{
 				++this_infix; // Discard CPAREN
 				--stack_count; // Discard OPAREN
+				if ((this_infix->symbol == SYM_DOT || this_infix->symbol == SYM_FUNC || this_infix->symbol == SYM_OBRACKET)
+					&& (this_infix->callsite->flags & EIF_STACK_MEMBER)) // a.%b?%, a.%b?%() or a.%b?%[]
+					bcmap[this_postfix - infix] += 1; // Need to pop the dot's "this" object.
 				// Push MAYBE back onto the stack, below any operators to the left which are at
 				// the new nesting level.  It will be popped again at the next CPAREN or at the
 				// end of the unset chain.
@@ -10008,8 +9973,7 @@ standard_pop_into_postfix: // Use of a goto slightly reduces code size.
 						return LineError(_T("This statement's parameters cannot be unset."), FAIL, this_postfix->error_reporting_marker);
 				}
 			}
-			else if (  !((infix_symbol == SYM_FUNC || infix_symbol == SYM_DOT || infix_symbol == SYM_OBRACKET)
-						&& (inf->callsite->flags & EIF_STACK_MEMBER))  ) // not x.%a?%() or x.%a?% or x.%a?%[]
+			else
 				return LineError(_T("This operator's left operand must not be unset."), FAIL, infix_symbol == SYM_DYNAMIC ? inf->marker : inf->error_reporting_marker);
 			if (  !(stack_symbol == SYM_FUNC
 				|| IS_OPAREN_LIKE(stack_symbol) || stack_symbol == SYM_BEGIN
@@ -12968,13 +12932,27 @@ void PauseCurrentThread()
 
 
 
-ResultType Script::PreprocessLocalVars(FuncList &aFuncs)
+ResultType Script::FinalizeFuncs(FuncList &aFuncs)
 {
 	for (int i = 0; i < aFuncs.mCount; ++i)
 	{
 		UserFunc &func = *aFuncs.mItem[i];
 		if (!PreprocessLocalVars(func))
 			return FAIL;
+		// Now that the preparsing stages have completed, mJumpToLine can be adjusted to
+		// exclude the parameter default expressions.
+		if (mLastParamInitializer)
+		{
+			// Search to back to 0 even if mMinParams > 0, for cases like F(a:=b(), c).
+			for (int i = func.mParamCount; --i >= 0; )
+			{
+				if (func.mParam[i].default_type == PARAM_DEFAULT_EXPR)
+				{
+					func.mJumpToLine = func.mParam[i].default_expr->mNextLine;
+					break;
+				}
+			}
+		}
 		// Nested functions will be preparsed next, due to the fact that they immediately
 		// follow the outer function in aFuncs.
 	}
@@ -13098,10 +13076,23 @@ ResultType Script::PreprocessLocalVars(UserFunc &aFunc)
 
 ResultType Script::PreparseVarRefs()
 {
+	// Preparse local variables, with innermost nested functions first.
+	// This ordering was implemented in v2.1 to ensure consistency with respect to
+	// variable references above/below a function. Without this change, unassigned refs
+	// above a function would take precedence over #Import {*} within the function.
+	for (int i = mFuncs.mCount; i > 0; --i)
+	{
+		g->CurrentFunc = mFuncs.mItem[i - 1];
+		if (!PreparseVarRefs(g->CurrentFunc->mJumpToLine))
+			return FAIL;
+	}
+	g->CurrentFunc = nullptr;
+
 	for (mCurrentModule = mLastModule; mCurrentModule; mCurrentModule = mCurrentModule->mPrev)
 	{
 		ResolveIndirectImports();
 
+		// Preparse global variables.
 		if (!PreparseVarRefs(mCurrentModule->mFirstLine))
 			return FAIL;
 
@@ -13132,10 +13123,26 @@ ResultType Script::PreparseVarRefs(Line *aStartingLine)
 {
 	for (Line *line = aStartingLine; line; line = line->mNextLine)
 	{
+		// Process only the direct body of the current module or function.
 		switch (line->mActionType)
-		{ // Establish context for FindOrAddVar:
-		case ACT_BLOCK_BEGIN: if (line->mAttribute) g->CurrentFunc = (UserFunc *)line->mAttribute; break;
-		case ACT_BLOCK_END: if (line->mAttribute) g->CurrentFunc = g->CurrentFunc->mOuterFunc; break;
+		{
+		case ACT_BLOCK_BEGIN:
+			if (line->mAttribute)
+			{
+				if (!line->mRelatedLine)
+					return OK;
+				line = line->mRelatedLine->mPrevLine;
+				ASSERT(line->mActionType == ACT_BLOCK_END);
+				continue;
+			}
+			break;
+		case ACT_BLOCK_END:
+			if (line->mAttribute)
+			{
+				ASSERT(line->mAttribute == g->CurrentFunc);
+				return OK;
+			}
+			break;
 		}
 		
 		mCurrLine = line; // For error-reporting.
@@ -13183,7 +13190,7 @@ ResultType Script::PreparseVarRefs(Line *aStartingLine)
 			}
 			if (arg.type == ARG_TYPE_INPUT_VAR)
 			{
-				if (arg.postfix->symbol != SYM_VAR || arg.postfix->var->Type() != VAR_NORMAL)
+				if (arg.postfix->symbol != SYM_VAR || arg.postfix->var->Type() != VAR_NORMAL || arg.postfix->var->IsByRefParam())
 				{
 					// Can't be ARG_TYPE_INPUT_VAR after all, as VAR_VIRTUAL and VAR_CONSTANT require ExpandExpression
 					// (unless it's a constant which was converted to SYM_OBJECT above).

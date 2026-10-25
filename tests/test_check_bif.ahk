@@ -1,6 +1,6 @@
 #Requires AutoHotkey v2.1-alpha.30
 ; test_check_bif.ahk - exercises the native Check(Source) BIF.
-; Run:  bin\AutoHotkey64.exe tests\test_check_bif.ahk   ; exits 0 all pass, 1 otherwise.
+; Run:  bin\AutoHotkey64Console.exe tests\test_check_bif.ahk   ; exits 0 all pass, 1 otherwise.
 ; All multi-line sources are built via Chr(10) concatenation (no heredoc).
 failures := 0
 nl := Chr(10)

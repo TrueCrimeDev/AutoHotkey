@@ -6,10 +6,13 @@ struct ScriptImport
 	LPTSTR names = nullptr, mod_path = nullptr, mod_name = nullptr, var_name = nullptr;
 	ScriptModule *mod = nullptr;
 	ScriptImport *next = nullptr;
+	UserFunc *scope = nullptr;
 	LineNumberType line_number = 0;
 	FileIndexType file_index = 0;
 	bool wildcard = false;
 	bool is_export = false;
+
+	bool IsInScope();
 
 	ScriptImport() {}
 	ScriptImport(ScriptModule *aMod) : mod(aMod), names(_T("*")), wildcard(true) {}
@@ -33,10 +36,10 @@ public:
 	UnresolvedBaseClass *mUnresolvedBaseClass = nullptr;
 	FileIndexType *mFiles = nullptr, mFilesCount = 0, mFilesCountMax = 0;
 	LineNumberType mDirectiveLineNumber = 0;
-	FileIndexType mSelfFileIndex = ABSOLUTE_MAX_SOURCE_FILES;
-	FileIndexType mOuterFileIndex = ABSOLUTE_MAX_SOURCE_FILES;
+	FileIndexType mFileIndex = 0;
 	FileIndexType mDirectiveFileIndex = ABSOLUTE_MAX_SOURCE_FILES;
 	bool mExecuted = false;
+	bool mIsFileModule = false;
 	bool mIsBuiltinModule = false;
 	bool mHasWildcardExports = false;
 	bool mBackCompatMode = true; // Compatibility mode for module startup code.  true = requires v2.0, false = requires v2.1
@@ -47,7 +50,8 @@ public:
 	WarnMode Warn_Unreachable = WARNMODE_ON;
 	WarnMode Warn_VarUnset = WARNMODE_ON;
 
-	bool IsFileModule() const { return mSelfFileIndex != ABSOLUTE_MAX_SOURCE_FILES; }
+	bool IsFileModule() const { return mIsFileModule; }
+	bool IsFileMain(FileIndexType aFile) const { return mIsFileModule ? mFileIndex == aFile : mDirectiveFileIndex == aFile; }
 
 	bool HasFileIndex(FileIndexType aFile);
 	ResultType AddFileIndex(FileIndexType aFile);
@@ -55,10 +59,10 @@ public:
 	IObject *FindGlobalObject(LPCTSTR aName);
 	Var *FindImportedVar(LPCTSTR aName);
 	Var *FindImportableVar(LPCTSTR aName, bool aAllowCreate = false);
-	Var *AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, IObject *aModule, bool aExport);
+	Var *AddNewImportVar(LPTSTR aVarName, Var *aAliasFor, ScriptImport &aImp);
 
 	ScriptModule() {}
-	ScriptModule(LPCTSTR aName) : mName(aName) {}
+	ScriptModule(LPCTSTR aName, bool aIsFileModule) : mName(aName), mIsFileModule(aIsFileModule) {}
 
 	void *operator new(size_t aBytes) {return SimpleHeap::Alloc(aBytes);}
 	void *operator new[](size_t aBytes) {return SimpleHeap::Alloc(aBytes);}
@@ -67,8 +71,10 @@ public:
 
 	IObject_Type_Impl("Module");
 	ResultType Invoke(IObject_Invoke_PARAMS_DECL) override;
+	void __Ref(ResultToken &aResultToken, int aID, int aFlags, ExprTokenType *aParam[], int aParamCount);
 	Object *Base() override { return sPrototype; }
 	static Object *sPrototype;
+	static ObjectMember sMembers[];
 };
 
 typedef ScriptItemList<ScriptModule, 16> ScriptModuleList;

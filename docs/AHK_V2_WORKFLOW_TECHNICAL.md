@@ -6,7 +6,8 @@ This document explains how this repository's AutoHotkey v2 build works in practi
 
 This repo is not just stock AHK v2 source. It includes:
 
-- A custom engine build tag: `2.1-alpha.29+Console` (`source/ahkversion.h`)
+- A custom engine build tag: `2.1-alpha.36+Console` (`source/ahkversion.h`)
+- A console executable, `AutoHotkey64Console.exe`, built from the same source as the GUI `AutoHotkey64.exe` (`AHK_CONSOLE_ENTRYPOINT` in `source/AutoHotkey.cpp`)
 - Runtime console/error behavior around `/ErrorStdOut` (`source/error.cpp`, `source/AutoHotkey.cpp`)
 - A built-in `_ScriptGetLines()` helper (`source/error.cpp`, `source/lib/functions.h`)
 
@@ -14,39 +15,45 @@ This repo is not just stock AHK v2 source. It includes:
 
 ### 1. Build the engine
 
-Use Visual Studio/MSBuild as documented in `BUILD.md`.
+Build with CMake as documented in `BUILD.md` (MSVC x64, MSVC Win32, or mingw-w64 GCC x64; CI builds, syntax-checks and gates all three configurations).
 
 Typical output:
 
-- `bin/AutoHotkey64.exe` (Release x64)
+- `out/msvc/x64/AutoHotkey64Console.exe` (console engine) and `out/msvc/x64/AutoHotkey64.exe` (GUI), Release x64, with BUILD.md's isolated `AHK_OUTPUT_DIR`
+- `AutoHotkey32Console.exe` and `AutoHotkey32.exe` from the MSVC Win32 route
+- `bin/` instead when `AHK_OUTPUT_DIR` keeps its default, as `build.bat` (the mingw-w64 convenience route) does
+
+The commands below use `bin\AutoHotkey64Console.exe`, the engine `.mcp.json` and the Claude Code hooks use; substitute the path of the build you are testing.
 
 ### 2. Run scripts normally
 
 ```powershell
-bin\AutoHotkey64.exe your_script.ahk
+bin\AutoHotkey64Console.exe your_script.ahk
 ```
 
-This follows standard GUI/runtime behavior unless you pass debug/error flags.
+The console engine keeps the terminal attached, so the shell waits for the script and receives its exit code, and it reports load and runtime errors on stderr. The GUI `bin\AutoHotkey64.exe` follows standard GUI/runtime behavior (error dialogs) unless you pass debug/error flags, and PowerShell does not wait for it unless its output is piped.
 
 ### 3. Run in console/headless error mode
 
 ```powershell
-bin\AutoHotkey64.exe /ErrorStdOut your_script.ahk
+bin\AutoHotkey64Console.exe /Headless your_script.ahk
+bin\AutoHotkey64Console.exe /Headless /Diag=json your_script.ahk   # one JSON diagnostic per line on stderr
 ```
 
-In this fork, runtime errors can be printed to stderr instead of modal dialogs (details below).
+In this fork, runtime errors can be printed to stderr instead of modal dialogs (details below). The console engine does this by default; `/ErrorStdOut[=encoding][:color]` selects the text encoding and color, and turns the routing on for the GUI engine. `/Headless` also reports the engine's own error and instance prompts on stderr, but a script's own `MsgBox`, `InputBox` and `Gui` still show and block. From Git Bash, which rewrites arguments that start with `/`, use `--headless`, `--diag=json` and `//ErrorStdOut`.
 
-Test file in repo:
+Test files in repo:
 
-- `tests/test_errorstdout.ahk`
+- `tests/test_errorstdout.ahk` (shows a `MsgBox` before its error, so not for unattended runs)
+- `tests/test_console.ahk` (dialog-free: stdout lines, then an uncaught error on stderr and exit code 10)
 
 ### 4. Run in debugger mode (DBGp)
 
 ```powershell
-bin\AutoHotkey64.exe /Debug your_script.ahk
+bin\AutoHotkey64Console.exe /Debug your_script.ahk
 ```
 
-AHK acts as the DBGp client and connects to a listening debugger server (default `localhost:9000`), such as:
+AHK acts as the DBGp client and connects to a listening debugger server (default `localhost:9000`; `/Debug=host:port` for another endpoint, `/Debug=stdio` for DBGp over stdin/stdout; `//Debug` from Git Bash), such as:
 
 - `debugger-tool/mcp-server`
 - `debugger-tool/examples/simple_client.py`
@@ -62,34 +69,52 @@ Example in repo:
 
 - `tests/test_console.ahk`
 
-### 6. Launch under MCP supervision (stdio debugger, preferred)
+### 6. Launch under MCP supervision (legacy stdio adapter)
 
-The MCP server can spawn the engine itself — no port 9000, no listen-first ordering:
+For this repo, run scripts with the native server's `mcp__ahk-mcp__run` and
+`mcp__ahk-mcp__test` (the `ahk-mcp` entry in `.mcp.json`). Those tools have no
+debugger. The stdio debugger launch below exists only in the legacy
+`debugger-tool/mcp-server` adapter, which `.mcp.json` does not register (see
+`debugger-tool/mcp-server/CLAUDE.md`):
 
-- MCP tool `launch_script` runs `bin\AutoHotkey64.exe /Debug=stdio script.ahk` as a child process.
+- Its `launch_script` tool runs `bin\AutoHotkey64.exe /Debug=stdio script.ahk` (the GUI
+  build by default; `AHK_EXE` overrides it) as a child process, so no port 9000
+  listener is involved.
 - DBGp frames travel over the child's stdin/stdout; script `Print()`/stdout output is
   redirected into DBGp `<stream>` packets (`stdout -c 2`) and read via `get_script_output`.
 - The script starts paused before auto-execute; `debug_run` begins execution.
 - An exception breakpoint is set by default, so uncaught errors break for inspection
-  (stack, variables, eval) instead of killing the process.
+  (stack and variables) instead of killing the process. The engine has no DBGp `eval`
+  command (it answers error 4), so the adapter's `evaluate` tool fails; read values with
+  `variables_get` or `property_get`.
 
 ### 7. Run generated code from stdin (no temp file)
 
-The engine accepts `*` as the script name and reads source from stdin:
+The engine accepts `*` as the script name and reads source from stdin. Use the console
+build, which the shell waits for:
 
 ```powershell
-echo 'Print("hi")' | bin\AutoHotkey64.exe /ErrorStdOut *
+'Print("hi")' | & .\bin\AutoHotkey64Console.exe *
+'Print("hi")' | & .\bin\AutoHotkey64Console.exe check *
+```
+
+```bash
+# Git Bash: quote * so the shell does not expand it to file names
+echo 'Print("hi")' | ./bin/AutoHotkey64Console.exe '*'
+echo 'Print("hi")' | ./bin/AutoHotkey64Console.exe check '*'
 ```
 
 Useful for validating or running harness-generated snippets without touching disk.
-Combine with `check` for syntax-only validation of a snippet.
+`check` validates a snippet without running it; its diagnostics name the file `*`.
+`/ErrorStdOut` is not needed on the console build (in Git Bash, write `//ErrorStdOut`).
 
-### 8. Interrupt a running script: break → eval → run
+### 8. Interrupt a running script: break → inspect → run
 
 DBGp advertises `supports_async=1`, so a busy script can be interrupted at any time:
 
-1. Send `break` (MCP: `debug_command` with `break`) — script pauses wherever it is.
-2. Inspect or mutate: `evaluate`, `variables_get`, `property_set`.
+1. Send `break` (legacy adapter: `debug_command` with `break`) — script pauses wherever it is.
+2. Inspect or mutate: `property_get`, `context_get` (adapter: `variables_get`), `property_set`.
+   There is no DBGp `eval`.
 3. Send `run` to resume.
 
 This is the supported "REPL into a running process" pattern; it works even when the
@@ -114,7 +139,7 @@ on the same model via `/Diag=json` on stderr.
 
 ### Console/Error path
 
-1. CLI flag parsed (`/ErrorStdOut`) in `source/AutoHotkey.cpp`.
+1. CLI flag parsed (`/ErrorStdOut`) in `source/AutoHotkey.cpp`; the console entrypoint enables it before parsing, so `AutoHotkey64Console.exe` needs no flag.
 2. Script errors route through `Script::ShowError(...)` in `source/error.cpp`.
 3. If `mErrorStdOut` is enabled, formatted output is written to `"**"` (stderr).
 4. Process exits with non-zero code for failures.
@@ -136,9 +161,9 @@ on the same model via `/Diag=json` on stderr.
 
 `source/ahkversion.h` defines:
 
-- `RAW_AHK_VERSION "2.1-alpha.29+Console"`
+- `RAW_AHK_VERSION "2.1-alpha.36+Console"`
 
-The `+Console` metadata signals this fork includes console-oriented behavior.
+The `+Console` metadata signals this fork includes console-oriented behavior. `--version` prints this string plus the build's source revision (CMake's `AHK_BUILD_REVISION`, with `-dirty` for uncommitted changes), compiler and architecture.
 
 ## 2) `/ErrorStdOut` behavior in this fork
 
@@ -147,6 +172,7 @@ The `+Console` metadata signals this fork includes console-oriented behavior.
 - `source/AutoHotkey.cpp`
   - Parses `/ErrorStdOut`, optional `=encoding`, and `:color`
   - Calls `Script::SetErrorStdOut(...)`
+  - Under `AHK_CONSOLE_ENTRYPOINT`, calls `g_script.SetErrorStdOut(nullptr)` at startup, so the console engine reports errors on stderr by default
 
 - `source/error.cpp`
   - `Script::SetErrorStdOut(...)` stores encoding mode and optional ANSI color handling.
@@ -243,7 +269,7 @@ This is used for higher quality error context and is a key capability for AI-ass
 
 ### `debugger-tool/mcp-server`
 
-- Bridges AI tools to AHK DBGp over stdio MCP
+- Bridges AI tools to AHK DBGp over stdio MCP (a legacy TypeScript adapter; the engine's own MCP server is `AutoHotkey64Console.exe mcp`, `source/mcp_server.cpp`, which has no DBGp tool)
 - Primary loop: debugger controls, breakpoints, stack/vars, evaluate
 
 ### `debugger-tool/ahk-error-agent`
@@ -255,38 +281,54 @@ This is used for higher quality error context and is a key capability for AI-ass
 
 ### VS Code tasks
 
-Workspace tasks are defined in `.vscode/tasks.json`, including:
+Workspace tasks are defined in `.vscode/tasks.json` and use the fork's console
+engine, `bin\AutoHotkey64Console.exe` (build it first; the `bin\*.exe` engines
+are gitignored):
 
-- Run with debug interceptor
-- Run normally
-- Start global debug server
+- `Run AHK (fork, color)`, `Check AHK (fork)` and `Test AHK (fork)` for the active file
+- `QA suite (fork)` (`qa/run.ahk`, the default test task) and `Console gate (choose engine)` (`tests/run_console_gate.py`)
+- CMake MSVC build tasks (`out/msvc/x64`, the default build task; `out/msvc/x64_debug`; `out/msvc/Win32`), `build.bat` (mingw, overwrites `bin\`), and the legacy msbuild `.sln` tasks (GUI only)
 
-Those tasks reference `AutoDebug.ahk` and `GlobalDebugServer.ahk`; ensure those scripts exist in your local workspace if you use those tasks.
+The repository ships no keybindings; VS Code reads shortcuts only from the
+user's own `keybindings.json`. See [VSCODE_SETUP.md](VSCODE_SETUP.md) for the
+full task list, the launch configurations, the recommended extensions
+(`.vscode/extensions.json`) and an optional user keybinding example.
 
 ## Common Commands
 
 ```powershell
-# Build
-msbuild AutoHotkeyx.sln /p:Configuration=Release /p:Platform=x64
+# Build (x64 developer prompt; see BUILD.md for prerequisites, Win32 and mingw-w64)
+cmake -S . -B build_msvc_x64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DAHK_OUTPUT_DIR=out/msvc/x64
+cmake --build build_msvc_x64 --target AutoHotkey64Console AutoHotkey64 --parallel 6
 
-# Normal run
-bin\AutoHotkey64.exe script.ahk
+# Normal run (errors on stderr)
+bin\AutoHotkey64Console.exe script.ahk
+
+# Syntax check: exit 0, or 13 for a syntax error or a missing script file
+bin\AutoHotkey64Console.exe check /Diag=json script.ahk
+# Single-script test: exit 0 on pass, 10 for an uncaught error, 12 for a parse
+# error, 14 for ExitApp(14), a persistent script or an execution failure
+# (--capabilities lists the codes under exitCodes)
+bin\AutoHotkey64Console.exe test script.ahk
 
 # Console/headless error mode
-bin\AutoHotkey64.exe /ErrorStdOut script.ahk
+bin\AutoHotkey64Console.exe /Headless /Diag=json script.ahk
 
 # Debug mode (default localhost:9000)
-bin\AutoHotkey64.exe /Debug script.ahk
+bin\AutoHotkey64Console.exe /Debug script.ahk
 
 # Debug mode with explicit endpoint
-bin\AutoHotkey64.exe /Debug=127.0.0.1:9000 script.ahk
+bin\AutoHotkey64Console.exe /Debug=127.0.0.1:9000 script.ahk
 ```
+
+From Git Bash, write `--headless`, `--diag=json`, `//Debug` and `//Debug=127.0.0.1:9000` instead of the `/` forms; Git Bash rewrites an argument that starts with a single `/` into a path.
 
 ## Known Caveats
 
 - Some docs under `debugger-tool/` describe stock AHK behavior where `/ErrorStdOut` only catches load-time errors. This fork changes runtime behavior in `source/error.cpp`.
 - DBGp stream packets (`<stream>`) are separate from normal `<response>` packets; tools need explicit handling if they want live stdout/stderr over debugger transport.
-- `/Debug` requires the debugger server to be listening first, otherwise connect will fail.
+- `/Debug` requires the debugger server to be listening first, otherwise connect will fail. The script then runs without the debugger and prints `Debugger error: Could not connect to localhost:PORT; continuing without the debugger.` on stderr (a lost connection prints `Connection to localhost:PORT lost; ...`; under `/Diag=json` either is one warning record with `what` "Debugger"). Engines before `f14d7427` showed a modal prompt instead, even with `/Headless`.
+- `/Headless` covers the engine's own prompts only; a script that calls `MsgBox`, `InputBox` or `Gui` still blocks on a real window.
 
 ## Quick Mental Model
 

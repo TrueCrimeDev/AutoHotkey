@@ -1,19 +1,103 @@
 #!/usr/bin/env bash
-# ahkmcp — run the AHK MCP CLI tools from WSL/bash.
+# ahkmcp - run the AHK MCP CLI tools (cli.ahk) from Git Bash, MSYS2, Cygwin or WSL.
 # Paths are relative to this script, so the repo can live anywhere.
-# Usage:  ahkmcp <tool> [args...]   e.g.  ahkmcp ast_outline /mnt/c/proj/x.ahk
+# Usage:  ahkmcp <tool> [args...]   e.g.  ahkmcp ast_outline /c/proj/x.ahk
+#
+# Engine: $AHK_CUSTOM_EXE when set (only that), else the fork's console engine
+# bin/AutoHotkey64Console.exe, else the GUI bin/AutoHotkey64.exe. The console
+# engine is preferred: the shell waits for it and receives its output. cli.ahk
+# needs this fork's engine, so an exe without the fork's "CHECK PASS" marker
+# (stock AutoHotkey) is refused with exit 126 rather than run.
+# Relative and POSIX path arguments are converted to absolute Windows paths,
+# and workspace_symbols without a root scans the directory you run this from.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exe="$here/../../bin/AutoHotkey64.exe"
-script="$(wslpath -w "$here/cli.ahk" 2>/dev/null || echo "$here/cli.ahk")"
+bin="$here/../../bin"
 
-# The engine is a Windows process, so translate bare /mnt/... path args to
-# Windows form for convenience (key=value args are passed through untouched).
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# Windows form of a path for the engine: cygpath (Git Bash, MSYS2, Cygwin),
+# else wslpath (WSL), else unchanged.
+to_win() {
+  if have cygpath; then cygpath -w "$1"
+  elif have wslpath; then wslpath -w "$1" 2>/dev/null || printf '%s\n' "$1"
+  else printf '%s\n' "$1"; fi
+}
+
+# POSIX form, so bash can exec an AHK_CUSTOM_EXE given as C:\... or C:/...
+to_unix() {
+  if have cygpath; then cygpath -u "$1"
+  elif have wslpath; then wslpath -u "$1" 2>/dev/null || printf '%s\n' "$1"
+  else printf '%s\n' "$1"; fi
+}
+
+if [[ -n ${AHK_CUSTOM_EXE:-} ]]; then
+  exe=$AHK_CUSTOM_EXE
+  if [[ $exe =~ ^[A-Za-z]:[\\/] ]]; then exe=$(to_unix "$exe"); fi
+elif [[ -f $bin/AutoHotkey64Console.exe ]]; then
+  exe=$bin/AutoHotkey64Console.exe
+else
+  exe=$bin/AutoHotkey64.exe
+fi
+
+if [[ ! -f $exe ]]; then
+  echo "ahkmcp: engine not found: $exe" >&2
+  echo "ahkmcp: build it per BUILD.md, copy a release console engine into bin/, or set AHK_CUSTOM_EXE" >&2
+  exit 127
+fi
+if ! LC_ALL=C grep -qa 'C.H.E.C.K. .P.A.S.S' "$exe"; then
+  echo "ahkmcp: not this fork's engine (no CHECK PASS marker): $exe" >&2
+  exit 126
+fi
+
+script=$(to_win "$here/cli.ahk")
+
+# An absolute Windows path for the engine. It is a Windows process, and it
+# starts the script with its working directory set to cli.ahk's folder, so a
+# relative path is resolved against this shell's directory first.
+win_path() {
+  local p=$1
+  case $p in
+    [A-Za-z]:[\\/]* | \\\\*) printf '%s\n' "$p"; return ;;   # already Windows
+    /*) ;;
+    *) p=$PWD/$p ;;
+  esac
+  to_win "$p"
+}
+
+# cli.ahk takes <tool> [positional...] [key=value...] [--raw]. The tools that
+# take a path take it as their first positional argument (file or root) or as
+# file=/root=, so convert exactly those (/c/..., /mnt/c/..., /tmp/..., x.ahk).
+case ${1:-} in
+  ast_outline | source_outline | get_source_context | workspace_symbols) pathslot=1 ;;
+  *) pathslot=0 ;;
+esac
 args=()
+first=1
 for a in "$@"; do
-  if [[ "$a" == /mnt/* ]]; then a="$(wslpath -w "$a")"; fi
+  if (( first )); then
+    first=0
+  elif [[ $a == --raw ]]; then
+    :
+  elif [[ $a =~ ^(file|root)=(.+)$ ]]; then
+    a="${BASH_REMATCH[1]}=$(win_path "${BASH_REMATCH[2]}")"
+  elif [[ $a != *=* ]] && (( pathslot )); then
+    pathslot=0
+    a=$(win_path "$a")
+  fi
   args+=("$a")
 done
 
-exec "$exe" "$script" "${args[@]}"
+# workspace_symbols without a root would scan cli.ahk's folder (the engine's
+# working directory), so insert root=<this shell's directory> right after the
+# tool name. cli.ahk applies arguments in order, so a root the caller gives,
+# as the first positional argument or as root=, still wins.
+if [[ ${1:-} == workspace_symbols ]]; then
+  args=("${args[0]}" "root=$(to_win "$PWD")" "${args[@]:1}")
+fi
+
+# Arguments are already in Windows form, so stop MSYS from rewriting them
+# again. /Headless keeps a GUI-engine fallback from showing error dialogs.
+export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
+exec "$exe" /Headless "$script" ${args[@]+"${args[@]}"}

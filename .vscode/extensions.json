@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "thqby.vscode-autohotkey2-lsp",
+        "zero-plusplus.vscode-autohotkey-debug",
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools"
+    ]
+}

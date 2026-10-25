@@ -7,6 +7,13 @@ as hotkey registration, so nothing is loaded into a long-lived engine).
 Failures are printed as `file:line:col: message`; under GitHub Actions they
 are also emitted as `::error` annotations. Exit status is the number of
 failing files, capped at 1 for shells.
+
+Skipped: dot-directories (.git, .claude, .history, .kilo, .vscode, ...), any
+directory holding its own `.git` entry (a nested worktree or clone), the
+SKIP_DIRS below, and everything in tests/ except the single-process suite.
+A fresh checkout (CI) has no script in a dot-directory except the hooks'
+fixture .claude/hooks/test-hooks-gui.ahk, which was always skipped, so these
+rules only drop local agent worktrees and editor history.
 """
 
 import json
@@ -18,24 +25,48 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Directories that hold scratch, history, build output, or scripts that are
-# deliberately invalid (crash-log and parse-error fixtures).
-SKIP_DIRS = {".git", ".history", ".claude", "node_modules", "temp", "out", "drafts", "logs",
+# Directories that hold scratch, build output, or scripts that are
+# deliberately invalid (crash-log and parse-error fixtures). Dot-directories
+# are skipped by skipped_dir() below.
+SKIP_DIRS = {"node_modules", "temp", "out", "drafts", "logs",
              "bin", "bin_debug", "bin_dev", "bin_harness", "bin_review", "tmp", "fixtures"}
 SKIP_PREFIXES = ("build",)
 # tests/ holds mostly hand-run fixtures; only the single-process suite is checked.
 CHECKED_TEST_FILES = ("run.ahk", "Test.ahk")
 
 
+def skipped_dir(directory):
+    """True for a directory under ROOT whose scripts this checkout does not own."""
+    name = directory.name
+    if name.startswith(".") or name in SKIP_DIRS or name.startswith(SKIP_PREFIXES):
+        return True
+    # A worktree has a .git file and a nested clone a .git directory; either
+    # way the directory is another checkout (for example a stale agent worktree).
+    return os.path.lexists(directory / ".git")
+
+
 def wanted(path):
     rel = path.relative_to(ROOT)
     parts = rel.parts
+    directory = ROOT
     for part in parts[:-1]:
-        if part in SKIP_DIRS or part.startswith(SKIP_PREFIXES):
+        directory = directory / part
+        if skipped_dir(directory):
             return False
     if parts[0] == "tests":
         return len(parts) == 2 and (parts[1] in CHECKED_TEST_FILES or parts[1].endswith(".test.ahk"))
     return True
+
+
+def collect(roots):
+    """Every wanted .ahk file under roots, without descending into skipped directories."""
+    found = set()
+    for root in roots:
+        for dirpath, dirnames, filenames in os.walk(root):
+            here = Path(dirpath)
+            dirnames[:] = [d for d in dirnames if not skipped_dir(here / d)]
+            found.update(here / f for f in filenames if f.lower().endswith(".ahk"))
+    return sorted(p for p in found if wanted(p))
 
 
 def check(engine, path):
@@ -71,7 +102,7 @@ def main():
         print(f"Engine does not exist: {engine}", file=sys.stderr)
         return 2
     roots = [Path(p).resolve() for p in sys.argv[2:]] or [ROOT]
-    files = sorted({p for root in roots for p in root.rglob("*.ahk") if wanted(p)})
+    files = collect(roots)
     if not files:
         print("check_all: no .ahk files found", file=sys.stderr)
         return 2

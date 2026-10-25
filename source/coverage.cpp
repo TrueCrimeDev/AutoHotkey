@@ -83,19 +83,110 @@ namespace
 		WideCharToMultiByte(CP_UTF8, 0, aText, len, &aOut[start], n, nullptr, nullptr);
 	}
 
-	// Open-write-flush-close, like the crash log, so the bytes reach the disk
-	// even if the process dies immediately afterwards.
-	void WriteWholeFile(LPCTSTR aPath, const std::string &aBytes)
+	void AppendJsonString(std::wstring &aOut, LPCTSTR aText)
 	{
+		static const wchar_t hex[] = L"0123456789ABCDEF";
+		aOut += L'"';
+		for (; *aText; ++aText)
+		{
+			if (*aText == '"' || *aText == '\\')
+				aOut += L'\\', aOut += *aText;
+			else if ((UINT)*aText < 0x20)
+				aOut += L"\\u00", aOut += hex[(*aText >> 4) & 0xF], aOut += hex[*aText & 0xF];
+			else
+				aOut += *aText;
+		}
+		aOut += L'"';
+	}
+
+	// Open-write-flush-close, like the crash log, so the bytes reach the disk
+	// even if the process dies immediately afterwards.  A missing directory is
+	// created first, so /Coverage=out\cov.lcov needs no separate mkdir step.
+	// Returns NO_ERROR or the Win32 error which stopped the write; aInDir is
+	// set when that error came from creating the directory.
+	DWORD WriteWholeFile(LPCTSTR aPath, const std::string &aBytes, bool &aInDir)
+	{
+		aInDir = false;
 		HANDLE h = CreateFile(aPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
 			CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+		DWORD error = h == INVALID_HANDLE_VALUE ? GetLastError() : NO_ERROR;
+		if (error == ERROR_PATH_NOT_FOUND)
+		{
+			// FileCreateDir is DirCreate's helper: it creates every missing level
+			// and normalizes either separator and relative components.
+			std::wstring dir = aPath;
+			size_t sep = dir.find_last_of(L"\\/");
+			if (sep != std::wstring::npos && sep > 0)
+			{
+				dir.resize(sep);
+				if (!FileCreateDir(dir.c_str()))
+					error = GetLastError(), aInDir = true;
+				else
+				{
+					h = CreateFile(aPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+						CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+					error = h == INVALID_HANDLE_VALUE ? GetLastError() : NO_ERROR;
+				}
+			}
+		}
 		if (h == INVALID_HANDLE_VALUE)
-			return;
+			return error;
 		DWORD written = 0;
-		if (!aBytes.empty())
-			WriteFile(h, aBytes.data(), (DWORD)aBytes.size(), &written, nullptr);
+		if (!aBytes.empty() && !WriteFile(h, aBytes.data(), (DWORD)aBytes.size(), &written, nullptr))
+			error = GetLastError();
 		FlushFileBuffers(h);
 		CloseHandle(h);
+		return error;
+	}
+
+	// One stderr line (a JSON diagnostic under /Diag=json) naming the report and
+	// the Win32 error, so a run which loses its coverage says so.  The exit code
+	// is left alone: coverage only observes the run, and every caller flushes
+	// after the script's own exit code has been decided.
+	void ReportWriteFailure(LPCTSTR aPath, DWORD aError, bool aInDir, bool aBestEffort)
+	{
+		TCHAR reason[256] = _T("");
+		GetWin32ErrorText(reason, _countof(reason), aError);
+		size_t len = _tcslen(reason);
+		while (len && (reason[len - 1] == '\r' || reason[len - 1] == '\n' || reason[len - 1] == ' '))
+			reason[--len] = '\0'; // FormatMessage ends the text with CRLF.
+		for (LPTSTR cp = reason; *cp; ++cp)
+			if (*cp == '\r' || *cp == '\n')
+				*cp = ' '; // Keep the diagnostic on one line.
+		std::wstring message = L"Coverage report \"";
+		message += aPath;
+		message += aInDir ? L"\" not written: could not create its directory (Win32 error " : L"\" not written (Win32 error ";
+		message += std::to_wstring(aError);
+		if (*reason)
+			message += L": ", message += reason;
+		message += L')';
+		std::wstring text;
+		if (g_script.mDiagJson)
+		{
+			text = L"{\"kind\":\"diagnostic\",\"format\":\"json\",\"schema\":2,\"severity\":\"warning\","
+				L"\"type\":\"OSError\",\"code\":0,\"message\":";
+			AppendJsonString(text, message.c_str());
+			text += L",\"extra\":";
+			AppendJsonString(text, aPath);
+			text += L",\"what\":\"\",\"file\":\"\",\"line\":0,\"column\":0,\"source\":\"\",\"stack\":\"\"}";
+		}
+		else
+			text = message;
+		text += L'\n';
+		if (aBestEffort)
+		{
+			// Fault and console-signal handlers run on a faulting or console-control
+			// thread, where TextFile and the debugger's stream hooks are not safe to
+			// enter, so write UTF-8 straight to the handle.
+			std::string bytes;
+			AppendUtf8(bytes, text.c_str());
+			HANDLE err = GetStdHandle(STD_ERROR_HANDLE);
+			DWORD written;
+			if (err && err != INVALID_HANDLE_VALUE)
+				WriteFile(err, bytes.data(), (DWORD)bytes.size(), &written, nullptr);
+		}
+		else
+			g_script.PrintErrorStdOut(text.c_str(), (int)text.size(), _T("**")); // Honors /ErrorStdOut and /StdErrFile.
 	}
 }
 
@@ -181,5 +272,7 @@ void Coverage::Flush(bool aBestEffort)
 			(UINT)lines.size(), hit_lines);
 		out += num;
 	}
-	WriteWholeFile(s_path, out);
+	bool in_dir;
+	if (DWORD error = WriteWholeFile(s_path, out, in_dir))
+		ReportWriteFailure(s_path, error, in_dir, aBestEffort);
 }

@@ -11,12 +11,26 @@ QaTimeoutMs() {
     return Integer(value)
 }
 
+; The engine sets the working directory to the script's directory before the
+; auto-execute section runs, so a relative path from the environment would land
+; under qa/. Resolve it against the directory the engine was started from, as
+; /Coverage= does for its own argument. Absolute and rooted paths pass through.
+QaFromInitialDir(path) {
+    path := StrReplace(path, "/", "\")
+    if path = "" || RegExMatch(path, "^(?:[A-Za-z]:|\\)")
+        return path
+    return A_InitialWorkingDir "\" path
+}
+
 ; When AHK_QA_COVERAGE_DIR is set, every child writes an LCOV report there
 ; (one file per launch); merge them with tools/lcov_summary.py.
 CoverageFlag(script, seq) {
-    dir := EnvGet("AHK_QA_COVERAGE_DIR")
+    dir := QaFromInitialDir(EnvGet("AHK_QA_COVERAGE_DIR"))
     if dir = ""
         return ""
+    ; Children (qa tests that launch snippets of their own) inherit the
+    ; environment and start in qa/, so hand them the resolved path.
+    EnvSet("AHK_QA_COVERAGE_DIR", dir)
     DirCreate(dir)
     SplitPath(script, , , , &base)
     return ' /Coverage="' dir '\' base '_' ProcessExist() '_' seq '.lcov"'
