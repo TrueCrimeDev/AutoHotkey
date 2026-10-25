@@ -446,8 +446,9 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   `m1/upstream-alpha37`, `docs/alpha/v2.1-alpha.37.md`; alpha.34/35/36 notes
   beside it). Always verify the actual executable's `--version` and hash;
   historical files in `bin/` or `bin_harness/` may be stale. Since 2026-10-25
-  `bin/` holds the local MSVC x64 build of `6460921b7672`
-  (`2.1-alpha.37+Console`, the alpha.37 merge commit); `bin/*.165d7384.bak`
+  `bin/` holds the local MSVC x64 build of `a911f73d`
+  (`2.1-alpha.37+Console`, the alpha.37 merge plus the fork's fixes to five
+  alpha.37 regressions, below); `bin/*.165d7384.bak`
   are the alpha.36 engines (`165d73849eb0`, the alpha.36 merge plus the
   struct-view fix) installed 2026-10-22, `bin/*.a41db9a1.bak` the alpha.36
   engines without that fix, `bin/*.56f57edb.bak`
@@ -465,8 +466,16 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   timeout; WORKLOG Session 18). The same upstream change also left every
   struct view able to own properties; fixed here in `f24c23d1` (section 7 of
   the same test, WORKLOG Session 19). Alpha.37 (WORKLOG Session 20) merged
-  without conflicts; `qa/tests/test_alpha37.ahk` (26 asserts) pins its
+  without conflicts; `qa/tests/test_alpha37.ahk` (32 asserts) pins its
   release-note items, and CI run 40216066837 on `6460921b` passed every job.
+  Alpha.37 itself regressed five things (Copilot review of PR #33, each
+  reproduced): `NumPut` accepted an invalid type in a later pair, `a.b()`
+  replaced a throwing getter's exception with `UnsetError`, `CallbackCreate`
+  rejected a struct subclass with only inherited fields, and on Win32
+  `"Int64*", unset` took two stack slots and an array callback parameter was
+  counted at its struct size; fixed here in `a911f73d`, pinned by section 9
+  of the same test, report in `docs/upstream/alpha37-regressions.md` (not
+  yet sent upstream).
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.

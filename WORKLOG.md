@@ -853,10 +853,33 @@ unlogged loop session between 3 and now.)
   `DllCall(..., Int32.Ptr, Any.Prototype)` still exits 11 on alpha.35, .36
   and .37 (`IsCArrayOf` null base); the x86 callback slot overflow stays
   unverified. The two open ones are CLAUDE.md open items now.
+- **Five alpha.37 regressions found and fixed** (`a911f73d`): Copilot's
+  review of PR #33 flagged them in the upstream commits; each was probed on
+  the merge build (`6460921b` x64, CI `5d296fb2` x86) and alpha.36 first.
+  `NumPut("Int", 1, "Bogus", 2, buf)` wrote 2 with the first pair's size
+  (`ConvertNumGetType` no longer reset `num_size`); `C().b()` with a getter
+  that throws gave `UnsetError` instead of the getter's `ValueError`
+  (`CallProperty` checked the token before `result`); `CallbackCreate(f, ,
+  [Derived, "Void"])` for a subclass with only inherited fields threw
+  "Parameter #3 ... invalid" until an instance existed
+  (`GetStructCallbackArgInfo` wanted `StructInfoInitialized`; now
+  `GetStructInfo(true)`); on x86 `DllCall("kernel32\lstrlenW", "Int64*",
+  unset, "Int")` threw "Parameter list too large." and `"Double*", unset`
+  before other arguments returned 2147483647 instead of 0 (the unset branch
+  kept the 64-bit type; now `DLLARGTYPE_INTPTR` with the flags union
+  zeroed); the Win32 callback stub and `param_slot_count` counted an array
+  parameter at its struct size (from source, excluded for `MdType::Array`).
+  A Win32 engine was configured and built locally (`build_msvc_win32`,
+  `out/msvc/Win32`) to confirm the x86 cases before and after; a struct
+  passed by value to a Win32 callback still arrives intact.
+  `test_alpha37.ahk` section 9 (6 asserts, 32 in the file) passes on the
+  fixed x64 and Win32 builds and fails 3 on `6460921b`;
+  `docs/upstream/alpha37-regressions.md` is the report.
 - Results on the MSVC x64 build `6460921b7672`: console gate 17/17 suites
   (qa 954/954 across 18 files), `check_all` 106/106; CI run 40216066837
   (`workflow_dispatch` on the branch) passed every build, test and
-  debugger-clients job. Installed into `bin/` (the console exe was held open
+  debugger-clients job. On the fixed build: gate 17/17 (qa 980/980 across
+  19 files). Installed into `bin/` (the console exe was held open
   by the project MCP server, so it was renamed aside rather than overwritten)
   and `Documents\Design\Coding\AutoHotkey\bin`, previous engines kept as
   `*.165d7384.bak`; capabilities JSON regenerated.
