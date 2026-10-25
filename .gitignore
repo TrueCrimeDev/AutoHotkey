@@ -64,7 +64,7 @@ __pycache__/
 # Coverage and test reports (CI writes these; see tools/lcov_summary.py)
 coverage/
 *.lcov
-junit.xml
+junit*.xml
 diag.jsonl
 
 # Personal Claude Code settings and memory (never commit)

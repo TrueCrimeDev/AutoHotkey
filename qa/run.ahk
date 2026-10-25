@@ -25,7 +25,9 @@
 ; unless its output is piped, so $LASTEXITCODE would not be the suite's result.
 ; AHK_QA_TIMEOUT_MS overrides the 30000 ms per-child timeout.
 ; AHK_QA_JUNIT=<path> also writes a JUnit XML report: one testsuite per test
-; file, one testcase per assertion (qa/README.md describes the shape).
+; file, one testcase per assertion (qa/README.md describes the shape). A
+; relative path (as for AHK_QA_COVERAGE_DIR) resolves against the directory
+; the engine was started from, not qa/.
 
 engine  := A_AhkPath
 testDir := A_ScriptDir "\tests"
@@ -47,7 +49,7 @@ totalFailed := 0
 crashes     := 0
 idx         := 0
 suites      := []
-junitPath   := EnvGet("AHK_QA_JUNIT")
+junitPath   := QaFromInitialDir(EnvGet("AHK_QA_JUNIT"))
 suiteStarted := A_TickCount
 
 Print("qa: running {} test file(s) with {}", files.Length, engine)

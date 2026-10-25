@@ -228,7 +228,7 @@ jobs:
     - name: Run tests/run.ahk with coverage
       shell: pwsh
       env:
-        AHK_TEST_JUNIT: ${{ github.workspace }}\junit.xml
+        AHK_TEST_JUNIT: junit.xml
       run: |
         New-Item -ItemType Directory -Force coverage | Out-Null
         engine\AutoHotkey64Console.exe /Headless /Diag=json /Coverage=coverage\tests.lcov test tests\run.ahk 2>diag.jsonl
@@ -251,7 +251,7 @@ jobs:
       shell: pwsh
       env:
         AHK_QA_COVERAGE_DIR: ${{ github.workspace }}\coverage\qa
-        AHK_QA_JUNIT: ${{ github.workspace }}\junit-qa.xml
+        AHK_QA_JUNIT: junit-qa.xml
       run: |
         engine\AutoHotkey64Console.exe /Headless /ErrorStdOut qa\run.ahk
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -262,6 +262,13 @@ jobs:
         python tools/lcov_summary.py "coverage/**/*.lcov"
         --include "^(qa/(Assert|Harness)\.ahk|tests/Test\.ahk)$"
         --out coverage/merged.lcov --badge coverage/badge.json
+
+    - name: Check that both JUnit reports reached the workspace root
+      if: always()
+      shell: pwsh
+      run: |
+        $missing = @('junit.xml', 'junit-qa.xml') | Where-Object { -not (Test-Path $_) }
+        if ($missing) { Write-Host "::error::JUnit report(s) missing from the workspace root: $($missing -join ', ')"; exit 1 }
 
     - name: Upload coverage and JUnit reports
       if: always()
@@ -274,7 +281,7 @@ jobs:
           junit.xml
           junit-qa.xml
           diag.jsonl
-        if-no-files-found: warn
+        if-no-files-found: ignore
 
   # The README badge reads coverage.json from the `badges` branch through
   # img.shields.io/endpoint. No third-party service, no extra secrets: the

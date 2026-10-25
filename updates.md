@@ -500,7 +500,9 @@ Both directives must appear at top-of-script scope, alongside `#Requires`, `#Sin
 The aggregate gate runs the automated suites against one engine: the `qa/`
 runner, `tests/test_eval*.ahk`, the Python checks, and `tests/run.ahk`.
 
-Both script frameworks write JUnit XML on request: `AHK_TEST_JUNIT=<path>` for
+Both script frameworks write JUnit XML on request, resolving a relative path
+against `A_InitialWorkingDir` (the engine makes the script's directory current
+first): `AHK_TEST_JUNIT=<path>` for
 a `tests/Test.ahk` suite (one `testsuite`, one `testcase` per case) and
 `AHK_QA_JUNIT=<path>` for `qa/run.ahk` (a `testsuites` root with one
 `testsuite` per test file and one `testcase` per assertion, written to a temp

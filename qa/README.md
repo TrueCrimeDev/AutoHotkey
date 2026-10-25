@@ -67,7 +67,11 @@ cannot survive a test that fails to load.
 
 Set `AHK_QA_JUNIT=<path>` and the runner also writes a JUnit XML report there,
 in the shape `tests/Test.ahk` writes under `AHK_TEST_JUNIT`, so one consumer (a
-CI reporter, the VS Code Test Explorer) reads both:
+CI reporter, the VS Code Test Explorer) reads both. A relative path, here and
+for `AHK_QA_COVERAGE_DIR` and `AHK_TEST_JUNIT`, resolves against the directory
+the engine was started from (`A_InitialWorkingDir`): the engine makes the
+script's own directory current before the runner starts, so without that
+`junit-qa.xml` would land in `qa/`.
 
 ```xml
 <testsuites name="qa" tests="862" failures="1" errors="0" skipped="0" time="5.625">

@@ -42,15 +42,18 @@ class QaRunnerTests(unittest.TestCase):
     def fixture(self, name, source):
         (self.qa / "tests" / f"test_{name}.ahk").write_text(source, encoding="utf-8")
 
-    def run_suite(self, timeout_ms=2000, junit=None):
+    def run_suite(self, timeout_ms=2000, junit=None, coverage_dir=None, cwd=None):
         env = dict(os.environ, AHK_QA_TIMEOUT_MS=str(timeout_ms))
         env.pop("AHK_QA_JUNIT", None)
+        env.pop("AHK_QA_COVERAGE_DIR", None)
         if junit is not None:
             env["AHK_QA_JUNIT"] = str(junit)
+        if coverage_dir is not None:
+            env["AHK_QA_COVERAGE_DIR"] = str(coverage_dir)
         child = subprocess.Popen(
             [str(ENGINE), "/Headless", "/ErrorStdOut", str(self.qa / "run.ahk")],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            env=env, creationflags=subprocess.CREATE_NO_WINDOW,
+            env=env, cwd=cwd, creationflags=subprocess.CREATE_NO_WINDOW,
         )
         try:
             output, _ = child.communicate(timeout=6)
@@ -191,6 +194,21 @@ Loop
         self.assertIn("JUnit report", output)
         self.assertIn("not written", output)
         self.assertIn("[PASS] test_pass.ahk", output)
+
+    def test_relative_report_paths_resolve_against_the_initial_directory(self):
+        # The engine makes the script's directory current before run.ahk
+        # starts, so a relative AHK_QA_JUNIT or AHK_QA_COVERAGE_DIR would land
+        # in qa/ unless the runner rebases it on A_InitialWorkingDir. CI run
+        # 40201881909 uploaded an artifact without either report that way.
+        self.fixture("pass", 'Print("qa: 1 passed, 0 failed")\nExitApp(0)')
+        start = Path(self.temp.name) / "start"
+        start.mkdir()
+        code, output = self.run_suite(junit="reports/qa.xml", coverage_dir="cov", cwd=start)
+        self.assertEqual(code, 0, output)
+        self.assertTrue((start / "reports" / "qa.xml").is_file(), output)
+        self.assertFalse((self.qa / "reports").exists(), "JUnit report landed beside run.ahk")
+        self.assertEqual(len(list((start / "cov").glob("*.lcov"))), 1, output)
+        self.assertFalse((self.qa / "cov").exists(), "coverage report landed beside run.ahk")
 
     def test_junit_not_written_without_env(self):
         self.fixture("pass", 'Print("qa: 1 passed, 0 failed")\nExitApp(0)')
