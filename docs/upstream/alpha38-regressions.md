@@ -1,13 +1,14 @@
-# v2.1-alpha.38: four regressions in the open-structure changes, and one import fix already upstream
+# v2.1-alpha.38: five regressions in the open-structure and import changes, and one import fix already upstream
 
 Draft upstream report. Found 2026-11-12 by GitHub Copilot's review of the
 fork's merge PR (TrueCrimeDev/AutoHotkey #35) and reproduced on a build of
 the `v2.1-alpha.38` tag (`afde2333`), x64 and x86, before being fixed in the
-fork (`b2885254`). Each item names the alpha.37 behaviour (fork build
+fork (`b2885254`; section 1's invalid-base case and section 6 came from
+Copilot's second review and are fixed in `e474e616`). Each item names the alpha.37 behaviour (fork build
 `a911f73d`, upstream `279247ee` plus fork fixes unrelated to these paths)
 for comparison.
 
-Sections 1 to 4 are still present on `upstream/alpha` (`42ddbabc`).
+Sections 1 to 4 and 6 are still present on `upstream/alpha` (`42ddbabc`).
 Section 5 was fixed upstream after the tag by `c727bdf0`, and the fork
 cherry-picked that commit.
 
@@ -52,6 +53,12 @@ Fix (`source/script_object.cpp`, `CloseStructInfo`):
   taken from the item.
 - After closing the base, return at once if this structure was closed in the
   meantime.
+- Give an invalid structure size 0. A struct derived from an invalid one
+  (`struct Derived extends Bad { x : Int32 }`) inherits `Invalid` but would
+  otherwise keep its own fields' size (4). `GetStructArgInfo` and
+  `GetStructCallbackArgInfo` reject a layout only when its size is 0, so
+  `CallbackCreate(f, , [Derived, "Void"])` accepted it. Upstream has the
+  same gap for any invalid base.
 
 Every construction path already refuses `StructKind::Invalid`, so `S()`,
 `S.At(buf)` and `ObjCreateWithDataPtr(S, buf)` throw `TypeError` "Invalid
@@ -126,12 +133,38 @@ so a nested function inside an import-free function no longer sees a global
 import resolution in nested functions which don't use #Import."). The fork
 cherry-picked it (`9a2cf75e`); nothing to report.
 
+## 6. A wildcard re-export is looked up with the calling function's imports
+
+`41c751bc` also made `FindImportedVar` start from `g->CurrentFunc`'s imports.
+When the search recurses into another module for its wildcard exports, that
+function belongs to the caller's module, so its imports are searched in place
+of the re-exporting module's own:
+
+```autohotkey
+#Module C
+global X := "C"
+#Module D
+global X := "D"
+#Module B
+#Import Export C {*}
+#Module __Main
+f() {
+    #Import D {*}
+    #Import B {*}    ; later, so it wins
+    return X         ; alpha.37: "C"   alpha.38: "D"
+}
+```
+
+Fix (`source/script_module.cpp`): use the calling function's imports only
+when `scope->mModule == this`; otherwise start from the module's global
+imports, as alpha.37's `IsInScope` test effectively did.
+
 ## Verification
 
-Fork build `b2885254`, MSVC x64 and Win32: `qa/tests/test_alpha38.ahk`
-section 9 (11 asserts) passes on both, and the full qa suite is 1032/1032 on
-each. On the unfixed merge build (`c47c4c8b`, x64), 9 of the 11 fail. The two
-that pass there pin what the fix must keep: a `Node { next : Node.Ptr }`
+Fork build `e474e616`, MSVC x64 and Win32: `qa/tests/test_alpha38.ahk`
+section 9 (13 asserts) passes on both, and the full qa suite is 1034/1034 on
+each. On the unfixed merge build (`c47c4c8b`, x64), 11 of the 13 fail
+(`b2885254` fails the two from the second review). The two that pass there pin what the fix must keep: a `Node { next : Node.Ptr }`
 self-reference and a plain `Class(Int32)` instance. Also unchanged:
 `test_alpha38.ahk` section 4's mutually referencing structs in both orders,
 section 6's `Class(X.Ptr)` field, and every `examples/alpha37` and

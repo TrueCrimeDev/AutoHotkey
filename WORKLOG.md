@@ -973,3 +973,14 @@ unlogged loop session between 3 and now.)
   examples exit 0. Installed into both `bin/` folders, replacing `c47c4c8b`
   (not kept as a `.bak`); `docs/upstream/alpha38-regressions.md` is the
   report.
+- CI run 43275401437 on `6d24bfd1` passed every job. Copilot's second review
+  (requested with `gh pr edit --add-reviewer @copilot`; it does not re-review
+  a push on its own) marked the five findings resolved and raised two more,
+  both reproduced and fixed in `e474e616`. A function importing `D` and then
+  `B` read `D`'s `X` where `B` re-exports `C` (alpha.37: `C`), because
+  `FindImportedVar` used the calling function's imports while searching `B`;
+  it now does so only when `scope->mModule == this`. A struct extending an
+  invalid one kept its own fields' size (4), so `CallbackCreate` accepted it;
+  an invalid structure's size is 0 now. Section 9 is 13 asserts (48 in the
+  file); gate 17/17, qa 1034/1034 on x64 and Win32, all ten examples exit 0.
+  Both `bin/` folders hold `e474e616`.
