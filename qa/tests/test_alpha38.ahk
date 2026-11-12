@@ -221,4 +221,85 @@ d := QaDerived38(4, 2)
 Assert.eq(DllCall(cb, QaDerived38, d, Int32), 42, "a struct with only inherited fields passes by value through a callback")
 CallbackFree(cb)
 
+; 9. Fork fixes to alpha.38 regressions found by Copilot on fork PR #35, each
+;    reproduced on the unfixed merge build (c47c4c8b) and compared with
+;    alpha.37 (a911f73d) first; the report is
+;    docs/upstream/alpha38-regressions.md. The import fix is upstream's own
+;    post-tag c727bdf0, cherry-picked.
+; OLD (c47c4c8b): a nested function inside an import-free function did not see
+;      a global wildcard import (41c751bc); a struct containing itself by
+;      value, directly, mutually, through an array or through its base, was
+;      accepted and corrupted the heap when constructed (exit 127/139;
+;      alpha.37 rejected it in DefineProp); {Type: ComValue(3, 0)} exited 11
+;      (alpha.37: ValueError); a Class(Int32) field dropped its class, so its
+;      __Value never ran (alpha.37 read through it); GetOwnPropDesc lost an
+;      Offset naming a field that sorts after the one being described.
+r := RunSnippet(Lines(wildcard*) Lines(
+    "#Import MB {*}",
+    "f() {",
+    "    g() {",
+    "        return Z",
+    "    }",
+    "    return g()",
+    "}",
+    "Print(f())"))
+Assert.eq(r.code " " r.out, "0 B`n", "a function nested in an import-free function sees the global wildcard import")
+cycles := Map(
+    "direct", "struct S {`n    a : Int32`n    x : S`n}",
+    "mutual", "struct S {`n    b : B`n}`nstruct B {`n    a : S`n}",
+    "array",  "struct S {`n    x : S[2]`n}",
+    "base",   "struct T {`n    s : S`n}`nstruct S extends T {`n}",
+    "dynamic", "S := Class(Struct)`nDefineProp(S.Prototype, 'a', {Type: Int32})`nDefineProp(S.Prototype, 'x', {Type: S})")
+for shape, src in cycles {
+    r := RunSnippet(Lines(src,
+        "try S()",
+        "catch Error as e",
+        "    Print(Type(e) ': ' e.Message)",
+        "try S.At(Buffer(64, 0))",
+        "catch Error as e",
+        "    Print(Type(e) ': ' e.Message)",
+        "Print('size ' ObjGetDataSize(S.Prototype))"))
+    Assert.eq(r.code " " r.out, "0 TypeError: Invalid struct.`nTypeError: Invalid struct.`nsize 0`n", "a struct that contains itself by value (" shape ") is an invalid struct")
+}
+struct QaNode38 {
+    next  : QaNode38.Ptr
+    value : Int32
+}
+n1 := QaNode38(), n2 := QaNode38()
+n2.value := 7
+n1.next := n2
+Assert.eq(n1.next.value, 7, "a struct that points to itself through a Ptr field still works")
+r := RunSnippet(Lines(
+    "S := Class(Struct)",
+    "try DefineProp(S.Prototype, 'x', {Type: ComValue(3, 0)})",
+    "catch Error as e",
+    "    Print(Type(e) ': ' e.Message)"))
+Assert.eq(r.code " " r.out, "0 ValueError: Parameter #3 invalid.`n", "DefineProp with a COM wrapper as the field type throws")
+; Child process: on c47c4c8b the field read returns unset (the class was
+; dropped for its native type, which is Void for a subclass), and
+; GetOwnPropDesc indexes sPrimitiveClass[-1].
+r := RunSnippet(Lines(
+    "N := Class(Int32)",
+    "DefineProp(N.Prototype, '__Value', {Get: (this) => 'custom ' NumGet(this.Ptr, 'Int')})",
+    "H := Class(Struct)",
+    "DefineProp(H.Prototype, 'n', {Type: N})",
+    "rec := H()",
+    "NumPut('Int', 5, rec.Ptr)",
+    "Print(rec.n ?? 'unset')",
+    "Print(Object.Prototype.GetOwnPropDesc.Call(H.Prototype, 'n').Type = N)"))
+Assert.eq(r.code " " r.out, "0 custom 5`n1`n", "a Class(Int32) field reads through the subclass __Value, and GetOwnPropDesc reports that class")
+QaNumPlain38 := Class(Int32)
+v := QaNumPlain38()
+v.__Value := 5
+Assert.eq(v.__Value " " v.Size, "5 4", "a Class(Int32) subclass instance still holds an Int32")
+QaFwd38 := Class(Struct)
+DefineProp(QaFwd38.Prototype, "m", {Type: Int32})
+DefineProp(QaFwd38.Prototype, "a", {Type: Int16, Offset: "m"})
+DefineProp(QaFwd38.Prototype, "z", {Type: Int16, Offset: "m"})
+Assert.eq(Desc38Of(QaFwd38, "a") "|" Desc38Of(QaFwd38, "z"), "m|m", "GetOwnPropDesc keeps an Offset naming a field that sorts after or before it")
+Desc38Of(cls, name) {
+    d := Object.Prototype.GetOwnPropDesc.Call(cls.Prototype, name)
+    return d.HasOwnProp("Offset") ? d.Offset : "-"
+}
+
 Assert.Summary()
