@@ -1005,3 +1005,8 @@ unlogged loop session between 3 and now.)
   always rejected. Section 9 is 17 asserts (52 in the file); gate 17/17, qa
   1038/1038 on x64 and Win32, all ten examples exit 0. Both `bin/` folders
   hold `e13b80d8`.
+- CI run 43281421940 on `54b92412` passed every job. A sixth Copilot review
+  did not run ("insufficient remaining quota"). PR #35 merged into `alpha`
+  as `ec6f5b32` (`--merge`). `examples/alpha38/` followed on
+  `docs/alpha38-examples`, rebased onto it, as `examples/alpha37/` did in
+  PR #34.
