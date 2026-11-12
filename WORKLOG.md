@@ -892,3 +892,56 @@ unlogged loop session between 3 and now.)
   missing. Stale local branches `fix/release-workflow-permissions`,
   `feat/stdio-supervisor`, `upgrade-alpha19-console` and `ci/alpha33`
   deleted; `f7712ec1` kept reachable as the local tag `ci-alpha33-engine`.
+
+### Session 21 (2026-11-12) — upstream v2.1-alpha.38 merge
+
+- Merged the `v2.1-alpha.38` tag (`afde2333`, released 2026-11-07 per the
+  upstream docs' ChangeLog; the forum thread returned 403 to a fetch) on
+  `m1/upstream-alpha38` (`c47c4c8b`), branched from `alpha` at `e34add4a`:
+  eighteen commits after `279247ee`. `upstream/alpha` is five commits past
+  the tag (`42ddbabc`) and was left out.
+- Conflicts were only in code the fork had patched. `Object::CreateStructPtr`:
+  upstream's rewrite (`Create(aBase, si, ...)`, `StructInfo::DataSuffix`)
+  writes the pointer after `object_size` and sets `CannotOwnProps` from the
+  base class, covering `a41db9a1` and `f24c23d1`; taken. `CallProperty`
+  (`1e55d515`) and `GetStructCallbackArgInfo` (`51547074`, now
+  `CloseStructInfo()`) fix two of the five alpha.37 regressions from
+  `a911f73d`; taken. `CallbackCreate`'s `param_slot_count` keeps the fork's
+  `MdType::Array` exclusion with upstream's `StructSize()`.
+- One semantic conflict surfaced at build time: `ee8080f8` changed
+  `ClassFactoryDef` and `StructInfo::create(size_t)` to `ctor(void*)`, so
+  `source/json.cpp`'s `NewJsonObject` did not compile. It now
+  placement-constructs into the memory `Object::operator new` allocated.
+- Every changelog item was probed on the alpha.37 engine (`a911f73d`) and
+  the merge build before becoming an assert: `qa/tests/test_alpha38.ahk`,
+  8 sections, 35 asserts, `A_PtrSize`-relative. The alpha.37 engine stops at
+  section 1. Findings: `ObjCreateWithDataPtr(S, buf)` exited 11 on alpha.37
+  (the Buffer was taken as the address). `ObjGetDataSize` on a Prototype
+  returned the unpadded size before any instance existed (5 for
+  `{Int32, Int8}`; 8 now). `DefineProp` accepted `Pack: 3` and new typed
+  properties after the size was taken. The module fixes need a module whose
+  body runs before the one it imports (modules run in reverse order of
+  creation); the first probes did not hit that and showed no difference.
+  `class Y extends X.Ptr` is still "Invalid base class."
+- Not pinned: `1fcc195f` (a struct whose `__New` throws, returned from a
+  callback, is reported cleanly on both engines) and the v2.0 AltTab
+  `Hotkey On/Off` fix. `CallbackCreate(f, , [S, "Int"])` fails on both
+  engines because the array form takes struct classes (`Int32`) or
+  `"Void"`; not a regression.
+- Three existing asserts changed with upstream: `test_alpha35.ahk` (an
+  invalid `DefineProp` descriptor is the generic "Parameter #2 invalid."
+  since `ad5cfae6`; `What` still names the method) and `test_alpha36.ahk`
+  (`At(0)` and `ObjCreateWithDataPtr(S, 100)` are accepted since
+  `2042a5e7`).
+- Results on the MSVC x64 build `c47c4c8bb179`: console gate 17/17 suites,
+  qa 1021/1021 across 20 files, `check_all` 113/113, `examples/alpha37/*.ahk`
+  all exit 0. A local MSVC Win32 build of the same commit
+  (`build_msvc_win32`): qa 1021/1021, including `test_alpha37.ahk` section
+  9's x86 cases. `DllCall(..., Int32.Ptr, Any.Prototype)` still exits 11 on
+  alpha.38 (`IsCArrayOf` open item).
+- Installed into `bin/` and `Documents\Design\Coding\AutoHotkey\bin`, previous
+  engines kept as `*.a911f73d.bak` (renamed aside, since the project MCP
+  server may hold the console exe); `bin/AutoHotkey64Console.capabilities.json`
+  regenerated. `docs/upstream/alpha36-createstructptr-offset.md` is marked
+  resolved upstream; `docs/upstream/alpha37-regressions.md` leaves sections
+  1, 4 and 5 to report.

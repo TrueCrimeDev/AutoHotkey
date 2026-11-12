@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A native AutoHotkey `2.1-alpha.37+Console` fork. The engine supplies shell
+A native AutoHotkey `2.1-alpha.38+Console` fork. The engine supplies shell
 commands, structured diagnostics, Eval, JSON, Inspect, ProcessPipe, source
 introspection, coverage, and an MCP server. The TypeScript debugger integrations
 under `debugger-tool/` are separate consumers of the engine's DBGp protocol.
@@ -438,17 +438,18 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
 
 ---
 
-# Current State & Open Items (updated 2026-10-25)
+# Current State & Open Items (updated 2026-11-12)
 
-- Target language version: `2.1-alpha.37+Console`, based on upstream
-  `upstream/alpha` `279247ee` (the content of `v2.1-alpha.37`, announced
-  2026-10-25 before its tag was pushed; merged 2026-10-25 on
-  `m1/upstream-alpha37`, `docs/alpha/v2.1-alpha.37.md`; alpha.34/35/36 notes
-  beside it). Always verify the actual executable's `--version` and hash;
-  historical files in `bin/` or `bin_harness/` may be stale. Since 2026-10-25
-  `bin/` holds the local MSVC x64 build of `a911f73d`
-  (`2.1-alpha.37+Console`, the alpha.37 merge plus the fork's fixes to five
-  alpha.37 regressions, below); `bin/*.165d7384.bak`
+- Target language version: `2.1-alpha.38+Console`, based on the upstream tag
+  `v2.1-alpha.38` (`afde2333`, released 2026-11-07; merged 2026-11-12 on
+  `m1/upstream-alpha38` as `c47c4c8b`, `docs/alpha/v2.1-alpha.38.md`;
+  alpha.34-37 notes beside it). `upstream/alpha` is five commits past the
+  tag (`42ddbabc`), not merged. Always verify the actual executable's
+  `--version` and hash; historical files in `bin/` or `bin_harness/` may be
+  stale. Since 2026-11-12 `bin/` holds the local MSVC x64 build of
+  `c47c4c8b` (`2.1-alpha.38+Console`); `bin/*.a911f73d.bak` are the alpha.37
+  engines (the alpha.37 merge plus the fork's fixes to five alpha.37
+  regressions, below) installed 2026-10-25, `bin/*.165d7384.bak`
   are the alpha.36 engines (`165d73849eb0`, the alpha.36 merge plus the
   struct-view fix) installed 2026-10-22, `bin/*.a41db9a1.bak` the alpha.36
   engines without that fix, `bin/*.56f57edb.bak`
@@ -460,7 +461,8 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   native class larger than `Object` (`Map`, `Array`, `Buffer`, `ProcessPipe`,
   `JSON.Object`) and corrupted the heap; fixed here in `a41db9a1`, pinned by
   `qa/tests/test_alpha36.ahk` section 3, report in
-  `docs/upstream/alpha36-createstructptr-offset.md` (not yet sent upstream).
+  `docs/upstream/alpha36-createstructptr-offset.md` (resolved upstream in
+  alpha.38, below).
   CI run 39685156323 on `83d013e8` passed every build, test and
   debugger-clients job (x64 after one rerun of a PowerShell cold-start
   timeout; WORKLOG Session 18). The same upstream change also left every
@@ -474,8 +476,17 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   rejected a struct subclass with only inherited fields, and on Win32
   `"Int64*", unset` took two stack slots and an array callback parameter was
   counted at its struct size; fixed here in `a911f73d`, pinned by section 9
-  of the same test, report in `docs/upstream/alpha37-regressions.md` (not
-  yet sent upstream).
+  of the same test, report in `docs/upstream/alpha37-regressions.md`.
+  Alpha.38 (WORKLOG Session 21) conflicted only where the fork had patched
+  upstream code. Upstream's `CreateStructPtr` rewrite covers both alpha.36
+  fixes (`a41db9a1`, `f24c23d1`), and `1e55d515`/`51547074` fix the `a.b()`
+  and `CallbackCreate` regressions, so upstream's versions were taken. The
+  `NumPut` per-pair size and the two Win32 fixes stay fork-only (report
+  sections 1, 4 and 5, not yet sent). `ee8080f8` changed native class
+  factories to `ctor(void *p)`; the fork's `JSON.Object` factory follows it.
+  `qa/tests/test_alpha38.ahk` (35 asserts) pins the changelog. Gate 17/17
+  and qa 1021/1021 on x64; qa 1021/1021 on a local Win32 build. CI has not
+  run on the merge yet.
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.
@@ -564,13 +575,14 @@ skipped, as on any non-tag run) and are marked [x] below with how they were veri
 - [ ] An `Eval` assignment inside a function adds a local to it for good (`source/console_eval.cpp:28` parses in the caller's scope): a later call's `Eval("qq")` reports a *local* unset, and `Eval("gv := 5")` leaves global `gv` unchanged. Documented in `updates.md:107`-`120`; close as intended or change it.
 - [x] FIXED 2026-10-08 (`ec684fd0`): `--coverage=` into a missing directory wrote nothing, printed nothing and exited 0. `WriteWholeFile` (`source/coverage.cpp`) now creates every missing level (`FileCreateDir`) and `ReportWriteFailure` prints one stderr line when the report still cannot be written, leaving the exit code alone. Verified: `qa/tests/test_coverage_missing_dir.ahk` 41/41; `out/a/b/probe.lcov` (relative, forward slashes) was created under `run` and `test`, also on an uncaught-error exit 10; a path under a file printed `Coverage report "<path>" not written: could not create its directory (Win32 error 183: ...)`, a directory path `... not written (Win32 error 5: Access is denied.)`, `--diag=json` one `"type":"OSError"` warning record with the path in `extra`, `/StdErrFile` mirrored it, and exit codes stayed 0 and 3 (`ExitApp(3)`).
 - [x] FIXED upstream 2026-10-18 (`65189b9c`, v2.1-alpha.36): `File`, `Func`, `BoundFunc`, `Closure`, `Enumerator` and `RegExMatchInfo` had no factory of their own, so `X()` and `(Object.Call)(X)` built a plain Object on the native prototype (same class as the `JSON()` bug). `Object::GetStructInfo` no longer lets a native class prototype inherit `Object`'s factory. Verified on `a41db9a12322` (`qa/tests/test_alpha36.ahk` section 4): all twelve calls throw `ValueError` "Invalid base."; `JSON()` still throws the fork's `TypeError`, `(Object.Call)(JSON)` "Invalid base.", and `ProcessPipe`, `SyntaxError`, `JSONError`, `(Object.Call)(Error)` and script subclasses of `Map` still construct. Side effect: `(Object.Call)(Struct)` now returns a `Struct` (it threw "Invalid base." on alpha.35).
-- [x] FIXED 2026-10-22 (`f24c23d1`): struct views accepted own properties (upstream alpha.36 regression, `7aa2e0ea`). `Object::CreateStructPtr` tested `obj->IsOfType(Object::sStructPrototype)` before `SetBase`, so `CannotOwnProps` was never set and `Pt.At(ptr).foo := 1`, `Int32.At(ptr).foo := 1`, a `Pt.Ptr` dereference and an `ObjCreateWithDataPtr` struct accepted them (alpha.35 threw `PropertyError`; `Pt()` always threw). Same on the official zip; no memory damage seen. The test now runs after `SetBase` (`source/script_object.cpp:188`-`193`). Verified: `qa/tests/test_alpha36.ahk` section 7 (five struct asserts fail on `a41db9a1`, pass after; `ObjCreateWithDataPtr` on `Map` and a script class still own properties). In the upstream report `docs/upstream/alpha36-createstructptr-offset.md` (not yet sent).
+- [x] FIXED 2026-10-22 (`f24c23d1`): struct views accepted own properties (upstream alpha.36 regression, `7aa2e0ea`). `Object::CreateStructPtr` tested `obj->IsOfType(Object::sStructPrototype)` before `SetBase`, so `CannotOwnProps` was never set and `Pt.At(ptr).foo := 1`, `Int32.At(ptr).foo := 1`, a `Pt.Ptr` dereference and an `ObjCreateWithDataPtr` struct accepted them (alpha.35 threw `PropertyError`; `Pt()` always threw). Same on the official zip; no memory damage seen. The test ran after `SetBase` from then until alpha.38, whose `CreateStructPtr` rewrite sets the flag from the base class before construction (the fork took upstream's version). Verified: `qa/tests/test_alpha36.ahk` section 7 (five struct asserts fail on `a41db9a1`, pass after, and still pass on alpha.38; `ObjCreateWithDataPtr` on `Map` and a script class still own properties). Resolved upstream; see `docs/upstream/alpha36-createstructptr-offset.md`.
 - [ ] `DllCall(..., Int32.Ptr, Any.Prototype)` (any struct pointer type with an
   object whose base is null) exits 11 "Invalid memory read/write.":
   `Object::IsCArrayOf` (`source/script_object.cpp`) dereferences
   `aCandidate->Base()` without a null check, reached from the alpha.34
   array-decay branch in `source/lib/DllCall.cpp`. Raised by Copilot on PR
-  #32; reproduced on alpha.35, alpha.36 and alpha.37 (2026-10-25). Upstream
+  #32; reproduced on alpha.35, alpha.36, alpha.37 (2026-10-25) and alpha.38
+  (2026-11-12). Upstream
   code; fix is a null guard before `IsCArrayOf`, then report upstream.
 - [ ] x86 `stdcall` callbacks: `CallbackCreate` (`source/lib/CCallback.cpp`)
   guards the parameter count at 31 before expanding 64-bit parameters to two
