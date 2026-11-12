@@ -210,6 +210,7 @@ enum CommandIDs {CONTROL_ID_FIRST = IDCANCEL + 1
 #define ERR_INVALID_ENCODING _T("Invalid Encoding.")
 #define ERR_INVALID_USAGE _T("Invalid usage.")
 #define ERR_INVALID_BASE _T("Invalid base.")
+#define ERR_INVALID_STRUCT _T("Invalid struct.")
 #define ERR_INTERNAL_CALL _T("An internal function call failed.") // Win32 function failed.  Eventually an error message should be generated based on GetLastError().
 #define ERR_FAILED _T("Failed") // A function failed to achieve its primary purpose for unspecified reason.  Equivalent to v1 throwing 1 (ErrorLevel).
 #define ERR_LOAD_ICON _T("Can't load icon.")
@@ -1493,6 +1494,7 @@ public:
 
 
 class ScriptModule;
+struct ScriptImport;
 class UserFunc : public Func
 {
 public:
@@ -1503,6 +1505,7 @@ public:
 	Label *mFirstLabel = nullptr, *mLastLabel = nullptr; // Linked list of private labels.
 	UserFunc *mOuterFunc = nullptr; // Func which contains this func (usually nullptr).
 	ScriptModule *mModule = nullptr; // Module in which this function was defined.
+	ScriptImport *mImports = nullptr; // Linked list of local import directives.
 	VarList mVars {}; // Sorted list of non-static local variables.
 	VarList mStaticVars {}; // Sorted list of static variables.
 	Var **mDownVar = nullptr, **mUpVar = nullptr;
@@ -2003,9 +2006,9 @@ public:
 		return p;
 	}
 
-	static UserMenu *NewMenuBar(size_t aSuffixSize)
+	static UserMenu *NewMenuBar(void *p)
 	{
-		return new (aSuffixSize) UserMenu(MENU_TYPE_BAR);
+		return ::new (p) UserMenu(MENU_TYPE_BAR);
 	}
 
 	UserMenu(MenuTypeType aMenuType = MENU_TYPE_POPUP);
@@ -2207,7 +2210,7 @@ private:
 
 	bool mClassPropertyStatic, mClassPropertyEmpty;
 	bool mClassStructUnion = false;
-	char mClassStructPack[MAX_NESTED_CLASSES + 1] {0};
+	UCHAR mClassStructPack[MAX_NESTED_CLASSES + 1] {0};
 
 	#define UPDATE_TIP_FIELD tcslcpy(mNIC.szTip, mTrayIconTip ? mTrayIconTip \
 		: mFileName, _countof(mNIC.szTip));

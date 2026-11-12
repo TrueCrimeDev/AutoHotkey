@@ -120,7 +120,7 @@ struct ObjectMemberListType
 
 
 // Helper for predefined classes
-typedef Object* (*NewObjectProc)(size_t);
+typedef Object* (*NewObjectProc)(void*);
 struct ClassFactoryDef
 {
 	void *call;
@@ -134,7 +134,7 @@ struct ClassFactoryDef
 	// Object size is inferred from the return type of the parameter,
 	// so the return type must be the exact type this factory constructs.
 	template<class T>
-	ClassFactoryDef(T* (*New)(size_t)) : call(New), object_size(sizeof(T)), min_params(1), max_params(1), is_variadic(true), is_bif(false) {}
+	ClassFactoryDef(T* (*New)(void*)) : call(New), object_size(sizeof(T)), min_params(1), max_params(1), is_variadic(true), is_bif(false) {}
 };
 
 
@@ -264,12 +264,17 @@ public:
 
 struct TypedProperty
 {
-	MdType type;
-	Object *class_object;
-	Object *pointed_proto;
-	size_t data_offset;
-	size_t object_offset;
-	TypedProperty *next_field, *prev_field;
+	MdType type = MdType::Void;
+	UCHAR pack = 0;
+	bool offset_by_tp = false;
+	Object *class_object = nullptr;
+	Object *pointed_proto = nullptr;
+	union {
+		size_t data_offset = 0;
+		TypedProperty *data_offset_tp;
+	};
+	size_t object_offset = 0;
+	TypedProperty *next_field = nullptr, *prev_field = nullptr;
 	~TypedProperty();
 };
 
@@ -337,9 +342,19 @@ protected:
 		~FieldType() { free(name); }
 	};
 
+	enum class StructKind : UCHAR
+	{
+		None,
+		Invalid,
+		Struct,
+		Number,
+		Ptr,
+		Array
+	};
+
 	struct StructInfo
 	{
-		NewObjectProc create;
+		NewObjectProc ctor;
 		size_t size;
 		size_t align;
 		size_t nested_object_size;
@@ -352,9 +367,13 @@ protected:
 		MdType native_type;
 		UCHAR dllcall_type;
 		bool is_unsigned;
+		StructKind kind;
 
-		bool IsPointerType() { return pointed_class && !item_count; }
+		bool IsPointerType() { return kind == StructKind::Ptr; }
+		bool IsValidPropertyType() { return (UCHAR)kind >= (UCHAR)StructKind::Struct; }
 		size_t SizeWhenNested() { return IsPointerType() ? sizeof(Object*) : object_size + nested_object_size + sizeof(void*); }
+		template<typename T = void>
+		T *DataSuffix(void *a) { return (T*)((char*)a + object_size + nested_object_size); }
 	};
 
 	ResultType GetEnumProp(UINT &aIndex, Var *aName, Var *aVal, int aVarCount);
@@ -370,11 +389,11 @@ protected:
 		ObjectIsClass			=   0x4,
 		DataIsSuffix			=  0x10,
 		DataIsSuffixPtr			=  0x20,
-		StructInfoInitialized	=  0x40,
-		StructInfoLocked		=  0x80,
+		StructInfoClosed		=  0x40,
 		NoCallDelete			= 0x100,
 		CannotOwnProps			= 0x200,
-		LastObjectFlag			= 0x200
+		OuterIsSeparate			= 0x400,
+		LastObjectFlag			= 0x400
 	};
 
 	Object *CloneTo(Object &aTo);
@@ -404,7 +423,7 @@ private:
 	}
 	
 	StructInfo *GetStructInfo();
-	StructInfo *GetStructInfo(bool aLock);
+	StructInfo *CloseStructInfo();
 
 protected:
 	ResultType GetProperty(ResultToken &aResultToken, int aFlags, name_t aName, ExprTokenType &aThisToken, ExprTokenType *aParam[], int aParamCount);
@@ -429,6 +448,9 @@ protected:
 	ResultType NestedNew(ResultToken &aResultToken, UINT_PTR aPtr, Object *aBase);
 	ResultType NestedSparseInit(ResultToken& aResultToken, TypedProperty& aProp, UINT_PTR aPtr);
 	ResultType CArrayNew(ResultToken &aResultToken, StructInfo *si);
+
+	static Object *Create(Object *aBase, StructInfo &si, UINT aFlags = DataIsSuffix);
+	static Object *Create(Object *aBase, StructInfo &si, UINT aFlags, size_t suffix);
 	
 public:
 
@@ -440,11 +462,10 @@ public:
 	Object() { mFlags = 0; }
 	static Object *Create();
 	static Object *Create(ExprTokenType *aParam[], int aParamCount, ResultToken *apResultToken = nullptr);
-	static Object *CreateStruct(Object *aBase, UINT_PTR aPtr = NULL, UINT aFlags = 0);
-	static Object *CreateStructCopyNoDelete(Object *aBase, UINT_PTR aPtr) { return CreateStruct(aBase, aPtr, NoCallDelete); }
 	static Object *CreateStructPtr(Object *aBase, UINT_PTR aPtr, bool aCallDelete = false);
-	static void NewInstance(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
+	static Object *CreateStructCopyNoDelete(Object *aBase, UINT_PTR aPtr);
 	static ResultType CreateStruct(ResultToken &aResultToken, Object *aBase, ExprTokenType *aParam[] = nullptr, int aParamCount = 0);
+	static void NewInstance(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
 	
 	static bool IsCArrayOf(IObject *aCandidate, Object *aPrototype);
 
@@ -453,6 +474,14 @@ public:
 	ResultType Initialize(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
 	ResultType CallInitNew(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount);
 	ResultType CallNew(ResultToken &aResultToken, ExprTokenType *aParam[], int aParamCount, ExprTokenType &aThisToken);
+
+	void KeepAlive(Object *aObject)
+	{
+		ASSERT(!mOuter);
+		mOuter = aObject;
+		aObject->AddRef();
+		mFlags |= OuterIsSeparate;
+	}
 
 	class PropEnum;
 
@@ -600,7 +629,8 @@ public:
 	
 	Property *DefineProperty(name_t aName, bool aEnumerable = true);
 	TypedProperty *DefineTypedProperty(name_t aName, bool aEnumerable = true);
-	FResult DefineTypedProperty(name_t aName, Object *aClass, size_t aPack, size_t aOffset, bool aEnumerable = true);
+	FResult DefineTypedProperty(name_t aName, Object *aClass, UCHAR aPack, ExprTokenType &aOffset, bool aEnumerable = true);
+	static bool IsValidStructPack(__int64 aPack);
 	bool DefineMethod(name_t aName, IObject *aFunc);
 	void DefineClass(name_t aName, Object *aClass, bool aIsStructPtrClass = false);
 	
@@ -611,7 +641,7 @@ public:
 	bool HasData() { return mFlags & (DataIsSuffix | DataIsSuffixPtr); }
 	UINT_PTR DataPtr();
 	UINT_PTR StructSize();
-	UINT_PTR LockStructSize() { auto si = GetStructInfo(); return si ? si->size : 0; }
+	UINT_PTR LockStructSize() { return CloseStructInfo()->size; }
 
 	bool GetStructArgInfo(DYNAPARM &aType, Object *&aPointedClass);
 	bool GetNumGetArgInfo(size_t &aSize, BOOL &aIsInt, BOOL &aIsSigned);
@@ -629,7 +659,7 @@ public:
 		mBase = aNewBase;
 	}
 
-	bool CanConstruct() { return GetStructInfo(true)->create != nullptr; }
+	bool CanConstruct() { return CloseStructInfo()->ctor != nullptr; }
 
 	bool IsClassPrototype() { return mFlags & ClassPrototype; }
 	bool IsNativeClassPrototype() { return mFlags & NativeClassPrototype; }

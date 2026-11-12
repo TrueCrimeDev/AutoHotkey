@@ -1966,9 +1966,9 @@ BIF_DECL(JsonClass_Stringify)
 // Object::NewInstance rejects (Object.Call)(JSON), (Object.Call)(Subclass) and
 // (Object.Call)({Prototype: JSON.Prototype}) with "Invalid base." JSON.Call
 // below replaces the Call that CreateClass defines from it.
-static JsonObject *NewJsonObject(size_t aSuffixSize)
+static JsonObject *NewJsonObject(void *p)
 {
-	return new (aSuffixSize) JsonObject();
+	return ::new (p) JsonObject(); // p was allocated by Object::operator new with the instance's suffix (ee8080f8).
 }
 
 // JSON() — JSON is a namespace of static methods. Its Prototype is still the
