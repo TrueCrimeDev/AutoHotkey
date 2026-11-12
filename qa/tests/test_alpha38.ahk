@@ -237,7 +237,8 @@ CallbackFree(cb)
 ;      From Copilot's second review: a module's wildcard re-export was looked
 ;      up with the calling function's imports, and a struct derived from an
 ;      invalid one kept a nonzero size (b2885254 made Bad invalid but
-;      Derived still sized 4, so CallbackCreate accepted it).
+;      Derived still sized 4, so CallbackCreate accepted it). From the third:
+;      an array class accepted typed fields while its layout was pending.
 r := RunSnippet(Lines(wildcard*) Lines(
     "#Import MB {*}",
     "f() {",
@@ -296,6 +297,15 @@ r := RunSnippet(Lines(
     "catch Error as e",
     "    Print(Type(e))"))
 Assert.eq(r.code " " r.out, "0 0`nValueError`n", "a struct with an invalid base has size 0 and is not a CallbackCreate type")
+; An array class takes no typed fields of its own: its layout is its elements.
+; afde2333 left it open until first use, so an extra Int32 made Int32[2] 12
+; bytes and moved element 2 to offset 6 (alpha.37: "Cannot add typed
+; property.", as now).
+QaArr38 := Int32[2]
+Assert.throws(() => DefineProp(QaArr38.Prototype, "extra", {Type: Int32}), "an array class refuses an extra typed field", "Cannot add typed property.")
+arr := QaArr38()
+arr[2] := 22
+Assert.eq(arr.Size " " NumGet(arr.Ptr, 4, "Int"), "8 22", "Int32[2] keeps its 8-byte layout, element 2 at offset 4")
 struct QaNode38 {
     next  : QaNode38.Ptr
     value : Int32

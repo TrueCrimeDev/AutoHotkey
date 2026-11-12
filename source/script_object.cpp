@@ -2243,7 +2243,8 @@ FResult Object::DefineTypedProperty(name_t aName, Object *aClass, UCHAR aPack, E
 		if (offset == -1)
 			return FR_E_ARGS;
 	}
-	if ((mFlags & (StructInfoClosed | ClassPrototype)) != ClassPrototype)
+	if ((mFlags & (StructInfoClosed | ClassPrototype)) != ClassPrototype
+		|| ((StructInfo*)(this + 1))->kind == StructKind::Array) // An array's layout is its elements alone; it stays open only until the item type closes (afde2333).
 		return FR_E_FAILED;
 	auto tprop = DefineTypedProperty(aName, aEnumerable);
 	if (!tprop)
