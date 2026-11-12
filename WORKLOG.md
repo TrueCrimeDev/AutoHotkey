@@ -892,3 +892,116 @@ unlogged loop session between 3 and now.)
   missing. Stale local branches `fix/release-workflow-permissions`,
   `feat/stdio-supervisor`, `upgrade-alpha19-console` and `ci/alpha33`
   deleted; `f7712ec1` kept reachable as the local tag `ci-alpha33-engine`.
+
+### Session 21 (2026-11-12) — upstream v2.1-alpha.38 merge
+
+- Merged the `v2.1-alpha.38` tag (`afde2333`, released 2026-11-07 per the
+  upstream docs' ChangeLog; the forum thread returned 403 to a fetch) on
+  `m1/upstream-alpha38` (`c47c4c8b`), branched from `alpha` at `e34add4a`:
+  eighteen commits after `279247ee`. `upstream/alpha` is five commits past
+  the tag (`42ddbabc`) and was left out.
+- Conflicts were only in code the fork had patched. `Object::CreateStructPtr`:
+  upstream's rewrite (`Create(aBase, si, ...)`, `StructInfo::DataSuffix`)
+  writes the pointer after `object_size` and sets `CannotOwnProps` from the
+  base class, covering `a41db9a1` and `f24c23d1`; taken. `CallProperty`
+  (`1e55d515`) and `GetStructCallbackArgInfo` (`51547074`, now
+  `CloseStructInfo()`) fix two of the five alpha.37 regressions from
+  `a911f73d`; taken. `CallbackCreate`'s `param_slot_count` keeps the fork's
+  `MdType::Array` exclusion with upstream's `StructSize()`.
+- One semantic conflict surfaced at build time: `ee8080f8` changed
+  `ClassFactoryDef` and `StructInfo::create(size_t)` to `ctor(void*)`, so
+  `source/json.cpp`'s `NewJsonObject` did not compile. It now
+  placement-constructs into the memory `Object::operator new` allocated.
+- Every changelog item was probed on the alpha.37 engine (`a911f73d`) and
+  the merge build before becoming an assert: `qa/tests/test_alpha38.ahk`,
+  8 sections, 35 asserts, `A_PtrSize`-relative. The alpha.37 engine stops at
+  section 1. Findings: `ObjCreateWithDataPtr(S, buf)` exited 11 on alpha.37
+  (the Buffer was taken as the address). `ObjGetDataSize` on a Prototype
+  returned the unpadded size before any instance existed (5 for
+  `{Int32, Int8}`; 8 now). `DefineProp` accepted `Pack: 3` and new typed
+  properties after the size was taken. The module fixes need a module whose
+  body runs before the one it imports (modules run in reverse order of
+  creation); the first probes did not hit that and showed no difference.
+  `class Y extends X.Ptr` is still "Invalid base class."
+- Not pinned: `1fcc195f` (a struct whose `__New` throws, returned from a
+  callback, is reported cleanly on both engines) and the v2.0 AltTab
+  `Hotkey On/Off` fix. `CallbackCreate(f, , [S, "Int"])` fails on both
+  engines because the array form takes struct classes (`Int32`) or
+  `"Void"`; not a regression.
+- Three existing asserts changed with upstream: `test_alpha35.ahk` (an
+  invalid `DefineProp` descriptor is the generic "Parameter #2 invalid."
+  since `ad5cfae6`; `What` still names the method) and `test_alpha36.ahk`
+  (`At(0)` and `ObjCreateWithDataPtr(S, 100)` are accepted since
+  `2042a5e7`).
+- Results on the MSVC x64 build `c47c4c8bb179`: console gate 17/17 suites,
+  qa 1021/1021 across 20 files, `check_all` 113/113, `examples/alpha37/*.ahk`
+  all exit 0. A local MSVC Win32 build of the same commit
+  (`build_msvc_win32`): qa 1021/1021, including `test_alpha37.ahk` section
+  9's x86 cases. `DllCall(..., Int32.Ptr, Any.Prototype)` still exits 11 on
+  alpha.38 (`IsCArrayOf` open item).
+- Installed into `bin/` and `Documents\Design\Coding\AutoHotkey\bin`, previous
+  engines kept as `*.a911f73d.bak` (renamed aside, since the project MCP
+  server may hold the console exe); `bin/AutoHotkey64Console.capabilities.json`
+  regenerated. `docs/upstream/alpha36-createstructptr-offset.md` is marked
+  resolved upstream; `docs/upstream/alpha37-regressions.md` leaves sections
+  1, 4 and 5 to report.
+- Pushed as PR #35. CI run 43271605576 on `5497c7c8` passed every build
+  (MSVC x64 and Win32, mingw x64), test and debugger-clients job; release
+  skipped, as on any non-tag run. No local mingw toolchain exists any more
+  (`build_mingw_x64` points at a removed `D:\msys64`), so that job is the
+  only GCC build of the `NewJsonObject` change.
+- `examples/alpha38/` (five scripts and a README, on `docs/alpha38-examples`,
+  as `examples/alpha37/` was) exit 0 on x64 and Win32; `check_all` 118/118.
+- **Four alpha.38 regressions found and fixed** (`b2885254`). Copilot's review
+  of PR #35 flagged five; each was probed on `c47c4c8b` and alpha.37 first.
+  Self-containing structs (direct, mutual, `S[2]`, through the base, and a
+  `DefineProp` one) were accepted and crashed when constructed (exit 127 or
+  139). `CloseStructInfo` sets `StructInfoClosed` before the layout, so it
+  now holds `StructKind::Invalid` until the layout is done, an array of an
+  invalid item is invalid, and a struct closed while its base was closing
+  returns early. `ComValue` as a field type exited 11 (null `aClass`). A
+  `Class(Int32)` field read `""`: a subclass inherited `Number` with a Void
+  native type, so it now reverts to `Struct`. `GetOwnPropDesc`'s
+  offset-by-name search assumed definition order in a name-sorted array. The
+  fifth (nested-function wildcard import) is upstream's `c727bdf0`,
+  cherry-picked as `9a2cf75e`. Two probes were wrong because a variable
+  `h` and a class `H` are the same name: `h := H()` replaced the class, which
+  looked like a `GetOwnPropDesc` bug; the README for the examples records it.
+  `test_alpha38.ahk` section 9 (11 asserts, 46 in the file): `c47c4c8b`
+  fails 9. On `b2885254`: gate 17/17, qa 1032/1032 on x64 and Win32,
+  `check_all` 113/113 (118/118 with the examples), all ten alpha.37/alpha.38
+  examples exit 0. Installed into both `bin/` folders, replacing `c47c4c8b`
+  (not kept as a `.bak`); `docs/upstream/alpha38-regressions.md` is the
+  report.
+- CI run 43275401437 on `6d24bfd1` passed every job. Copilot's second review
+  (requested with `gh pr edit --add-reviewer @copilot`; it does not re-review
+  a push on its own) marked the five findings resolved and raised two more,
+  both reproduced and fixed in `e474e616`. A function importing `D` and then
+  `B` read `D`'s `X` where `B` re-exports `C` (alpha.37: `C`), because
+  `FindImportedVar` used the calling function's imports while searching `B`;
+  it now does so only when `scope->mModule == this`. A struct extending an
+  invalid one kept its own fields' size (4), so `CallbackCreate` accepted it;
+  an invalid structure's size is 0 now. Section 9 is 13 asserts (48 in the
+  file); gate 17/17, qa 1034/1034 on x64 and Win32, all ten examples exit 0.
+  Both `bin/` folders hold `e474e616`.
+- CI run 43277056470 on `5f5d15fb` passed every job. Copilot's third review
+  had no open issues on changed code and one it had missed: `afde2333`
+  leaves an array class open until first use, so
+  `DefineProp(Int32[2].Prototype, "extra", {Type: Int32})` was accepted, the
+  array closed at 12 bytes, and `a[2]` was written at offset 6 (stride
+  `size / item_count`). Alpha.37 threw "Cannot add typed property.", and so
+  does `07fa54d7`, which refuses a prototype whose kind is `Array`. A script
+  subclass `Class(Int32[2])` accepts extra fields on alpha.37 and alpha.38
+  alike (not a regression; left alone). Section 9 is 15 asserts (50 in the
+  file); gate 17/17, qa 1036/1036 on x64 and Win32, all ten examples exit 0.
+  Both `bin/` folders hold `07fa54d7`.
+- CI run 43278657310 on `97c9ba80` passed every job. Copilot's fourth review
+  reported no open issues but a failed reviewer session, so a fifth was
+  requested. It found `GetNumGetArgInfo` reading `GetStructInfo()`, which
+  answers with the base's numeric type while a class is open: `NumGet(buf,
+  Class(Int32))` read an Int32 until the class closed, then threw. Alpha.37
+  accepted it until the class was instantiated. `e13b80d8` uses
+  `CloseStructInfo()`, as `GetStructArgInfo` does, so a numeric subclass is
+  always rejected. Section 9 is 17 asserts (52 in the file); gate 17/17, qa
+  1038/1038 on x64 and Win32, all ten examples exit 0. Both `bin/` folders
+  hold `e13b80d8`.

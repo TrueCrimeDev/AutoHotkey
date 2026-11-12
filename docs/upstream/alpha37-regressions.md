@@ -6,6 +6,12 @@ fork's merge PR (TrueCrimeDev/AutoHotkey #33) and reproduced on a build of
 v2.1-alpha.37), x64 and x86, before being fixed in the fork. Each item names
 the alpha.36 behaviour (`0b8e6fa3`) for comparison.
 
+**Status after v2.1-alpha.38 (2026-11-07):** upstream fixed two of the five
+independently: sections 2 (`1e55d515`) and 3 (`51547074`). The fork took
+those versions in its alpha.38 merge (`c47c4c8b`). Sections 1, 4 and 5 are
+still unfixed upstream and fixed only in the fork; they are what remains to
+report.
+
 ## 1. `NumPut` accepts an invalid type in any pair after the first
 
 `2cdf79a6` ("Fixed NumGet/NumPut to throw if an incorrect Struct class is

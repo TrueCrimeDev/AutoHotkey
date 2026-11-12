@@ -292,10 +292,23 @@ BIF_DECL(StructClass_At)
 	auto proto = class_ && class_->IsOfType(Object::sPrototype) ? ((Object*)class_)->ClassGetPrototype() : nullptr;
 	if (!proto || !proto->CanConstruct())
 		_f_throw(_T("Invalid class"));
-	auto ptr = (UINT_PTR)ParamIndexToInt64(1);
-	if (ptr < 65536 && (ptr || !is_objcreate) && proto->StructSize())
-		return (void)aResultToken.ParamError(0 + int(is_objcreate), aParam[1]);
-	_f_return(Object::CreateStructPtr(proto, ptr, is_objcreate));
+	UINT_PTR ptr;
+	auto buf = dynamic_cast<Object*>(ParamIndexToObject(1));
+	if (!buf)
+		ptr = (UINT_PTR)ParamIndexToInt64(1);
+	else
+		if (!GetObjectPtrProperty(buf, _T("Ptr"), ptr, aResultToken))
+			return;
+	// Allow invalid addresses even if typed properties exist, for cases like
+	// IDI_INFORMATION := UInt16.at(32516)  ; PWSTR -> WCHAR* -> UInt16.Ptr
+	//if (ptr < 65536 && (ptr || !is_objcreate) && proto->StructSize())
+	//	return (void)aResultToken.ParamError(0 + int(is_objcreate), aParam[1]);
+	auto s = Object::CreateStructPtr(proto, ptr, is_objcreate);
+	if (!s)
+		_f_throw(ERR_INVALID_STRUCT, ErrorPrototype::Type);
+	if (buf)
+		s->KeepAlive(buf);
+	_f_return(s);
 }
 
 
@@ -322,11 +335,14 @@ FResult Object::SetDataPtr(UINT_PTR aPtr)
 }
 
 
-bif_impl FResult ObjGetDataPtr(IObject *aObj, UINT_PTR &aPtr)
+bif_impl FResult ObjGetDataPtr(IObject *aObj, ResultToken &aPtr)
 {
-	if (!aObj->IsOfType(Object::sPrototype))
-		return FR_E_ARG(0);
-	return ((Object*)aObj)->GetDataPtr(aPtr);
+	UINT_PTR ptr;
+	if (aObj->IsOfType(Object::sPrototype) && ((Object*)aObj)->GetDataPtr(ptr) == OK)
+		aPtr.Return(ptr);
+	else
+		aPtr.Unset();
+	return OK;
 }
 
 FResult Object::GetDataPtr(UINT_PTR &aPtr)
@@ -343,7 +359,7 @@ UINT_PTR Object::DataPtr()
 	if (mFlags & (DataIsSuffix | DataIsSuffixPtr))
 	{
 		auto si = mBase->GetStructInfo();
-		ptr = (UINT_PTR)this + si->object_size + si->nested_object_size;
+		ptr = (UINT_PTR)si->DataSuffix(this);
 	}
 	if (mFlags & DataIsSuffixPtr)
 		ptr = *(UINT_PTR*)ptr;
@@ -355,6 +371,6 @@ bif_impl FResult ObjGetDataSize(IObject *aObj, UINT_PTR &aRetVal)
 {
 	if (!aObj->IsOfType(Object::sPrototype))
 		return FR_E_ARG(0);
-	aRetVal = ((Object*)aObj)->StructSize();
+	aRetVal = ((Object*)aObj)->LockStructSize();
 	return OK;
 }

@@ -7,6 +7,11 @@ official `AutoHotkey_2.1-alpha.36.zip` (`AutoHotkey64.exe`; zip sha256
 `300f9610664b4f3c22468579a30ca993d3f473a307f1421f45c6ede2ab9a5550`).
 **Status:** both issues fixed in this fork (the offset on `m1/upstream-alpha36`,
 the own-property regression on `m1/alpha36-followups`); not yet reported upstream.
+**Resolved upstream** in v2.1-alpha.38 (2026-11-07): `ee8080f8` places the
+pointer at `object_size`, and the `CreateStructPtr` rewrite sets
+`CannotOwnProps` from the base class before construction. The fork took
+upstream's version in the alpha.38 merge (`c47c4c8b`), and
+`qa/tests/test_alpha36.ahk` sections 3 and 7 still pass. Nothing left to send.
 
 ## Symptom
 

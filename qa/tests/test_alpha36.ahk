@@ -13,8 +13,9 @@
 #Include ..\Harness.ahk
 
 ; 1. ObjCreateWithDataPtr (7aa2e0ea) on struct classes: the object is a view of
-;    the memory at Address, like StructClass.At, but Address 0 is accepted and
-;    an address below 65536 is not.
+;    the memory at Address, like StructClass.At. On alpha.36 Address 0 was
+;    accepted and any other address below 65536 was not; alpha.38 (2042a5e7)
+;    accepts every address in both (test_alpha38.ahk section 2).
 ; OLD (alpha.35): ObjCreateWithDataPtr did not exist.
 buf := Buffer(16, 0)
 NumPut("Int", 42, buf)
@@ -33,8 +34,8 @@ Assert.eq(pt.x " " pt.y, "3 4", "ObjCreateWithDataPtr(struct): reads the fields"
 pt.y := 9
 Assert.eq(NumGet(buf, 4, "Int"), 9, "ObjCreateWithDataPtr(struct): writes a field")
 Assert.eq(Type(ObjCreateWithDataPtr(QaPt36, 0)), "QaPt36", "ObjCreateWithDataPtr(struct, 0) is accepted")
-Assert.throws(() => QaPt36.At(0), "StructClass.At(0) still throws", "Parameter #1 of Struct.At is invalid")
-Assert.throws(() => ObjCreateWithDataPtr(QaPt36, 100), "ObjCreateWithDataPtr(struct, 100) throws", "Parameter #2 of ObjCreateWithDataPtr is invalid")
+Assert.eq(QaPt36.At(0).Ptr, 0, "StructClass.At(0) is accepted since alpha.38 (2042a5e7)")
+Assert.eq(Type(ObjCreateWithDataPtr(QaPt36, 100)), "QaPt36", "ObjCreateWithDataPtr(struct, 100) is accepted since alpha.38 (2042a5e7)")
 Assert.throws(() => ObjCreateWithDataPtr(42, 0), "ObjCreateWithDataPtr(non-class) throws", "Invalid class")
 Assert.throws(() => ObjCreateWithDataPtr(RegExMatchInfo, 0), "ObjCreateWithDataPtr(RegExMatchInfo) throws", "Invalid class")
 

@@ -185,8 +185,16 @@ ResultType Script::ParseImportDirective(LPTSTR aBuf)
 	imp->line_number = mCombinedLineNumber;
 	imp->file_index = mCurrFileIndex;
 	imp->scope = g->CurrentFunc;
-	imp->next = mCurrentModule->mImports;
-	mCurrentModule->mImports = imp;
+	// Reverse list of imports in current scope.
+	auto &last = imp->scope ? imp->scope->mImports : mCurrentModule->mLastGlobalImport;
+	imp->prev = last;
+	last = imp;
+	// Forward list of all imports.
+	if (!mCurrentModule->mFirstImport)
+		mCurrentModule->mFirstImport = imp;
+	else
+		mCurrentModule->mLastParsedImport->next = imp;
+	mCurrentModule->mLastParsedImport = imp;
 	return OK;
 }
 
@@ -197,24 +205,23 @@ Var *Script::FindImportedVar(LPCTSTR aVarName)
 }
 
 
-bool ScriptImport::IsInScope()
-{
-	if (!scope)
-		return true;
-	for (auto f = g->CurrentFunc; f; f = f->mOuterFunc)
-		if (f == scope)
-			return true;
-	return false;
-}
-
-
 Var *ScriptModule::FindImportedVar(LPCTSTR aVarName)
 {
 	if (*aVarName == '_')
 		return nullptr;
-	for (auto imp = mImports; imp; imp = imp->next)
+	auto scope = g->CurrentFunc;
+	if (scope && scope->mModule != this) // Searching another module's wildcard exports: only its global imports apply.
+		scope = nullptr;
+	for (auto imp = scope ? scope->mImports : mLastGlobalImport; ; imp = imp->prev)
 	{
-		if (imp->wildcard && imp->mod && imp->IsInScope()) // mod can be null during DerefInclude().
+		while (!imp)
+		{
+			if (!scope)
+				return nullptr;
+			scope = scope->mOuterFunc;
+			imp = scope ? scope->mImports : mLastGlobalImport;
+		}
+		if (imp->wildcard && imp->mod) // mod can be null during DerefInclude().
 		{
 			auto var = imp->mod->mVars.Find(aVarName);
 			if (!var && imp->mod->mHasWildcardExports)
@@ -233,7 +240,6 @@ Var *ScriptModule::FindImportedVar(LPCTSTR aVarName)
 			}
 		}
 	}
-	return nullptr;
 }
 
 
@@ -308,7 +314,7 @@ ResultType Script::ResolveImports(ScriptModule *aTerminator)
 		if (!directive_list && !mod->IsFileModule())
 			directive_list = mod;
 
-		for (auto imp = mod->mImports; imp; imp = imp->next)
+		for (auto imp = mod->mFirstImport; imp; imp = imp->next)
 		{
 			if (!imp->mod && !ResolveImports(*imp, directive_list))
 				return FAIL;
