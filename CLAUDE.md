@@ -447,7 +447,8 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   tag (`42ddbabc`), not merged. Always verify the actual executable's
   `--version` and hash; historical files in `bin/` or `bin_harness/` may be
   stale. Since 2026-11-12 `bin/` holds the local MSVC x64 build of
-  `c47c4c8b` (`2.1-alpha.38+Console`); `bin/*.a911f73d.bak` are the alpha.37
+  `b2885254` (`2.1-alpha.38+Console`, the alpha.38 merge plus the fork's
+  fixes to four alpha.38 regressions, below); `bin/*.a911f73d.bak` are the alpha.37
   engines (the alpha.37 merge plus the fork's fixes to five alpha.37
   regressions, below) installed 2026-10-25, `bin/*.165d7384.bak`
   are the alpha.36 engines (`165d73849eb0`, the alpha.36 merge plus the
@@ -484,9 +485,19 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   `NumPut` per-pair size and the two Win32 fixes stay fork-only (report
   sections 1, 4 and 5, not yet sent). `ee8080f8` changed native class
   factories to `ctor(void *p)`; the fork's `JSON.Object` factory follows it.
-  `qa/tests/test_alpha38.ahk` (35 asserts) pins the changelog. Gate 17/17
-  and qa 1021/1021 on x64; qa 1021/1021 on a local Win32 build. CI has not
-  run on the merge yet.
+  `qa/tests/test_alpha38.ahk` sections 1-8 pin the changelog. CI run
+  43271605576 (PR #35, `5497c7c8`) passed every build, test and
+  debugger-clients job, mingw included. Alpha.38 itself regressed four
+  things (Copilot review of PR #35, each reproduced on `c47c4c8b`): a struct
+  containing itself by value was accepted and corrupted the heap when
+  constructed, `{Type: ComValue(3, 0)}` in `DefineProp` exited 11, a
+  `Class(Int32)` field dropped its class, and `GetOwnPropDesc` lost an
+  `Offset` naming a later-sorted field. They are fixed here in `b2885254`,
+  pinned by section 9 of the same test (46 asserts), report in
+  `docs/upstream/alpha38-regressions.md` (not yet sent). A fifth, nested
+  functions missing a global wildcard import, is upstream's post-tag
+  `c727bdf0`, cherry-picked. On `b2885254` the gate is 17/17 and qa
+  1032/1032 on x64 and on a local Win32 build.
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.

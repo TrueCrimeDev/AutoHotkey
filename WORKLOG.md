@@ -945,3 +945,31 @@ unlogged loop session between 3 and now.)
   regenerated. `docs/upstream/alpha36-createstructptr-offset.md` is marked
   resolved upstream; `docs/upstream/alpha37-regressions.md` leaves sections
   1, 4 and 5 to report.
+- Pushed as PR #35. CI run 43271605576 on `5497c7c8` passed every build
+  (MSVC x64 and Win32, mingw x64), test and debugger-clients job; release
+  skipped, as on any non-tag run. No local mingw toolchain exists any more
+  (`build_mingw_x64` points at a removed `D:\msys64`), so that job is the
+  only GCC build of the `NewJsonObject` change.
+- `examples/alpha38/` (five scripts and a README, on `docs/alpha38-examples`,
+  as `examples/alpha37/` was) exit 0 on x64 and Win32; `check_all` 118/118.
+- **Four alpha.38 regressions found and fixed** (`b2885254`). Copilot's review
+  of PR #35 flagged five; each was probed on `c47c4c8b` and alpha.37 first.
+  Self-containing structs (direct, mutual, `S[2]`, through the base, and a
+  `DefineProp` one) were accepted and crashed when constructed (exit 127 or
+  139). `CloseStructInfo` sets `StructInfoClosed` before the layout, so it
+  now holds `StructKind::Invalid` until the layout is done, an array of an
+  invalid item is invalid, and a struct closed while its base was closing
+  returns early. `ComValue` as a field type exited 11 (null `aClass`). A
+  `Class(Int32)` field read `""`: a subclass inherited `Number` with a Void
+  native type, so it now reverts to `Struct`. `GetOwnPropDesc`'s
+  offset-by-name search assumed definition order in a name-sorted array. The
+  fifth (nested-function wildcard import) is upstream's `c727bdf0`,
+  cherry-picked as `9a2cf75e`. Two probes were wrong because a variable
+  `h` and a class `H` are the same name: `h := H()` replaced the class, which
+  looked like a `GetOwnPropDesc` bug; the README for the examples records it.
+  `test_alpha38.ahk` section 9 (11 asserts, 46 in the file): `c47c4c8b`
+  fails 9. On `b2885254`: gate 17/17, qa 1032/1032 on x64 and Win32,
+  `check_all` 113/113 (118/118 with the examples), all ten alpha.37/alpha.38
+  examples exit 0. Installed into both `bin/` folders, replacing `c47c4c8b`
+  (not kept as a `.bak`); `docs/upstream/alpha38-regressions.md` is the
+  report.
