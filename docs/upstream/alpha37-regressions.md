@@ -9,8 +9,18 @@ the alpha.36 behaviour (`0b8e6fa3`) for comparison.
 **Status after v2.1-alpha.38 (2026-11-07):** upstream fixed two of the five
 independently: sections 2 (`1e55d515`) and 3 (`51547074`). The fork took
 those versions in its alpha.38 merge (`c47c4c8b`). Sections 1, 4 and 5 are
-still unfixed upstream and fixed only in the fork; they are what remains to
-report.
+still unfixed upstream and fixed only in the fork.
+
+**Filed 2026-11-12:** section 1 as [AutoHotkey/AutoHotkey#378](https://github.com/AutoHotkey/AutoHotkey/issues/378), section 4 as
+[AutoHotkey/AutoHotkey#379](https://github.com/AutoHotkey/AutoHotkey/issues/379), with section 5 as a from-source note in the same issue
+(`CallbackCreate` on alpha.38 still refuses `Int32[2]`, `Class(Int32[2])`
+and `Int32[2].Ptr` as parameter types, so it cannot be reached from script).
+Both repros were run first on the official alpha.36, alpha.37 and alpha.38
+zips: section 1 throws on alpha.36 and writes on alpha.37 and alpha.38 (x64
+and x86); section 4 gives "Parameter list too large." and 2147483647 on x86
+alpha.37 and alpha.38. Alpha.36 rejected an unset `"Int64*"` or `"Double*"`
+("Missing a required parameter."), so section 4 is a bug in `1fa8d1f1`'s new
+feature rather than a regression.
 
 ## 1. `NumPut` accepts an invalid type in any pair after the first
 
