@@ -67,9 +67,12 @@ o.hidden := 3
 Assert.eq(o.hidden, 3, "Enumerable false: the value writes normally")
 
 ; 5. DefineProp descriptor validation (alpha.34): an unknown key, and Value
-;    combined with an accessor, throw ValueError.
-Assert.throws(() => o.DefineProp("bad", {Bogus: 1}), "DefineProp unknown descriptor key: throws", "DefineProp")
-Assert.throws(() => o.DefineProp("bad2", {Value: 1, Get: (*) => 2}), "DefineProp Value plus Get: throws", "DefineProp")
+;    combined with an accessor, throw ValueError. Since alpha.38 (ad5cfae6)
+;    the message is the generic "Parameter #2 invalid." (What still names
+;    DefineProp); before it was "Parameter #2 of Object.Prototype.DefineProp
+;    is invalid." with Extra "Object".
+Assert.throws(() => o.DefineProp("bad", {Bogus: 1}), "DefineProp unknown descriptor key: throws", "Parameter #2 invalid.")
+Assert.throws(() => o.DefineProp("bad2", {Value: 1, Get: (*) => 2}), "DefineProp Value plus Get: throws", "Parameter #2 invalid.")
 Assert.falsy(o.HasOwnProp("bad") || o.HasOwnProp("bad2"), "DefineProp rejected descriptors define nothing")
 
 ; 6. Library search (alpha.35): in v2.1 mode `#Include <A_B>` looks for A_B.ahk
