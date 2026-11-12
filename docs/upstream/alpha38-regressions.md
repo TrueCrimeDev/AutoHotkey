@@ -1,14 +1,15 @@
-# v2.1-alpha.38: five regressions in the open-structure and import changes, and one import fix already upstream
+# v2.1-alpha.38: six regressions in the open-structure and import changes, and one import fix already upstream
 
 Draft upstream report. Found 2026-11-12 by GitHub Copilot's review of the
 fork's merge PR (TrueCrimeDev/AutoHotkey #35) and reproduced on a build of
 the `v2.1-alpha.38` tag (`afde2333`), x64 and x86, before being fixed in the
 fork (`b2885254`; section 1's invalid-base case and section 6 came from
-Copilot's second review and are fixed in `e474e616`). Each item names the alpha.37 behaviour (fork build
+Copilot's second review and are fixed in `e474e616`, section 7 from its
+third, fixed in `07fa54d7`). Each item names the alpha.37 behaviour (fork build
 `a911f73d`, upstream `279247ee` plus fork fixes unrelated to these paths)
 for comparison.
 
-Sections 1 to 4 and 6 are still present on `upstream/alpha` (`42ddbabc`).
+Sections 1 to 4, 6 and 7 are still present on `upstream/alpha` (`42ddbabc`).
 Section 5 was fixed upstream after the tag by `c727bdf0`, and the fork
 cherry-picked that commit.
 
@@ -159,12 +160,35 @@ Fix (`source/script_module.cpp`): use the calling function's imports only
 when `scope->mModule == this`; otherwise start from the module's global
 imports, as alpha.37's `IsInScope` test effectively did.
 
+## 7. An array class accepts typed fields while its layout is pending
+
+`afde2333` ("Change CreateCArrayClass to postpone CloseStructInfo") leaves an
+array class open until it is first used. Before that, an array class was
+closed when it was created, so `DefineProp` refused new typed properties on
+it. Now an extra field is accepted, and it changes the array's size but not
+its item count. `CArrayItem` computes the element stride as
+`size / item_count`:
+
+```autohotkey
+A := Int32[2]
+DefineProp(A.Prototype, "extra", {Type: Int32})   ; alpha.37: "Cannot add typed property."
+a := A()                                          ; alpha.38: 12 bytes
+a[2] := 22                                        ; written at offset 6, not 4
+```
+
+Fix (`Object::DefineTypedProperty`): refuse a prototype whose `kind` is
+`StructKind::Array` with the same `FR_E_FAILED` ("Cannot add typed
+property.") as a closed one. A script subclass of an array class
+(`Class(Int32[2])`) accepts extra fields on alpha.37 and alpha.38 alike, so
+that case is not a regression and is not changed here.
+
 ## Verification
 
-Fork build `e474e616`, MSVC x64 and Win32: `qa/tests/test_alpha38.ahk`
-section 9 (13 asserts) passes on both, and the full qa suite is 1034/1034 on
-each. On the unfixed merge build (`c47c4c8b`, x64), 11 of the 13 fail
-(`b2885254` fails the two from the second review). The two that pass there pin what the fix must keep: a `Node { next : Node.Ptr }`
+Fork build `07fa54d7`, MSVC x64 and Win32: `qa/tests/test_alpha38.ahk`
+section 9 (15 asserts) passes on both, and the full qa suite is 1036/1036 on
+each. On the unfixed merge build (`c47c4c8b`, x64), 13 of the 15 fail
+(`b2885254` fails the four from the second and third reviews, `e474e616`
+the two from the third). The two that pass there pin what the fix must keep: a `Node { next : Node.Ptr }`
 self-reference and a plain `Class(Int32)` instance. Also unchanged:
 `test_alpha38.ahk` section 4's mutually referencing structs in both orders,
 section 6's `Class(X.Ptr)` field, and every `examples/alpha37` and

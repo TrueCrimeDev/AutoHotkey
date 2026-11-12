@@ -984,3 +984,14 @@ unlogged loop session between 3 and now.)
   an invalid structure's size is 0 now. Section 9 is 13 asserts (48 in the
   file); gate 17/17, qa 1034/1034 on x64 and Win32, all ten examples exit 0.
   Both `bin/` folders hold `e474e616`.
+- CI run 43277056470 on `5f5d15fb` passed every job. Copilot's third review
+  had no open issues on changed code and one it had missed: `afde2333`
+  leaves an array class open until first use, so
+  `DefineProp(Int32[2].Prototype, "extra", {Type: Int32})` was accepted, the
+  array closed at 12 bytes, and `a[2]` was written at offset 6 (stride
+  `size / item_count`). Alpha.37 threw "Cannot add typed property.", and so
+  does `07fa54d7`, which refuses a prototype whose kind is `Array`. A script
+  subclass `Class(Int32[2])` accepts extra fields on alpha.37 and alpha.38
+  alike (not a regression; left alone). Section 9 is 15 asserts (50 in the
+  file); gate 17/17, qa 1036/1036 on x64 and Win32, all ten examples exit 0.
+  Both `bin/` folders hold `07fa54d7`.
