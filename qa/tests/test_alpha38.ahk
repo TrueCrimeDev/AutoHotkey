@@ -239,6 +239,7 @@ CallbackFree(cb)
 ;      invalid one kept a nonzero size (b2885254 made Bad invalid but
 ;      Derived still sized 4, so CallbackCreate accepted it). From the third:
 ;      an array class accepted typed fields while its layout was pending.
+;      From the fifth: NumGet accepted a Class(Int32) subclass until closed.
 r := RunSnippet(Lines(wildcard*) Lines(
     "#Import MB {*}",
     "f() {",
@@ -306,6 +307,14 @@ Assert.throws(() => DefineProp(QaArr38.Prototype, "extra", {Type: Int32}), "an a
 arr := QaArr38()
 arr[2] := 22
 Assert.eq(arr.Size " " NumGet(arr.Ptr, 4, "Int"), "8 22", "Int32[2] keeps its 8-byte layout, element 2 at offset 4")
+; NumGet/NumPut close the class first, as DllCall does, so a Class(Int32)
+; subclass (a plain struct once closed) is rejected whether or not it has been
+; used yet. c47c4c8b accepted it as Int32 until it was closed; alpha.37 until
+; it was instantiated.
+QaNumOpen38 := Class(Int32)
+b4 := Buffer(4, 0)
+Assert.throws(() => NumGet(b4, QaNumOpen38), "NumGet rejects an unused Class(Int32) subclass", "Invalid parameter(s).")
+Assert.eq(NumGet(b4, Int32), 0, "NumGet still accepts Int32 itself")
 struct QaNode38 {
     next  : QaNode38.Ptr
     value : Int32

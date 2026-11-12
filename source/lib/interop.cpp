@@ -30,7 +30,9 @@ struct NumGetParams
 
 bool Object::GetNumGetArgInfo(size_t &aSize, BOOL &aIsInt, BOOL &aIsSigned)
 {
-	auto &si = *GetStructInfo();
+	// Close the layout as DllCall does: an open subclass would otherwise answer with its base's
+	// numeric type, and a numeric subclass (a plain struct once closed) must be rejected either way.
+	auto &si = *CloseStructInfo();
 	if (!DLLARGTYPE_IS_NUMERIC(si.dllcall_type))
 		return false;
 	aSize = si.size;
