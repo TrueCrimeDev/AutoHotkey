@@ -995,3 +995,13 @@ unlogged loop session between 3 and now.)
   alike (not a regression; left alone). Section 9 is 15 asserts (50 in the
   file); gate 17/17, qa 1036/1036 on x64 and Win32, all ten examples exit 0.
   Both `bin/` folders hold `07fa54d7`.
+- CI run 43278657310 on `97c9ba80` passed every job. Copilot's fourth review
+  reported no open issues but a failed reviewer session, so a fifth was
+  requested. It found `GetNumGetArgInfo` reading `GetStructInfo()`, which
+  answers with the base's numeric type while a class is open: `NumGet(buf,
+  Class(Int32))` read an Int32 until the class closed, then threw. Alpha.37
+  accepted it until the class was instantiated. `e13b80d8` uses
+  `CloseStructInfo()`, as `GetStructArgInfo` does, so a numeric subclass is
+  always rejected. Section 9 is 17 asserts (52 in the file); gate 17/17, qa
+  1038/1038 on x64 and Win32, all ten examples exit 0. Both `bin/` folders
+  hold `e13b80d8`.

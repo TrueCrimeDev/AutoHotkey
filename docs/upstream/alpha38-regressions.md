@@ -1,15 +1,16 @@
-# v2.1-alpha.38: six regressions in the open-structure and import changes, and one import fix already upstream
+# v2.1-alpha.38: seven regressions in the open-structure and import changes, and one import fix already upstream
 
 Draft upstream report. Found 2026-11-12 by GitHub Copilot's review of the
 fork's merge PR (TrueCrimeDev/AutoHotkey #35) and reproduced on a build of
 the `v2.1-alpha.38` tag (`afde2333`), x64 and x86, before being fixed in the
 fork (`b2885254`; section 1's invalid-base case and section 6 came from
 Copilot's second review and are fixed in `e474e616`, section 7 from its
-third, fixed in `07fa54d7`). Each item names the alpha.37 behaviour (fork build
+third, fixed in `07fa54d7`, section 8 from its fifth, fixed in `e13b80d8`).
+Each item names the alpha.37 behaviour (fork build
 `a911f73d`, upstream `279247ee` plus fork fixes unrelated to these paths)
 for comparison.
 
-Sections 1 to 4, 6 and 7 are still present on `upstream/alpha` (`42ddbabc`).
+Sections 1 to 4 and 6 to 8 are still present on `upstream/alpha` (`42ddbabc`).
 Section 5 was fixed upstream after the tag by `c727bdf0`, and the fork
 cherry-picked that commit.
 
@@ -182,13 +183,35 @@ property.") as a closed one. A script subclass of an array class
 (`Class(Int32[2])`) accepts extra fields on alpha.37 and alpha.38 alike, so
 that case is not a regression and is not changed here.
 
+## 8. `NumGet`/`NumPut` accept a numeric subclass until its layout closes
+
+`Object::GetNumGetArgInfo` reads `GetStructInfo()`, which for a prototype
+whose structure is still open returns its base's `StructInfo`. With
+`ad5cfae6` a class stays open until something needs its layout, so a
+subclass of a numeric class answers with the base's numeric type until then,
+and is rejected afterwards, because a closed numeric subclass is a plain
+struct (`native_type` Void, no `dllcall_type`):
+
+```autohotkey
+N := Class(Int32)
+NumGet(buf, N)              ; alpha.38: reads an Int32
+ObjGetDataSize(N.Prototype)
+NumGet(buf, N)              ; alpha.38: ValueError "Invalid parameter(s)."
+```
+
+Alpha.37 was inconsistent the other way: it accepted `N` until `N` was
+instantiated. Fix: `CloseStructInfo()` in `GetNumGetArgInfo`, as DllCall's
+`GetStructArgInfo` already does, so a numeric subclass is always rejected
+and the numeric classes themselves are unaffected.
+
 ## Verification
 
-Fork build `07fa54d7`, MSVC x64 and Win32: `qa/tests/test_alpha38.ahk`
-section 9 (15 asserts) passes on both, and the full qa suite is 1036/1036 on
-each. On the unfixed merge build (`c47c4c8b`, x64), 13 of the 15 fail
+Fork build `e13b80d8`, MSVC x64 and Win32: `qa/tests/test_alpha38.ahk`
+section 9 (17 asserts) passes on both, and the full qa suite is 1038/1038 on
+each. On the unfixed merge build (`c47c4c8b`, x64), 13 of the first 15 fail
 (`b2885254` fails the four from the second and third reviews, `e474e616`
-the two from the third). The two that pass there pin what the fix must keep: a `Node { next : Node.Ptr }`
+the two from the third); the `NumGet` assert from the fifth fails on
+`07fa54d7`. The two that pass there pin what the fix must keep: a `Node { next : Node.Ptr }`
 self-reference and a plain `Class(Int32)` instance. Also unchanged:
 `test_alpha38.ahk` section 4's mutually referencing structs in both orders,
 section 6's `Class(X.Ptr)` field, and every `examples/alpha37` and

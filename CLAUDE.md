@@ -447,8 +447,8 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   tag (`42ddbabc`), not merged. Always verify the actual executable's
   `--version` and hash; historical files in `bin/` or `bin_harness/` may be
   stale. Since 2026-11-12 `bin/` holds the local MSVC x64 build of
-  `07fa54d7` (`2.1-alpha.38+Console`, the alpha.38 merge plus the fork's
-  fixes to six alpha.38 regressions, below); `bin/*.a911f73d.bak` are the alpha.37
+  `e13b80d8` (`2.1-alpha.38+Console`, the alpha.38 merge plus the fork's
+  fixes to seven alpha.38 regressions, below); `bin/*.a911f73d.bak` are the alpha.37
   engines (the alpha.37 merge plus the fork's fixes to five alpha.37
   regressions, below) installed 2026-10-25, `bin/*.165d7384.bak`
   are the alpha.36 engines (`165d73849eb0`, the alpha.36 merge plus the
@@ -487,22 +487,23 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   factories to `ctor(void *p)`; the fork's `JSON.Object` factory follows it.
   `qa/tests/test_alpha38.ahk` sections 1-8 pin the changelog. CI run
   43271605576 (PR #35, `5497c7c8`) passed every build, test and
-  debugger-clients job, mingw included. Alpha.38 itself regressed six
-  things (Copilot's three reviews of PR #35, each reproduced on `c47c4c8b`): a
+  debugger-clients job, mingw included. Alpha.38 itself regressed seven
+  things (Copilot's five reviews of PR #35, each reproduced first): a
   struct containing itself by value was accepted and corrupted the heap
   when constructed (and one derived from an invalid struct kept a nonzero
   size), `{Type: ComValue(3, 0)}` in `DefineProp` exited 11, a
   `Class(Int32)` field dropped its class, `GetOwnPropDesc` lost an `Offset`
   naming a later-sorted field, a module's wildcard re-export was looked up
-  with the calling function's imports, and an array class accepted typed
-  fields until first use (element 2 of `Int32[2]` moved to offset 6). They
-  are fixed here in `b2885254`, `e474e616` and `07fa54d7`, pinned by section
-  9 of the same test (50 asserts), report in
+  with the calling function's imports, an array class accepted typed
+  fields until first use (element 2 of `Int32[2]` moved to offset 6), and
+  `NumGet` accepted a `Class(Int32)` subclass only until its layout closed.
+  They are fixed here in `b2885254`, `e474e616`, `07fa54d7` and `e13b80d8`,
+  pinned by section 9 of the same test (52 asserts), report in
   `docs/upstream/alpha38-regressions.md` (not yet sent). Another, nested
   functions missing a global wildcard import, is upstream's post-tag
-  `c727bdf0`, cherry-picked. On `07fa54d7` the gate is 17/17 and qa
-  1036/1036 on x64 and on a local Win32 build; CI runs 43275401437 and
-  43277056470 passed on the first two rounds of fixes.
+  `c727bdf0`, cherry-picked. On `e13b80d8` the gate is 17/17 and qa
+  1038/1038 on x64 and on a local Win32 build; CI runs 43275401437,
+  43277056470 and 43278657310 passed on the first three rounds of fixes.
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.
