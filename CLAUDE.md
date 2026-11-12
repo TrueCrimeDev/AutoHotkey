@@ -502,8 +502,10 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   `docs/upstream/alpha38-regressions.md` (not yet sent). Another, nested
   functions missing a global wildcard import, is upstream's post-tag
   `c727bdf0`, cherry-picked. On `e13b80d8` the gate is 17/17 and qa
-  1038/1038 on x64 and on a local Win32 build; CI runs 43275401437,
-  43277056470 and 43278657310 passed on the first three rounds of fixes.
+  1038/1038 on x64 and on a local Win32 build; CI run 43281421940 on
+  `54b92412` passed every job, and PR #35 merged into `alpha` as `ec6f5b32`
+  (Copilot's sixth review did not run: the account's review quota was
+  spent). `examples/alpha38/` has one script per change.
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.
