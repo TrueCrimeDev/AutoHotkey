@@ -234,6 +234,10 @@ CallbackFree(cb)
 ;      (alpha.37: ValueError); a Class(Int32) field dropped its class, so its
 ;      __Value never ran (alpha.37 read through it); GetOwnPropDesc lost an
 ;      Offset naming a field that sorts after the one being described.
+;      From Copilot's second review: a module's wildcard re-export was looked
+;      up with the calling function's imports, and a struct derived from an
+;      invalid one kept a nonzero size (b2885254 made Bad invalid but
+;      Derived still sized 4, so CallbackCreate accepted it).
 r := RunSnippet(Lines(wildcard*) Lines(
     "#Import MB {*}",
     "f() {",
@@ -244,6 +248,23 @@ r := RunSnippet(Lines(wildcard*) Lines(
     "}",
     "Print(f())"))
 Assert.eq(r.code " " r.out, "0 B`n", "a function nested in an import-free function sees the global wildcard import")
+; A module's wildcard re-export (#Import Export C {*}) is resolved with that
+; module's own imports, not the calling function's (41c751bc gave "D").
+r := RunSnippet(Lines(
+    "#Module C",
+    "global X := 'C'",
+    "#Module D",
+    "global X := 'D'",
+    "#Module B",
+    "#Import Export C {*}",
+    "#Module __Main",
+    "f() {",
+    "    #Import D {*}",
+    "    #Import B {*}",
+    "    return X",
+    "}",
+    "Print(f())"))
+Assert.eq(r.code " " r.out, "0 C`n", "a wildcard re-export is looked up in the re-exporting module's own imports")
 cycles := Map(
     "direct", "struct S {`n    a : Int32`n    x : S`n}",
     "mutual", "struct S {`n    b : B`n}`nstruct B {`n    a : S`n}",
@@ -261,6 +282,20 @@ for shape, src in cycles {
         "Print('size ' ObjGetDataSize(S.Prototype))"))
     Assert.eq(r.code " " r.out, "0 TypeError: Invalid struct.`nTypeError: Invalid struct.`nsize 0`n", "a struct that contains itself by value (" shape ") is an invalid struct")
 }
+; A struct derived from an invalid one is invalid with size 0, so DllCall and
+; CallbackCreate (which test the size) reject it too.
+r := RunSnippet(Lines(
+    "struct Bad {",
+    "    self : Bad",
+    "}",
+    "struct Derived extends Bad {",
+    "    x : Int32",
+    "}",
+    "Print(ObjGetDataSize(Derived.Prototype))",
+    "try CallbackCreate((s) => 0, , [Derived, 'Void'])",
+    "catch Error as e",
+    "    Print(Type(e))"))
+Assert.eq(r.code " " r.out, "0 0`nValueError`n", "a struct with an invalid base has size 0 and is not a CallbackCreate type")
 struct QaNode38 {
     next  : QaNode38.Ptr
     value : Int32
