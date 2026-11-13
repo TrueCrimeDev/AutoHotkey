@@ -356,4 +356,28 @@ Desc38Of(cls, name) {
     return d.HasOwnProp("Offset") ? d.Offset : "-"
 }
 
+; 10. An older upstream bug still present in alpha.38, fixed in the fork.
+; OLD (e13b80d8 and official alpha.34-38): Object::IsCArrayOf (8fcbf453, the
+;      S.Array-to-S.Ptr decay) dereferenced the candidate's base without a null
+;      check, so Any.Prototype passed to an Int32.Ptr DllCall parameter or
+;      assigned to an Int32.Ptr field exited 11 "Invalid memory read/write."
+;      (alpha.33: TypeError, as now).
+r := RunSnippet(Lines(
+    "try DllCall('kernel32\lstrlenW', Int32.Ptr, Any.Prototype, 'Int')",
+    "catch Error as e",
+    "    Print(Type(e) ': ' e.Message)",
+    "struct P {",
+    "    p : Int32.Ptr",
+    "}",
+    "s := P()",
+    "try s.p := Any.Prototype",
+    "catch Error as e",
+    "    Print(Type(e) ': ' e.Message)"))
+Assert.eq(r.code " " r.out, "0 TypeError: Expected a Number but got a Prototype.`nTypeError: Expected an Int32 but got a Prototype.`n", "Any.Prototype as an Int32.Ptr argument or field value throws TypeError")
+qaArr38 := Int32[3]()
+qaArr38[1] := 7, qaArr38[2] := 8
+qaDest38 := Buffer(8, 0)
+DllCall("kernel32\RtlMoveMemory", "Ptr", qaDest38, Int32.Ptr, qaArr38, "UPtr", 8)
+Assert.eq(NumGet(qaDest38, 0, "Int") " " NumGet(qaDest38, 4, "Int"), "7 8", "an Int32[3] still decays to an Int32.Ptr argument")
+
 Assert.Summary()
