@@ -1,6 +1,8 @@
 # Upstream report: `&Module.Var` returns an uncounted VarRef (alpha.33)
 
-Draft for an upstream issue. Nothing has been filed yet.
+Filed 2026-11-12 as [AutoHotkey/AutoHotkey#381](https://github.com/AutoHotkey/AutoHotkey/issues/381), after
+reproducing on the official alpha.38 zip, x64 and x86 (`__Ref` is
+unchanged at `upstream/alpha` `42ddbabc`).
 
 **Suggested title:** `&Module.Var` corrupts the heap: `ScriptModule::__Ref` returns `Var::GetRef()` without an `AddRef`
 
@@ -50,9 +52,14 @@ freeing the variable or `ref` later double-frees the VarRef.
 | Official alpha.33 GUI build (2026-10-08) | `UnsetError` | heap-corruption / access-violation exit after the script ends |
 | Fork `2.1-alpha.33+Console` before the fix (`d9fd14ac`) | `UnsetError`, line of the `Mod.X` read | `0xC0000374` (STATUS_HEAP_CORRUPTION), also with no `Bump` when `ref` is kept until exit |
 | Fork after the fix (`cb092d22` + patch) | `15` | `0` |
+| Official alpha.38 zip, x64 and x86 (2026-11-12) | `UnsetError` | `0xC0000374` (one x86 run: "Critical Error: Invalid memory read/write." dialog) |
+| Official alpha.33 zip, x64 and x86 (2026-11-12) | `UnsetError` | `0xC0000374` |
 
 On the before engine, a script-side `ObjAddRef(ObjPtr(ref))` right after
-`ref := &Mod.X` hides both symptoms, which points at the missing count.
+`ref := &Mod.X` hides both symptoms, which points at the missing count. On
+the official alpha.38 zip it keeps `Bump` working, but the process still
+exits `0xC0000374`: the second `&Mod.X` (inside `Bump`) gives up another
+count, so one extra reference is not enough.
 
 ## Patch
 

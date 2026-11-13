@@ -1027,3 +1027,18 @@ unlogged loop session between 3 and now.)
   `Class(Int32[2])`, `Int32[2].Ptr`), so alpha.37 section 5 stays
   unreachable from script. Not filed (not asked): the `IsCArrayOf` null
   dereference and `docs/upstream/alpha33-module-ref-addref.md`.
+- Two older upstream bugs, filed on request. The alpha.34 `IsCArrayOf`
+  crash (`DllCall(..., Int32.Ptr, Any.Prototype)`, and `Any.Prototype`
+  assigned to an `Int32.Ptr` field: exit 11) is fixed in `a6763d81` with a
+  null-base guard. Both cases now throw `TypeError` as on official alpha.33,
+  and an `Int32[3]` still decays. `test_alpha38.ahk` section 10 pins it (54
+  asserts in the file; `e13b80d8` fails it). Gate 17/17, qa 1040/1040 on
+  x64, qa 1040/1040 on Win32, check_all 118/118. It crashes on the official
+  alpha.34, 36, 37 and 38 zips (the alpha.35 zip was locked after download,
+  probably by antivirus). Filed as AutoHotkey/AutoHotkey #380
+  (`docs/upstream/alpha34-iscarrayof-null-base.md`). The alpha.33
+  `&Module.Var` report (fixed here since `398dd37f`) still reproduces on the
+  official alpha.38 zip, x64 and x86, and is filed as #381. There, one
+  script-side `ObjAddRef(ObjPtr(ref))` no longer hides the crash once
+  `Bump(&Mod.X)` runs, and the report says so. Both `bin/` folders hold
+  `a6763d81`; `bin/AutoHotkey64Console.capabilities.json` was regenerated.
