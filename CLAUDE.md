@@ -483,7 +483,8 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   fixes (`a41db9a1`, `f24c23d1`), and `1e55d515`/`51547074` fix the `a.b()`
   and `CallbackCreate` regressions, so upstream's versions were taken. The
   `NumPut` per-pair size and the two Win32 fixes stay fork-only (report
-  sections 1, 4 and 5, not yet sent). `ee8080f8` changed native class
+  sections 1, 4 and 5, filed 2026-11-12 as AutoHotkey/AutoHotkey #378
+  and #379). `ee8080f8` changed native class
   factories to `ctor(void *p)`; the fork's `JSON.Object` factory follows it.
   `qa/tests/test_alpha38.ahk` sections 1-8 pin the changelog. CI run
   43271605576 (PR #35, `5497c7c8`) passed every build, test and
@@ -499,7 +500,9 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   `NumGet` accepted a `Class(Int32)` subclass only until its layout closed.
   They are fixed here in `b2885254`, `e474e616`, `07fa54d7` and `e13b80d8`,
   pinned by section 9 of the same test (52 asserts), report in
-  `docs/upstream/alpha38-regressions.md` (not yet sent). Another, nested
+  `docs/upstream/alpha38-regressions.md` (filed 2026-11-12 as
+  AutoHotkey/AutoHotkey #371-#377, one per regression, each reproduced
+  first on the official alpha.38 zip, x64 and x86). Another, nested
   functions missing a global wildcard import, is upstream's post-tag
   `c727bdf0`, cherry-picked. On `e13b80d8` the gate is 17/17 and qa
   1038/1038 on x64 and on a local Win32 build; CI run 43281421940 on

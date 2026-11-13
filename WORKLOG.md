@@ -1010,3 +1010,20 @@ unlogged loop session between 3 and now.)
   as `ec6f5b32` (`--merge`). `examples/alpha38/` followed on
   `docs/alpha38-examples`, rebased onto it, as `examples/alpha37/` did in
   PR #34.
+- Upstream reports filed 2026-11-12 as GitHub issues on
+  `AutoHotkey/AutoHotkey`, where #370 (another reporter's source-level alpha
+  bug) was answered and fixed within three days; the issue template's forum
+  link is for documented functionality. One issue per defect: #371-#377 for
+  `docs/upstream/alpha38-regressions.md` sections 1-4 and 6-8, #378 and #379
+  for `alpha37-regressions.md` sections 1 and 4 (section 5 as a from-source
+  note in #379). Each repro was run first on the official alpha.38 and
+  alpha.37 zips (alpha.36 too for the alpha.37 items), x64 and x86, through
+  `tools/run_hidden.py`; every item reproduces. Section 1's crash code
+  varies between runs (`0xC0000409`, `0xC0000005`, `0xC0000374`, or a
+  Critical Error dialog). Official alpha.37 printed `Offset 0` for both
+  fields of section 4's repro; alpha.36 refused an unset `"Int64*"`, so
+  alpha.37 section 4 is a bug in the new feature, not a regression.
+  `CallbackCreate` still refuses every array type (`Int32[2]`,
+  `Class(Int32[2])`, `Int32[2].Ptr`), so alpha.37 section 5 stays
+  unreachable from script. Not filed (not asked): the `IsCArrayOf` null
+  dereference and `docs/upstream/alpha33-module-ref-addref.md`.

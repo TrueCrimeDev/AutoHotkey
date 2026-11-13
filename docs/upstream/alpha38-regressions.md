@@ -1,6 +1,8 @@
 # v2.1-alpha.38: seven regressions in the open-structure and import changes, and one import fix already upstream
 
-Draft upstream report. Found 2026-11-12 by GitHub Copilot's review of the
+Upstream report, filed 2026-11-12 as one GitHub issue per section
+([AutoHotkey/AutoHotkey#371](https://github.com/AutoHotkey/AutoHotkey/issues/371) to [AutoHotkey/AutoHotkey#377](https://github.com/AutoHotkey/AutoHotkey/issues/377); each section names its
+issue). Found 2026-11-12 by GitHub Copilot's review of the
 fork's merge PR (TrueCrimeDev/AutoHotkey #35) and reproduced on a build of
 the `v2.1-alpha.38` tag (`afde2333`), x64 and x86, before being fixed in the
 fork (`b2885254`; section 1's invalid-base case and section 6 came from
@@ -15,6 +17,8 @@ Section 5 was fixed upstream after the tag by `c727bdf0`, and the fork
 cherry-picked that commit.
 
 ## 1. A struct that contains itself by value is accepted, then corrupts the heap
+
+Filed as [AutoHotkey/AutoHotkey#371](https://github.com/AutoHotkey/AutoHotkey/issues/371).
 
 `ad5cfae6` ("Changed typed property offsets to be calculated later") moved
 layout calculation into `Object::CloseStructInfo`, which sets
@@ -65,10 +69,13 @@ Fix (`source/script_object.cpp`, `CloseStructInfo`):
 Every construction path already refuses `StructKind::Invalid`, so `S()`,
 `S.At(buf)` and `ObjCreateWithDataPtr(S, buf)` throw `TypeError` "Invalid
 struct.", and `ObjGetDataSize(S.Prototype)` is 0. The error now comes at
-first use instead of at `DefineProp`, which is unavoidable once offsets are
-calculated late.
+first use instead of at `DefineProp`. The direct and `DefineProp` shapes
+could still be refused there, as on alpha.37; the mutual and base shapes can
+only be detected once the layout closes.
 
 ## 2. `DefineProp` with a COM wrapper as the field type dereferences null
+
+Filed as [AutoHotkey/AutoHotkey#372](https://github.com/AutoHotkey/AutoHotkey/issues/372).
 
 `ad5cfae6` rewrote `Object::DefineTypedProperty(name, Object *aClass, ...)`
 to start with `aClass->ClassGetPrototype()`. `DefineProp` passes
@@ -86,6 +93,8 @@ Fix: `auto proto = aClass ? aClass->ClassGetPrototype() : nullptr;`, so a
 non-`Object` reaches the existing `FR_E_ARGS` path.
 
 ## 3. A field whose type is a numeric subclass loses its class
+
+Filed as [AutoHotkey/AutoHotkey#373](https://github.com/AutoHotkey/AutoHotkey/issues/373).
 
 In `CloseStructInfo` a subclass inherits `bsi.kind` (reverting only `Ptr` to
 `Struct`), while `native_type` stays `MdType::Void` for a subclass ("Revert
@@ -112,6 +121,8 @@ field keeps its class, constructs it, and runs its `__Value`. `N()` itself,
 
 ## 4. `GetOwnPropDesc` loses an `Offset` that names a later-sorted field
 
+Filed as [AutoHotkey/AutoHotkey#374](https://github.com/AutoHotkey/AutoHotkey/issues/374).
+
 `ad5cfae6`'s `GetOwnPropDesc` reports an `Offset` given by name, while the
 structure is open, by searching `mFields` backward from the described field.
 `mFields` is sorted by name, not definition order:
@@ -136,6 +147,8 @@ import resolution in nested functions which don't use #Import."). The fork
 cherry-picked it (`9a2cf75e`); nothing to report.
 
 ## 6. A wildcard re-export is looked up with the calling function's imports
+
+Filed as [AutoHotkey/AutoHotkey#375](https://github.com/AutoHotkey/AutoHotkey/issues/375).
 
 `41c751bc` also made `FindImportedVar` start from `g->CurrentFunc`'s imports.
 When the search recurses into another module for its wildcard exports, that
@@ -163,6 +176,8 @@ imports, as alpha.37's `IsInScope` test effectively did.
 
 ## 7. An array class accepts typed fields while its layout is pending
 
+Filed as [AutoHotkey/AutoHotkey#376](https://github.com/AutoHotkey/AutoHotkey/issues/376).
+
 `afde2333` ("Change CreateCArrayClass to postpone CloseStructInfo") leaves an
 array class open until it is first used. Before that, an array class was
 closed when it was created, so `DefineProp` refused new typed properties on
@@ -184,6 +199,8 @@ property.") as a closed one. A script subclass of an array class
 that case is not a regression and is not changed here.
 
 ## 8. `NumGet`/`NumPut` accept a numeric subclass until its layout closes
+
+Filed as [AutoHotkey/AutoHotkey#377](https://github.com/AutoHotkey/AutoHotkey/issues/377).
 
 `Object::GetNumGetArgInfo` reads `GetStructInfo()`, which for a prototype
 whose structure is still open returns its base's `StructInfo`. With
@@ -216,3 +233,18 @@ self-reference and a plain `Class(Int32)` instance. Also unchanged:
 `test_alpha38.ahk` section 4's mutually referencing structs in both orders,
 section 6's `Class(X.Ptr)` field, and every `examples/alpha37` and
 `examples/alpha38` script.
+
+## Official builds (2026-11-12, before filing)
+
+Each section's repro (stdout through `FileAppend(..., "*")`, run through
+`tools/run_hidden.py`) was run on the official `AutoHotkey_2.1-alpha.38.zip`
+(sha256 `f4a18987fd2d2a23e3239b2716689765b7deda2a5d23cb94e13da22feb78e896`),
+`AutoHotkey64.exe` and `AutoHotkey32.exe`, and on the official alpha.37 zip.
+Every section reproduces on both architectures. Section 1's crash varies
+between runs and shapes: `0xC0000409`, `0xC0000005`, `0xC0000374`, or a
+"Critical Error: Invalid memory read/write." dialog at `S()` (in one x64
+run of the mutual shape `S()` returned). Official alpha.37 refused every
+section 1 shape at `DefineProp` ("Cannot add typed property." or
+"Parameter #3 invalid."), printed `Offset 0` for both fields in section 4
+(the offset was resolved in `DefineProp`), and accepted section 8's
+`Class(Int32)` before and after `ObjGetDataSize` closed it.
