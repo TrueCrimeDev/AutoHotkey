@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A native AutoHotkey `2.1-alpha.38+Console` fork. The engine supplies shell
+A native AutoHotkey `2.1-alpha.39+Console` fork. The engine supplies shell
 commands, structured diagnostics, Eval, JSON, Inspect, ProcessPipe, source
 introspection, coverage, and an MCP server. The TypeScript debugger integrations
 under `debugger-tool/` are separate consumers of the engine's DBGp protocol.
@@ -219,7 +219,7 @@ comments and blank lines are skipped. `Text` is the engine's rendering of the
 parsed line, not the raw source: trailing comments are dropped, and
 `for line in lines {` comes back as `For line in lines` plus a separate `{`
 entry with the same `Number`. Those brace entries count toward `Range`, and
-since the post-alpha.38 merge (upstream `7db739be`) function bodies are
+since alpha.39 (upstream `1c1994e1`) function bodies are
 separate line lists: a range around a line inside a function stops at that
 function's own braces, and one outside a function skips over its body. A
 negative or omitted range returns just the given line. A line number with no
@@ -443,17 +443,17 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
 
 # Current State & Open Items (updated 2026-11-15)
 
-- Target language version: `2.1-alpha.38+Console`, based on the upstream tag
-  `v2.1-alpha.38` (`afde2333`, released 2026-11-07; merged 2026-11-12 on
-  `m1/upstream-alpha38` as `c47c4c8b`, `docs/alpha/v2.1-alpha.38.md`;
-  alpha.34-37 notes beside it). `upstream/alpha` was merged again on
-  2026-11-15 up to `768d9bdc`, 23 commits past the tag and 18 past
-  `42ddbabc` (`ca5b713b`, WORKLOG
-  Session 22). Always verify the actual executable's
+- Target language version: `2.1-alpha.39+Console`, based on the upstream tag
+  `v2.1-alpha.39` (`768d9bdc`, released 2026-11-14; merged 2026-11-15 on
+  `m1/upstream-alpha38-post` as `ca5b713b`, 23 commits past the alpha.38
+  tag, before the alpha.39 tag was noticed; the version string followed in
+  `560b1f7e`; `docs/alpha/v2.1-alpha.39.md`, alpha.34-38 notes beside it;
+  WORKLOG Session 22). Alpha.38 (`afde2333`) was merged 2026-11-12 on
+  `m1/upstream-alpha38` as `c47c4c8b`. Always verify the actual executable's
   `--version` and hash; historical files in `bin/` or `bin_harness/` may be
   stale. Since 2026-11-15 `bin/AutoHotkey64*.exe` are the local MSVC x64
-  build of `ec2f18d9` (`2.1-alpha.38+Console`, that merge plus the fork's
-  fix for lines inside functions, Session 22); `bin/*.a6763d81.bak` are the
+  build of `560b1f7e` (`2.1-alpha.39+Console`: the alpha.39 merge plus the
+  fork's fix for lines inside functions, `ec2f18d9`); `bin/*.a6763d81.bak` are the
   previous x64 engines (the alpha.38 merge plus the fork's
   fixes to seven alpha.38 regressions and the alpha.34 `IsCArrayOf` crash,
   below), and `bin/AutoHotkey32*.exe` are still `f14d7427`; `bin/*.a911f73d.bak` are the alpha.37

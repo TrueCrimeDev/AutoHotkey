@@ -1061,7 +1061,7 @@ unlogged loop session between 3 and now.)
   kept the fork's side (its transports already treat a 0-byte read as a
   disconnect); `interop.cpp` took upstream's rewrite of the #377 `NumGet`
   fix (an unclosed layout is rejected instead of closed).
-- `7db739be` unlinks every function body from its module's line list.
+- `1c1994e1` unlinks every function body from its module's line list.
   `Script::GetLine` and coverage walked only those lists, so
   `_ScriptGetLines` inside a function returned nothing, an uncaught error
   made inside a function was reported at the throw line again, and
@@ -1074,3 +1074,22 @@ unlogged loop session between 3 and now.)
   Win32 qa 1040/1040 and the runtime-regression and coverage suites pass.
   `bin/AutoHotkey64*.exe` hold `ec2f18d9` (sha256 `53e6a8e75edeec0f` GUI,
   `7c84d6797927d2e6` Console); the previous pair is `bin/*.a6763d81.bak`.
+- Corrections to the two bullets above: the merge brought in all 23
+  commits after the alpha.38 tag (merge base `afde2333`, with `c727bdf0`
+  already cherry-picked), not 18 after `42ddbabc`; and the line-list split
+  is `1c1994e1` (`7db739be` is its breakpoint follow-up). The commit
+  messages of `ca5b713b` and `ec2f18d9` keep the old wording.
+- Upstream tagged `v2.1-alpha.39` on `768d9bdc` (2026-11-14), the commit
+  merged above, so the fork already had alpha.39's code. `560b1f7e` moves the
+  version string to `2.1-alpha.39+Console` (`source/ahkversion.h`,
+  `build_local.bat`, VS Code tasks and generator, `fork.d.ahk`, README,
+  BUILD, updates and two tool docs) and adds `qa/tests/test_alpha39.ahk`
+  (5 asserts: function definition expressions under `if`/`else`, the #370
+  link fix and the range boundaries through `_ScriptGetLines`, a line inside
+  a function found by number, `WinGetTransparent` returning `""`). Four of the
+  five fail on `a6763d81` (run from a copy with `#Requires` lowered); the
+  fifth pins `ec2f18d9`. Release note: `docs/alpha/v2.1-alpha.39.md`.
+- On `560b1f7e`: gate 17/17 and qa 1045/1045 on x64, `check_all` 119/119,
+  Win32 qa 1045/1045. `bin/AutoHotkey64*.exe` hold `560b1f7e` (sha256
+  `ac8926b45b62ab60` GUI, `382833c77f55bb1d` Console);
+  `bin/AutoHotkey64Console.capabilities.json` was regenerated.
