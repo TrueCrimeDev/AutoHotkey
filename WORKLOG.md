@@ -1042,3 +1042,34 @@ unlogged loop session between 3 and now.)
   script-side `ObjAddRef(ObjPtr(ref))` no longer hides the crash once
   `Bump(&Mod.X)` runs, and the report says so. Both `bin/` folders hold
   `a6763d81`; `bin/AutoHotkey64Console.capabilities.json` was regenerated.
+
+### Session 22 (2026-11-15) — upstream `alpha` after the alpha.38 tag
+
+- The `upstream` remote's push URL is now `DISABLED` (fetch still works), so
+  nothing from this clone can be pushed to `AutoHotkey/AutoHotkey`. The
+  issues #371-#381 filed there on 2026-11-12 were filed by mistake: the
+  maintainer wanted the fork updated, not upstream. Lexikos closed and fixed
+  all eleven on 2026-11-13.
+- Merged `upstream/alpha` (`768d9bdc`, 18 commits past `42ddbabc`) on
+  `m1/upstream-alpha38-post` as `ca5b713b`. Upstream's fixes for #371-#381
+  are the fork's own commits, applied unchanged with TrueCrimeDev as author,
+  so `script_object.cpp`, `script_module.cpp`, `CCallback.cpp` and
+  `DllCall.cpp` merged with no difference. Also in: breakpoints in
+  `#Module`s (`7db739be`), the v2.0 merge (`property_value` corruption,
+  `source`-command and disconnect hangs, RegEx invalid UTF-16 crash,
+  `Format` overflows) and the Gui DPI font fix. Conflicts: `Debugger.cpp`
+  kept the fork's side (its transports already treat a 0-byte read as a
+  disconnect); `interop.cpp` took upstream's rewrite of the #377 `NumGet`
+  fix (an unclosed layout is rejected instead of closed).
+- `7db739be` unlinks every function body from its module's line list.
+  `Script::GetLine` and coverage walked only those lists, so
+  `_ScriptGetLines` inside a function returned nothing, an uncaught error
+  made inside a function was reported at the throw line again, and
+  `/Coverage` lost every line inside a function (the two coverage tests
+  failed; the first two were found by probing). `ec2f18d9` walks each
+  function body too; two new `tests/test_runtime_regressions.py` cases pin
+  them. A `_ScriptGetLines` range now stops at the function's own braces.
+- On `ec2f18d9`: gate 17/17 and qa 1040/1040 on x64, `check_all` 118/118;
+  Win32 qa 1040/1040 and the runtime-regression and coverage suites pass.
+  `bin/AutoHotkey64*.exe` hold `ec2f18d9` (sha256 `53e6a8e75edeec0f` GUI,
+  `7c84d6797927d2e6` Console); the previous pair is `bin/*.a6763d81.bak`.

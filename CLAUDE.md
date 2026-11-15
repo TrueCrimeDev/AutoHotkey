@@ -218,7 +218,9 @@ It returns an Array of `{File, Number, Text}` objects, one per parsed line;
 comments and blank lines are skipped. `Text` is the engine's rendering of the
 parsed line, not the raw source: trailing comments are dropped, and
 `for line in lines {` comes back as `For line in lines` plus a separate `{`
-entry with the same `Number`. Those brace entries count toward `Range`. A
+entry with the same `Number`. Those brace entries count toward `Range`, and
+since the post-alpha.38 merge (upstream `7db739be`) a range around a line
+inside a function stops at that function's own braces. A
 negative or omitted range returns just the given line. A line number with no
 code (blank, comment-only or past the end) returns no Array, and what you get
 depends on the calling module's compatibility mode: by default (v2.0 mode) an
@@ -438,18 +440,21 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
 
 ---
 
-# Current State & Open Items (updated 2026-11-12)
+# Current State & Open Items (updated 2026-11-15)
 
 - Target language version: `2.1-alpha.38+Console`, based on the upstream tag
   `v2.1-alpha.38` (`afde2333`, released 2026-11-07; merged 2026-11-12 on
   `m1/upstream-alpha38` as `c47c4c8b`, `docs/alpha/v2.1-alpha.38.md`;
-  alpha.34-37 notes beside it). `upstream/alpha` is five commits past the
-  tag (`42ddbabc`), not merged. Always verify the actual executable's
+  alpha.34-37 notes beside it). `upstream/alpha` was merged again on
+  2026-11-15 up to `768d9bdc`, 18 commits past the tag (`ca5b713b`, WORKLOG
+  Session 22). Always verify the actual executable's
   `--version` and hash; historical files in `bin/` or `bin_harness/` may be
-  stale. Since 2026-11-12 `bin/` holds the local MSVC x64 build of
-  `a6763d81` (`2.1-alpha.38+Console`, the alpha.38 merge plus the fork's
+  stale. Since 2026-11-15 `bin/AutoHotkey64*.exe` are the local MSVC x64
+  build of `ec2f18d9` (`2.1-alpha.38+Console`, that merge plus the fork's
+  fix for lines inside functions, Session 22); `bin/*.a6763d81.bak` are the
+  previous x64 engines (the alpha.38 merge plus the fork's
   fixes to seven alpha.38 regressions and the alpha.34 `IsCArrayOf` crash,
-  below); `bin/*.a911f73d.bak` are the alpha.37
+  below), and `bin/AutoHotkey32*.exe` are still `f14d7427`; `bin/*.a911f73d.bak` are the alpha.37
   engines (the alpha.37 merge plus the fork's fixes to five alpha.37
   regressions, below) installed 2026-10-25, `bin/*.165d7384.bak`
   are the alpha.36 engines (`165d73849eb0`, the alpha.36 merge plus the
