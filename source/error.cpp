@@ -1619,6 +1619,17 @@ Line *Script::GetLine(LPCTSTR aFile, int aNumber, Line *aCandidate)
 					break;
 			}
 		}
+		// Function bodies are unlinked from their module's line list during preparsing,
+		// each left as its own list from the opening brace to the closing one.
+		for (int i = 0; i < mFuncs.mCount; ++i)
+		{
+			for (Line *line = mFuncs.mItem[i]->mJumpToLine; line; line = line->mNextLine)
+			{
+				if (line->mLineNumber == aNumber && line->mFileIndex == file_index
+					&& (line->mArgc || !line->mNextLine || line->mNextLine->mLineNumber != aNumber))
+					return line;
+			}
+		}
 	}
 	return aCandidate;
 }
