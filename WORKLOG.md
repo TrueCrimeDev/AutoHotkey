@@ -1068,7 +1068,8 @@ unlogged loop session between 3 and now.)
   `/Coverage` lost every line inside a function (the two coverage tests
   failed; the first two were found by probing). `ec2f18d9` walks each
   function body too; two new `tests/test_runtime_regressions.py` cases pin
-  them. A `_ScriptGetLines` range now stops at the function's own braces.
+  them. A `_ScriptGetLines` range inside a function now stops at its
+  braces, and one outside a function skips over the body.
 - On `ec2f18d9`: gate 17/17 and qa 1040/1040 on x64, `check_all` 118/118;
   Win32 qa 1040/1040 and the runtime-regression and coverage suites pass.
   `bin/AutoHotkey64*.exe` hold `ec2f18d9` (sha256 `53e6a8e75edeec0f` GUI,
