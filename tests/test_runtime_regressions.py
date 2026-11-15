@@ -325,6 +325,23 @@ Print(JSON.Stringify({{ok:valid.Ok, validDiagnostics:valid.Diagnostics.Length,
         record = self.uncaught_diagnostic(source)
         self.assertEqual((record["message"], record["line"], record["source"]), ("m", 2, "y := 2"))
 
+    def test_uncaught_error_made_inside_a_function_names_its_line(self):
+        # Since upstream 7db739be preparsing unlinks every function body from its module's
+        # line list, so a GetLine that walked only those lists missed lines inside functions
+        # and the report fell back to the throw site.
+        source = 'F() {\n    x := 1\n    e := Error("made on 3")\n    y := 2\n    throw e\n}\nF()\n'
+        self.assertIn("sample.ahk (3) : ==> made on 3", self.uncaught_report(source))
+        record = self.uncaught_diagnostic(source)
+        self.assertEqual((record["line"], record["source"]), (3, '    e := Error("made on 3")'))
+
+    def test_script_get_lines_finds_lines_inside_functions(self):
+        source = ('F() {\n    x := 1\n    return _ScriptGetLines(A_LineFile, 2)\n}\n'
+                  'Outer() {\n    Inner() => _ScriptGetLines(A_LineFile, 6)\n    return Inner()\n}\n'
+                  'Print(F()[1].Text)\nPrint(Outer()[1].Number)\n')
+        result = self.run_script(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [b"x := 1", b"6"])
+
     def test_uncaught_object_without_a_loaded_location_reports_the_throw_site(self):
         cases = [
             ('x := 1\nthrow {Message: "m", File: A_ScriptFullPath, Line: 999999}\n', "m", ""),

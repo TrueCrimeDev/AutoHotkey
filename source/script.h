@@ -2454,6 +2454,7 @@ public:
 	
 	ScriptModule *CurrentModule() { return g->CurrentFunc ? g->CurrentFunc->mModule : mCurrentModule; }
 	ScriptModule *LastModule() { return mLastModule; } // Head of the module chain (walk mPrev); used by coverage.
+	FuncList &Funcs() { return mFuncs; } // Every UserFunc; each body is its own line list after preparsing. Used by coverage.
 	ScriptModule *FindDirectiveModule(LPCTSTR aName, ScriptModule *aList);
 	ResultType ParseModuleDirective(LPCTSTR aName);
 	ResultType ParseImportDirective(LPTSTR aBuf);

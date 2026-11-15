@@ -62,10 +62,16 @@ namespace
 		s_lines.resize(Line::sSourceFileCount);
 		for (int f = 0; f < Line::sSourceFileCount; ++f)
 			s_files.emplace_back(Line::sSourceFile[f]);
-		for (auto mod = g_script.LastModule(); mod; mod = mod->mPrev)
-			for (Line *line = mod->mFirstLine; line; line = line->mNextLine)
+		auto found = [](Line *aFirst) {
+			for (Line *line = aFirst; line; line = line->mNextLine)
 				if (line->mLineNumber && !IsStructuralLine(line) && line->mFileIndex < s_lines.size())
 					s_lines[line->mFileIndex][line->mLineNumber] = 0;
+		};
+		for (auto mod = g_script.LastModule(); mod; mod = mod->mPrev)
+			found(mod->mFirstLine);
+		// Preparsing unlinks each function body from its module's line list.
+		for (int i = 0; i < g_script.Funcs().mCount; ++i)
+			found(g_script.Funcs().mItem[i]->mJumpToLine);
 		s_prepared = true;
 	}
 

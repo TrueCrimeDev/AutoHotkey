@@ -7954,9 +7954,7 @@ ResultType Script::PreparseCommands(ScriptModule *aModule)
 
 	for (Line *line = aModule->mFirstLine; line; line = line->mNextLine)
 	{
-		LPTSTR line_raw_arg1 = LINE_RAW_ARG1; // Resolve only once to help reduce code size.
-		LPTSTR line_raw_arg2 = LINE_RAW_ARG2; //
-		
+	continue_with_same_line:
 		switch (line->mActionType)
 		{
 		case ACT_BLOCK_BEGIN:
@@ -7973,54 +7971,34 @@ ResultType Script::PreparseCommands(ScriptModule *aModule)
 				Line *block_begin = line->mParentLine;
 				Line *parent = block_begin->mParentLine;
 
-				if (func.mIsFuncExpression == FuncDefFatArrow)
-				{
-					// If this fat arrow function's parent line is a statement with a single-line
-					// action, that action is currently separated from its parent by one or
-					// more fat arrow functions.  It won't work that way because If/Else/Loop/etc.
-					// all skip an initial ACT_BLOCK_BEGIN (to avoid an extra ExecUntil call),
-					// which would result in executing the function's body instead of skipping it.
-					// If the parent is a block, this is needed only to let breakpoints work on the
-					// line which contains the arrow function.
-					Line *next = line->mNextLine;
-					Line *prev = block_begin->mPrevLine;
-					// Remove the fat arrow function from the outer Line list.
-					if (prev)
-						prev->mNextLine = next;
-					else
-						mCurrentModule->mFirstLine = next;
-					next->mPrevLine = prev;
-					// If this wasn't unset, an error dialog would walk upward to find a previous line,
-					// then step forward and fail to find the original target line.  Instead, it will
-					// display from the function's block-begin downward, usually including the expression
-					// which contains the function.  Must not change line->mNextLine or line itself because
-					// they are still needed by the current and next iteration of this loop.
-					block_begin->mPrevLine = nullptr;
-					// An alternative approach used in v2.0.17 & .18 was to move the function's body,
-					// but identifying the right place to move it was deceptively complicated:
-					//   if cond
-					//       ; BAD: executed by IF
-					//       f(A()=>)
-					//       ; OK for A
-					//   else
-					//       ; BAD: executed by ELSE
-					//       if f(B()=>)
-					//           ; BAD: executed by IF
-					//           body
-					//           ; OK? Difficult to locate because mRelatedLine points us to the very end of the ladder.
-					//       else ...
-					// This was intended to group the lines together so that the debugger can iterate
-					// over them efficiently, but as demonstrated above, they can't always be kept in a
-					// continuguous sequence.  Instead, the debugger now iterates over the function list.
-					// If ever we do shuffle lines around again, be sure that the loop here is redesigned
-					// to finish preparsing this current "line" and continue iterating correctly.
-				}
-				else if (parent && parent->mActionType != ACT_BLOCK_BEGIN)
+				if (parent && parent->mActionType != ACT_BLOCK_BEGIN && !func.IsInExpression())
 				{
 					// This is a normal function definition directly under If/Else/Loop/etc.
 					// It would execute incorrectly as described above, so raise an error.
 					return block_begin->PreparseError(_T("Unexpected function"));
 				}
+
+				// Remove the function from the line list so that ExecUntil doesn't need to step
+				// over it, and so that if this is an arrow function or FDE separating a statement
+				// from its body, the statement will execute correctly.  For example:
+				//    if cond          ; parent
+				//        x(y() => 1)  ; block_begin, (return 1), line (block end), (call to x)
+				Line *prev = block_begin->mPrevLine;
+				Line *next = line->mNextLine;
+				// Remove the function from the outer Line list.  When there are consecutive functions,
+				// each one must be removed only after preparsing its body, and the line list must be
+				// kept consistent in both directions in case an error is shown (see comment below).
+				if (prev)
+					prev->mNextLine = next;
+				else
+					mCurrentModule->mFirstLine = next;
+				next->mPrevLine = prev;
+				// If mPrevLine wasn't unset, an error dialog would walk upward to find a previous line,
+				// then step forward and fail to find the original target line.  Instead, it will
+				// display only the function's body.
+				block_begin->mPrevLine = nullptr;
+				line = std::exchange(line->mNextLine, nullptr);
+				goto continue_with_same_line;
 			}
 			break;
 		case ACT_BREAK:
@@ -8030,7 +8008,7 @@ ResultType Script::PreparseCommands(ScriptModule *aModule)
 					// It seems unlikely that computing the target loop at runtime would be useful.
 					// For simplicity, rule out things like "break(var)" and "break(func())":
 					return line->PreparseError(ERR_PARAM1_INVALID); //_T("Target label of Break/Continue cannot be dynamic."));
-				LPTSTR loop_name = line_raw_arg1;
+				LPTSTR loop_name = LINE_RAW_ARG1;
 				Label *loop_label = nullptr;
 				Line *loop_line, *innermost_loop = nullptr;
 				if (*loop_name && !IsNumeric(loop_name))
