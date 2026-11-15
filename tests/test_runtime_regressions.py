@@ -326,7 +326,7 @@ Print(JSON.Stringify({{ok:valid.Ok, validDiagnostics:valid.Diagnostics.Length,
         self.assertEqual((record["message"], record["line"], record["source"]), ("m", 2, "y := 2"))
 
     def test_uncaught_error_made_inside_a_function_names_its_line(self):
-        # Since upstream 7db739be preparsing unlinks every function body from its module's
+        # Since upstream 1c1994e1 preparsing unlinks every function body from its module's
         # line list, so a GetLine that walked only those lists missed lines inside functions
         # and the report fell back to the throw site.
         source = 'F() {\n    x := 1\n    e := Error("made on 3")\n    y := 2\n    throw e\n}\nF()\n'
