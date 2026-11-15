@@ -110,9 +110,64 @@ inline bool BreakpointLineIsSlippery(Line *aLine)
 
 Line *Debugger::FindFirstLineForBreakpoint(int file_index, UINT line_no)
 {
-	Line *found_line = nullptr;
+	Line *best_line = nullptr;
 	for (auto mod = g_script.mLastModule; mod; mod = mod->mPrev)
-	for (Line *line = mod->mFirstLine; line; line = line->mNextLine)
+		if (mod->mFileIndex == file_index || mod->HasFileIndex(file_index))
+		{
+			if (auto line = FindFirstLineForBreakpoint(file_index, line_no, mod->mFirstLine))
+			{
+				if (line->mLineNumber == line_no // Exact match.
+					&& line->mActionType != ACT_END_MODULE) // Exclude ACT_END_MODULE because it can overlap with an FDE or the next #Module.
+					return line;
+				if (!best_line || line->mLineNumber < best_line->mLineNumber)
+					best_line = line;
+				// Keep searching for a better match.
+			}
+			// We currently presume that if it wasn't found in this module, it won't be
+			// found in any module which includes this file.  We don't really support
+			// cases where multiple modules #include a file anyway, as the Breakpoint
+			// would only be set on the first found Line instance.
+			if (mod->IsFileModule() || mod->mFileIndex != file_index)
+				break;
+		}
+	bool mod_has_file = false;
+	ScriptModule *mod = nullptr;
+	for (int i = 0; i < g_script.mFuncs.mCount; ++i)
+	{
+		auto &func = *g_script.mFuncs.mItem[i];
+		// Don't search arrow functions since they need to be grouped with their parent line
+		// (which probably should have already been found anyway, if this was the target).
+		if (func.mIsFuncExpression == FuncDefFatArrow)
+			continue;
+		if (func.mJumpToLine->mFileIndex != file_index)
+		{
+			// Can't immediately rule out func since it could #include the file.
+			if (func.mModule != mod)
+			{
+				// Functions tend to be grouped by module, so this might help performance
+				// by skipping many functions which can't possibly be in/contain this file.
+				mod = func.mModule;
+				mod_has_file = mod->mFileIndex == file_index || mod->HasFileIndex(file_index);
+			}
+			if (!mod_has_file)
+				continue;
+		}
+		if (auto line = FindFirstLineForBreakpoint(file_index, line_no, func.mJumpToLine))
+		{
+			if (line->mLineNumber == line_no)
+				return line;
+			// Keep searching because class var initializers can cause lines to be listed out of order.
+			if (!best_line || line->mLineNumber < best_line->mLineNumber)
+				best_line = line;
+		}
+	}
+	return best_line;
+}
+
+Line *Debugger::FindFirstLineForBreakpoint(int file_index, UINT line_no, Line *aStart)
+{
+	Line *found_line = nullptr;
+	for (Line *line = aStart; line; line = line->mNextLine)
 	{
 		if (line->mFileIndex == file_index && line->mLineNumber >= line_no)
 		{
@@ -170,18 +225,19 @@ void Debugger::SetBreakpointForLineGroup(Line *line, Breakpoint *bp)
 	line->mBreakpoint = bp;
 	for (int i = 0; i < g_script.mFuncs.mCount; ++i)
 	{
-		ASSERT(dynamic_cast<UserFunc*>(g_script.mFuncs.mItem[i]));
-		auto &func = *(UserFunc *)g_script.mFuncs.mItem[i];
+		auto &func = *g_script.mFuncs.mItem[i];
 		auto fl = func.mJumpToLine;
 		// Fat arrow functions are either removed from the main line list or come after the
 		// line which contains them, in which case our caller would have found the latter.
-		if (fl->mLineNumber == line_no && fl->mFileIndex == file_no && func.IsInExpression())
+		if (fl->mLineNumber == line_no && fl->mFileIndex == file_no && func.mIsFuncExpression == FuncDefFatArrow)
 			fl->mBreakpoint = bp;
 		// After the script loads, a function's parameter default initializers precede mJumpToLine.
 		for (fl = fl->mPrevLine
 			; fl && fl->mLineNumber == line_no && fl->mFileIndex == file_no && fl->mActionType == ACT_EXPRESSION
 			; fl = fl->mPrevLine)
+		{
 			fl->mBreakpoint = bp;
+		}
 	}
 }
 
@@ -2228,7 +2284,7 @@ DEBUGGER_COMMAND(Debugger::source)
 
 			LineNumberType current_line = 0;
 			
-			while (-1 != (line_length = tf.ReadLine(line_buf + line_remainder, LINE_SIZE)))
+			while (0 != (line_length = tf.ReadLine(line_buf + line_remainder, LINE_SIZE)))
 			{
 				if (++current_line >= begin_line)
 				{
@@ -2884,6 +2940,9 @@ size_t Debugger::Base64Encode(char *aBuf, const char *aInput, size_t aInputSize/
 
 	if (aInputSize == -1) // Direct comparison since aInputSize is unsigned.
 		aInputSize = strlen(aInput);
+#ifdef _DEBUG
+	auto input_end = aInput + aInputSize;
+#endif
 
 	for (i = aInputSize; i > 2; i -= 3)
 	{
@@ -2896,6 +2955,7 @@ size_t Debugger::Base64Encode(char *aBuf, const char *aInput, size_t aInputSize/
 		aBuf[len + 3] = BINARY_TO_BASE64_CHAR(buffer);
 		len += 4;
 	}
+	ASSERT(!(aBuf + len > aInput && aBuf < input_end)); // Overlap is permitted, but should be calculated to avoid overwriting input before finishing.
 	if (i > 0)
 	{
 		buffer = (UCHAR)aInput[0] << 16;
