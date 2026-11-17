@@ -96,4 +96,67 @@ r := RunSnippet("#Module Mod`nglobal X := 1`n#Module __Main`n#Import Mod`n"
 Assert.eq(r.code, 0, "ByRef then released &Module.Var: exit 0")
 Assert.eq(r.out, "11`n11`ndone`n", "ByRef then released &Module.Var: the variable stays set")
 
+; 4. Generic Object methods refuse a Struct (a020f5b0): calling
+;    Object.Prototype.DefineProp on one, or ObjSetCapacity, throws TypeError
+;    instead of treating its typed storage as an ordinary property table.
+struct QaPt33 {
+    x : Int32
+    y : Int32
+}
+QaErr(f) {
+    try {
+        f()
+        return "no error"
+    } catch as e
+        return Type(e) ": " e.Message
+}
+pt := QaPt33()
+Assert.eq(QaErr(() => Object.Prototype.DefineProp.Call(pt, "z", {Value: 1})),
+    "TypeError: Expected an Object but got a QaPt33.", "Object DefineProp on a Struct: TypeError")
+Assert.eq(QaErr(() => ObjSetCapacity(pt, 10)),
+    "TypeError: Expected an Object but got a QaPt33.", "ObjSetCapacity on a Struct: TypeError")
+
+; 5. Indexing a property whose getter returns nothing throws UnsetError
+;    (alpha.32): a.b[1] with b => unset.
+qaUnset := {}
+qaUnset.DefineProp("b", {Get: (*) => unset})
+Assert.eq(QaErr(() => qaUnset.b[1]), "UnsetError: No value was returned.", "a.b[1] with an unset getter: UnsetError")
+
+; 6. NumPut and NumGet take a struct class as the type (alpha.32).
+qaBuf := Buffer(8, 0)
+NumPut(Int32, -5, qaBuf)
+Assert.eq(NumGet(qaBuf, Int32) " " NumGet(qaBuf, "UInt"), "-5 4294967291", "NumPut/NumGet with Int32 as the type")
+
+; 7. #Import inside a function (alpha.32) imports for that function only.
+r := RunSnippet(Lines33("F() {", "    #Import QaM {Hello}", "    return Hello()", "}",
+    "Print(F())", "#Module QaM", "Hello() => `"hi`""))
+Assert.eq(r.code " " r.out, "0 hi`n", "#Import inside a function")
+
+; 8. A #Requires in an #Include file applies to that file's own code but not
+;    to the module (47eabd41): the included function runs in v2.1 mode (a
+;    no-value return throws UnsetError) while the main file's lines stay in
+;    v2.0 mode (the same call returns "").
+qaInc := A_Temp "\qa_alpha33_inc_" ProcessExist() ".ahk"
+try FileDelete(qaInc)
+FileAppend("#Requires AutoHotkey v2.1-alpha.33`nIncLines() => _ScriptGetLines(A_LineFile, 9999)`n", qaInc)
+r := RunSnippet(Lines33("#Include " qaInc,
+    "v := _ScriptGetLines(A_LineFile, 9999)", "Print(`"main: `" Type(v))",
+    "try IncLines()", "catch as e", "    Print(`"include: `" Type(e))"))
+FileDelete(qaInc)
+Assert.eq(r.code " " r.out, "0 main: String`ninclude: UnsetError`n", "#Requires in an #Include: the file's code only")
+
+; 9. Every module's body runs at startup, in reverse order of creation, and
+;    __Main (created first) runs last; an #Import does not reorder them.
+;    Upstream design since alpha.21 (Script::AutoExecSection), not lazy.
+r := RunSnippet(Lines33("Print(`"main`")", "#Module Alpha", "Print(`"Alpha`")",
+    "#Module Beta", "Print(`"Beta`")", "#Module Gamma", "#Import Alpha", "Print(`"Gamma`")"))
+Assert.eq(r.code " " r.out, "0 Gamma`nBeta`nAlpha`nmain`n", "module bodies run in reverse order of creation")
+
+Lines33(parts*) {
+    out := ""
+    for p in parts
+        out .= p "`n"
+    return out
+}
+
 Assert.Summary()
