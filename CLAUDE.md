@@ -149,9 +149,14 @@ one stderr line, `Coverage report "<path>" not written: ... (Win32 error N:
 path in `extra` under `--diag=json`, and the exit code stays the script's own.
 An engine before `ec684fd0` (alpha.33 and earlier) writes nothing and
 says nothing there, so create the directory first for one of those.
-`/Headless` only routes error and warning dialogs to stderr; `MsgBox`,
-`InputBox` and `Gui` still block, so do not run dialog-driven scripts
-unattended except through `tools/run_hidden.py --timeout`. `/Headless` and `check` are not sandboxes: loading can perform
+`/Headless` routes error and warning dialogs to stderr and, since
+`ac51392e` (2026-11-16), answers `MsgBox` (its default button), `InputBox`
+(OK with its default text), `FileSelect` and `DirSelect` (Cancel) without
+opening them, reporting each on stderr (`==> Headless MsgBox "<title>"
+answered OK: <text>`, or a `"kind":"dialog"` record under `--diag=json`). A
+`Gui` still opens and keeps the script running, and an engine before
+`ac51392e` blocks on all of them, so run dialog-driven scripts unattended
+only through `tools/run_hidden.py --timeout`. `/Headless` and `check` are not sandboxes: loading can perform
 operations such as `#DllLoad`. Do not execute arbitrary untrusted scripts
 merely to validate them.
 
@@ -230,7 +235,9 @@ empty string, which `for` rejects with `TypeError`; under a
 main script, or the file that declares the `#Module`) no value, so even a plain
 assignment throws `UnsetError`. Since upstream `47eabd41`/`08beacf1` a
 `#Requires` in an `#Include`d file or inside a function no longer sets the
-mode (so `tests/Test.ahk`'s line-1 `#Requires` is inert when included).
+module's mode: an included file's `#Requires` still applies to that file's own
+code (its functions run in v2.1 mode), but not to the including file's lines
+(pinned by `qa/tests/test_alpha33.ahk` section 8).
 Neither `?? []` nor `|| []` alone covers both modes; guard with
 `(... ?? "") || []` as above. Merged from lexikos' `linecontext` branch.
 
@@ -395,7 +402,8 @@ Git Bash:    ./bin/AutoHotkey64Console.exe //Debug=localhost:9001 --headless scr
      the error on stderr and exits 10. At a breakpoint use `stack_trace`,
      `variables_get` (context 0 local, 1 global) and `evaluate`, which reads a
      variable or property path (`x`, `obj.prop`, `arr[1]`, `m["key"]`) and
-     rejects operators (`a + b`): the engine has no eval command. A step that
+     rejects operators (`a + b`): it reads paths with `property_get` and does
+     not use the engine's DBGp `eval` (added 2026-11-16). A step that
      reaches a throw stays paused there.
   3. `capture_error` (`timeout`, default 30000 ms) returns the oldest queued
      error at once as `{"captured":true,"error":{...}}`, even one from an
@@ -437,7 +445,7 @@ Git Bash:    ./bin/AutoHotkey64Console.exe //Debug=localhost:9001 --headless scr
   `AHK_Debug_DBGp` must not share one (thqby's default debug port range is
   9002-9100).
 
-DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`, `stack_get`
+DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`, `stack_get`, `eval` (fork, 2026-11-16)
 
 ---
 
@@ -450,11 +458,12 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
   regressions it brought and the fork's fixes are in WORKLOG Sessions 17-22.
 - Always verify the actual executable's `--version` and hash; `bin/` may be
   stale. Since 2026-11-16 all four `bin/AutoHotkey{64,32}{,Console}.exe` are
-  the local MSVC build of `be8ecff3` (alpha.39 plus the fixes for an empty
-  `FileRead`, JSON scalar positions and the outline matcher, below).
-  `bin/*.560b1f7e.bak` (alpha.39 before those fixes) and `bin/*.a6763d81.bak`
-  (alpha.38) are the only older engines kept, both x64; the rest were
-  deleted that day. `bin/archive/` still holds the alpha.30-era builds.
+  the local MSVC build of `7d6bc796` (alpha.39 plus the fork's 2026-11-16
+  work: `/Headless` answering dialogs, DBGp `eval` and the fixes below).
+  The only older engines kept are x64 pairs: `bin/*.be8ecff3.bak` (before
+  `/Headless` dialogs and `eval`), `bin/*.560b1f7e.bak` (alpha.39 as merged)
+  and `bin/*.a6763d81.bak` (alpha.38). `bin/archive/` still holds the
+  alpha.30-era builds.
 - Every upstream report in `docs/upstream/` is resolved upstream. Alpha.39
   closed AutoHotkey/AutoHotkey #371-#381 (filed there by mistake on
   2026-11-12), so the struct, DllCall and module fixes the fork carried are
@@ -502,7 +511,7 @@ Open items:
   the merge. Use `#Import Mod {X}` plus `&X`. Engine fix: `AddRef` before
   `_o_return(ref)`.
   Fixed 2026-10-09 on m1/module-ref: `ref->AddRef()` before `_o_return(ref)`; pinned by `qa/tests/test_alpha33.ahk` and two `tests/test_runtime_regressions.py` cases (both fail on `d9fd14ac`, exit 3221226356); upstream report in `docs/upstream/alpha33-module-ref-addref.md`, filed 2026-11-12 as AutoHotkey/AutoHotkey #381 after reproducing on the official alpha.38 zip (x64 and x86; `__Ref` is unchanged at `42ddbabc`). Resolved upstream in alpha.39 (`776836e3`).
-- [ ] **Module init is not lazy, by upstream design** (rechecked on alpha.33,
+- [x] PINNED 2026-11-16 (`qa/tests/test_alpha33.ahk` section 9): **Module init is not lazy, by upstream design** (rechecked on alpha.33,
   2026-10-08): every module runs at startup in reverse order of creation
   (`source/script.cpp:1042`-`1048`, `Script::AutoExecSection`), so a
   `#Module` nothing imports still runs before `__Main`; since alpha.21
@@ -512,12 +521,16 @@ Open items:
   `examples/alpha21/README.md` and the comments in
   `examples/alpha21/05_lazy_module_init.ahk` are corrected (2026-10-08; a
   Print copy of that example on `f14d74270a2b` runs `NeverUsed`, `Formatter`,
-  `Logger`, then `__Main`). Still open: a qa test pinning the order.
-- [ ] `/Headless` does **not** suppress `MsgBox` (`source/script2.cpp:1257` ->
-  `source/window.cpp:932`), `InputBox` (`source/lib/InputBox.cpp:75`) or
-  `Gui`: `mHeadless` is read only at `source/error.cpp:1151`/`:1165` and
-  `source/AutoHotkey.cpp:556`/`:596` (read from source, not run). Verify such
-  scripts via a scratch copy with `MsgBox` → `Print`, or extend `/Headless`.
+  `Logger`, then `__Main`). Rechecked on alpha.39: module bodies run in
+  reverse order of creation, `__Main` last, and an `#Import` does not
+  reorder them.
+- [x] FIXED 2026-11-16 (`ac51392e`): `/Headless` did not suppress `MsgBox`,
+  `InputBox`, `FileSelect` or `DirSelect`. Each now answers as Enter would
+  (Cancel for the file dialogs) and reports through
+  `Script::ReportHeadlessDialog` (`source/error.cpp`); `--capabilities` lists
+  `headlessDialogs`. Pinned by `tests/test_runtime_regressions.py`
+  `test_headless_dialogs_*` (the previous engine blocks until the timeout).
+  Still open: a `Gui` opens and keeps the script running under `/Headless`.
 - [ ] Faster tree-sitter path: build `tree-sitter-ahk.wasm` + `web-tree-sitter`
   for in-process, incremental parsing in a Node host. Needs the grammar
   **source**: only `bin/tree-sitter-ahk.dll` (loaded by `source/ts_api.cpp:41`
@@ -539,20 +552,20 @@ skipped, as on any non-tag run) and are marked [x] below with how they were veri
 `bin/` engine (`f14d74270a2b`, WORKLOG Session 15); the rest are still open:
 - [x] FIXED 2026-10-08 (`7b1a23b6`): `JSON()` was callable (the class was built on `JsonObject::sPrototype` with no factory) and returned a plain Object posing as `JSON.Object`, whose `Set`, `Count` and `Keys` read and wrote past its end (exit 11 or 0xC0000374). `source/json.cpp` now records a `JsonObject` factory and defines `JSON.Call`. Verified: `qa/tests/test_json_class.ahk` 48/48; probes give `TypeError` "JSON cannot be constructed. Use JSON.Parse() to create a JSON.Object." for `JSON()`, `JSON(1, 2, 3)` and a subclass `X()`, and `ValueError` "Invalid base." for `(Object.Call)(JSON)`, `(Object.Call)(X)` and `(Object.Call)({Prototype: JSON.Prototype})`.
 - [x] FIXED 2026-10-08 (`7b1a23b6`): `JSON.True`/`False`/`Null` were writable value properties, so `JSON.True := 5` replaced the singleton. They are getter-only now (`JSON.True.Get` etc.). Verified: assigning on `JSON` or a subclass throws `Error` "Property is read-only.", the singletons stay identical, and native-mode `Stringify` still writes `[true,false,null]`. `DefineProp`/`DeleteProp` can still replace or remove them (standard for built-in members; Parse and Stringify are unaffected).
-- [ ] JSON `MaxDepth`: the parser checks each value's depth with the root at 0 (`source/json.cpp:954`, `:999`), the writer counts containers (`:1108`), so an innermost empty container one level deeper parses (and `Validate` accepts it) but cannot re-serialize: `[[]]` with `MaxDepth: 1`, or 257 nested `[]` by default (`[[1]]` is rejected).
+- [x] FIXED 2026-11-16 (`cafc3c72`): JSON `MaxDepth` checked each value's depth with the root at 0 in the parser but counted containers in the writer, so an innermost empty container one level deeper parsed (and `Validate` accepted it) but could not re-serialize: `[[]]` with `MaxDepth: 1`, or 257 nested `[]` by default. `ParseValue`/`SkipValue` now reject a container at depth `MaxDepth` (level `MaxDepth + 1`), as `Enter` does. Pinned by `qa/tests/test_json.ahk` (`json.maxdepth.*`).
 - [x] FIXED 2026-11-16 (`be8ecff3`): with `AllowTopLevelScalar: false`, `Parse`/`ParseAt` reported `(line 1, col 1, pos 1)` wherever the scalar was and `ParseAt` left `Pos` on it, so a catch-and-continue loop never advanced; `Validate` reported the position after the value (Line 3, Col 6, Pos 8 for "\n\n   42"). All three now report where the scalar starts (line 3, col 4, pos 6), using the start the scanner records for the top-level value (`JsonScanner::MarkTop`/`FailAtTop`), and `ParseAt` moves `Pos` past the rejected scalar. Fixing it showed that every `ParseAt` error counted its line from `Pos` but its column from the start of `Text`; `ThrowParseAtError` now recounts both from the start of `Text`, only on failure. Pinned by four `qa/tests/test_json.ahk` asserts, all failing on `560b1f7e`.
 - [x] FIXED 2026-10-08 (`47bc3fcb`): `Check()` built its single diagnostic from the first record of any severity, so a VarUnset warning printed before a missing `Goto` label gave `Ok=0` with only the warning. `CheckFindDiagRecord` (`source/console_check.cpp:206`) now takes the first `error` or `critical` record, and the first record of any severity only when none is an error. Verified: `qa/tests/test_check_severity.ahk` 22/22; on `x := neverAssigned` + `Goto NoSuchLabel`, `Diagnostics[1]` is Severity "error", Code 13, Line 2, "Label not found in current scope."; after two warnings, `break` on line 3 is reported; a warning-only source gives `Ok=1` and no diagnostics.
 - [ ] `Check()` field extraction (`source/console_check.cpp:111`, `:138`) still searches from the chosen record to the end of the captured output, so a key missing from that record would be read from a later one. Both emitters write every field today (from source).
 - [x] FIXED 2026-10-09 (`m1/dbgp-property-data`): DBGp `WritePropertyData` (same in upstream alpha.33 and v2.0) staged UTF-8 at the buffer tail and base64-encoded it forward over unread bytes (one 196000-byte value via `property_get -m 0` arrived 192142 bytes wrong from offset 1953 while a 140000-byte one arrived intact; the damage depended on the value's size), and its sizing loop counted a surrogate pair as 7 bytes (three emoji: `size="21"` for 12 bytes) with `-m 5` splitting the pair into U+FFFD. `source/Debugger.cpp` now reserves the UTF-8 scratch area beyond the encoded data's end and skips the low surrogate it has counted. Verified: `tests/test_debugger_property_data.py` 4/4 (16 failures on the previous engine: 90000- and 180000-byte values corrupt from bytes 32721 and 65925, `size="20"` for 14 bytes). Upstream fixed the large-value corruption separately in v2.0 (`b71f5841`, reached alpha.39 through its `v2.0` merge); the alpha.39 merge kept the fork's `Debugger.cpp`.
 - [x] FIXED 2026-10-08 (`76973889` lost connection, `f14d7427` refused connect): `Debugger::FatalError` showed a modal Yes/No box even under `/Headless` on a failed connect or a lost connection (only `/Debug=stdio` printed it). The refused-connect Abort/Retry/Ignore box in `SocketTransport::Connect`, which comes before FatalError, was folded into this item's "failed connect" case; `76973889` fixed only the lost connection, and `f14d7427` fixed the refused connect. Both now take `DebuggerErrorsToStdErr()` (`source/Debugger.cpp:2481`: `g_DebugStdio || mErrorStdOut || mHeadless`, Script::ShowError's test) and print one notice through `PrintErrorStdOut` (`ReportContinuingWithoutDebugger`, `:2506`). Verified: `tests/test_debugger_fatal.py` 3/3 on `bin/AutoHotkey64Console.exe`; probes on bound-then-closed ports print `Debugger error: Could not connect to localhost:PORT; continuing without the debugger.` (no flags, `/Headless`, `/StdErrFile` byte-identical), an RST after the init packet prints `Connection to localhost:PORT lost; ...`, `/Debug=stdio` with stdin closed prints `Connection to stdio lost; ...`, `--diag=json` gives one warning record (`what` "Debugger", `extra` the client); each run printed `after` and exited 0, and `detach` printed nothing.
 - Trade-off, by design (`76973889`, `f14d7427`): `mErrorStdOut` defaults to true in both builds (`source/script.cpp:327`; only an invalid `/ErrorStdOut` encoding clears it, `source/error.cpp:222`), so `DebuggerErrorsToStdErr()` holds in every normal run and neither debugger prompt appears in any build. A GUI `AutoHotkey64.exe` session (an IDE, or Explorer, with no visible stderr) whose debugger is missing or dies now continues silently without the "Continue running the script without the debugger?" choice, and the old Retry workflow is gone; use `/StdErrFile` to see the notice. To restore the GUI prompt, narrow `DebuggerErrorsToStdErr()` to `g_DebugStdio || g_script.mHeadless`.
-- [ ] Two notices when the init packet cannot be sent: `SendResponse` calls `FatalError()` itself (`source/Debugger.cpp:2463`, "Connection ... lost"), then `Debugger::Connect` calls `FatalError(DEBUGGER_ERR_FAILEDTOCONNECT ...)` again (`:2812`, "Could not connect ..."), so stderr gets both lines (two warning records under `--diag=json`). From source; not triggered. Fix: return `DEBUGGER_E_INTERNAL_ERROR` from Connect without a second FatalError once SendResponse has reported.
+- [x] FIXED 2026-11-16 (`cafc3c72`): when the init packet could not be sent, `SendResponse`'s `FatalError()` reported the loss and `Debugger::Connect` called `FatalError` again (two notices). `Connect` now returns after the first. That path was unreachable over stdio: `StdioTransport::Send` ignored a failed `fflush`, so with no reader on stdout the engine waited on stdin and never ran the script; it now fails the send. Pinned by `tests/test_debugger_fatal.py` `test_stdio_init_send_failure_reports_once`.
 - [ ] `ReceiveCommand` reports a failed `mCommandBuf.Expand()` (out of memory, `source/Debugger.cpp:2417`-`2418`) through the default `FatalError()`, so the notice says "Connection to ... lost". From source. Fix: pass a distinct message for internal errors.
 - [ ] `DebuggerJsonEscape` and the hand-built record in `ReportContinuingWithoutDebugger` (`source/Debugger.cpp:2487`, `:2506`) duplicate `error.cpp`'s `EscapeJsonText` (`source/error.cpp:238`) and its schema-2 diagnostic format, as `coverage.cpp`'s `AppendJsonString` and `ReportWriteFailure` do; the copies can drift if the schema changes (every field matches today). Fix: one shared warning-record helper in `error.cpp`.
 - [ ] `tests/test_debugger_fatal.py`'s guard only looks for the two notice strings in the engine file; the `SocketTransport::Connect` break has no unique string, so a build that kept the strings but reverted the break would pass the guard, open the Abort/Retry/Ignore box and be killed at the 20-s deadline. The suite also has no no-flags refused case and no `/Debug=stdio` EOF case (both checked by hand), and `tests/run_console_gate.py:48` turns a skip into a failure only when `CI` is `true` in any case, so `CI=1` still allows the skip (GitHub Actions sets `true`).
 - [x] FIXED 2026-10-09 (roadmap C3): the uncaught-exception `Script::ShowError` overload (`source/error.cpp:1775`) passed `TokenToString(t)` (Extra, else Message) to `GetLine` instead of `file`, so the report and `--diag=json` named the throw line, not `Error.Line` (created on line 3, thrown on line 6: reported as 6, `OnError` sees 3; fork-only, from lexikos' linecontext commit `d8217d1a`), and `t` was uninitialized when the thrown object had own `File` and nonzero `Line` but neither `Message` nor `Extra`, so `throw {File: A_LineFile, Line: 1}` on any line but the first exited 0xC0000409 with no report. `ShowError` now calls `GetLine(file, line_no, aLine)` directly (its own duplicate file-index loop is gone; `GetLine` keeps the throw site when the file or line is not loaded). Verified: `tests/test_runtime_regressions.py` `test_uncaught_*` (3 tests; the first two fail on the before engine `d9fd14ac`); probes for a missing file, a line past the end, no `File`, a dynamic `File` getter that throws, `throw 42` and `throw "text"` all exit 10 with the throw line. `updates.md` §23.
 - [x] FIXED 2026-10-09 (`6690ba29`, `m1/diag-buffer`): headless error reports truncated silently: the text report was cut at `DIAG_JSON_BUF_SIZE`-1 = 87298 chars, mid-message and without `Specifically:`, source or stack, and `--diag=json` capped `message`/`extra` at 16384 chars each. `FormatDiagJson` (`source/error.cpp`) now builds the record on a `std::wstring`, the text report goes through `FormatStdErrText` (a heap buffer sized from the message and Extra), and the `/StdErrFile` tee no longer `_alloca`s the converted record; `DIAG_JSON_BUF_SIZE` is gone. The `stack` field keeps `Error.Stack`'s `SCRIPT_STACK_BUF_SIZE` cap (2048 chars, `... N more`). Verified: five new `tests/test_runtime_regressions.py` cases (300 KB message, 100 KB Extra, 120-deep stack, text report, `/StdErrFile` mirror) fail on `d9fd14ac` and pass after; 40 short-record BEFORE/AFTER cases (runtime, parse, `check`, `#Warn StdOut`, escapes, 50-deep stack, text and JSON) are byte-identical. Not changed: a 500-deep recursion still hits the C stack (`Function recursion limit exceeded.`, exit 11) at about 340 frames on this CMake build, which sets no linker stack reserve.
-- [ ] The crash log writes `Error.Stack` raw after `  Stack:` (`source/crashlog.cpp:190`): its lines are not indented and end in CRLF, unlike every other LF line.
+- [x] FIXED 2026-11-16 (`cafc3c72`): the crash log wrote `Error.Stack` raw after `  Stack:` (unindented, CRLF). Each frame is now indented four spaces and ends in LF. Pinned by `tests/test_runtime_regressions.py` `test_crash_log_indents_stack_lines`.
 - [x] FIXED 2026-10-09 (roadmap Track C item 5): an `Eval` `SyntaxError` was built by hand (`source/console_eval.cpp`: own `Message`, `File` `_Eval`, `Line` 0, `Column` 0 only), so reading `What`, `Extra` or `Stack` threw `PropertyError`. `ConsoleEval::Evaluate` now rebuilds the parser's exception through `Line::CreateRuntimeException` with the `SyntaxError` prototype, so `Error.__New` fills `What` (`"Eval"`), `Extra` (the parser's token, e.g. `"+"` for `1 + + +`) and `Stack` as for any runtime error, then sets `File`, `Line` and `Column` to their documented values. Verified: `tests/test_eval.ahk` section I (fails `I.1 has What property` on the engine before the fix); `Check("1 +")` records and the REPL's `SyntaxError` output are unchanged.
 - [ ] An `Eval` assignment inside a function adds a local to it for good (`source/console_eval.cpp:28` parses in the caller's scope): a later call's `Eval("qq")` reports a *local* unset, and `Eval("gv := 5")` leaves global `gv` unchanged. Documented in `updates.md:107`-`120`; close as intended or change it.
 - [x] FIXED 2026-10-08 (`ec684fd0`): `--coverage=` into a missing directory wrote nothing, printed nothing and exited 0. `WriteWholeFile` (`source/coverage.cpp`) now creates every missing level (`FileCreateDir`) and `ReportWriteFailure` prints one stderr line when the report still cannot be written, leaving the exit code alone. Verified: `qa/tests/test_coverage_missing_dir.ahk` 41/41; `out/a/b/probe.lcov` (relative, forward slashes) was created under `run` and `test`, also on an uncaught-error exit 10; a path under a file printed `Coverage report "<path>" not written: could not create its directory (Win32 error 183: ...)`, a directory path `... not written (Win32 error 5: Access is denied.)`, `--diag=json` one `"type":"OSError"` warning record with the path in `extra`, `/StdErrFile` mirrored it, and exit codes stayed 0 and 3 (`ExitApp(3)`).
@@ -581,19 +594,20 @@ skipped, as on any non-tag run) and are marked [x] below with how they were veri
   throwing (Copilot, PR #32; reproduced on alpha.35 and alpha.36). Both now
   throw `ValueError` "Invalid parameter(s)."; `qa/tests/test_alpha37.ahk`
   section 7 pins it.
-- [ ] DBGp has no `eval` command (`source/Debugger.cpp:47` command table; `eval` answers error 4) and `breakpoint_set` rejects `--` conditions (`:771`, error 3), as upstream alpha.33 does: clients read paths with `property_get`.
+- [x] FIXED 2026-11-16 (`4491441f`): DBGp had no `eval` command (error 4, as upstream). `Debugger::eval` runs the expression through `ConsoleEval::Evaluate` in the paused function's scope and answers one `<property>`, or error 206 with the exception's message; `#EnableEval` is not required. Pinned by `tests/test_debugger_eval.py` (in the gate). `updates.md` §26.
+- [ ] `breakpoint_set` rejects `--` conditions (`source/Debugger.cpp`, error 3), as upstream does. With `eval` in place a condition could be evaluated the same way.
 - [x] FIXED 2026-11-16 (`be8ecff3`): native `source_outline`/`workspace_symbols` matched functions with one line regex (`MatchFuncDecl`, `source/mcp_server.cpp`), so they missed a function whose default parameters contain parentheses and every fat-arrow function (on `qa/Harness.ahk`, `RunQaChild` and `SnippetOut`). `MatchFuncDecl` now balances parentheses, skips quoted strings and accepts `=>`; `debugger-tool/mcp-ahk/mcp.ahk`'s `_FuncDeclRe` matches the same lines, and the `conformance_native.py` fixture has one of each (60/60; the old engine fails the two outline diffs).
 - [x] FIXED 2026-10-09 (`m1/cli-help`): `--help` (`source/AutoHotkey.cpp:86`) listed only slash options. It now lists every spelling `ParseCmdLineArgs` accepts, grouped as commands, information, options and command switches: `/Debug[=host[:port]|stdio]`, the Git Bash aliases (`--headless`, `--diag`, `--eval`, `--trace`, `--check`, `--test`, `--crashlog=`, `--stderrfile=`, `--coverage=`), `/ErrorStdOut:color|nocolor`, `/version`, `/restart`, `/script`, `/validate` and `/iLib file`. `tests/test_console_cli.py` pins that list and also scans the parser's own `_T("/...")`/`_T("--...")` literals, so an option added to the parser without help text fails the gate. `--capabilities` carries no options list and gained none.
 
 Follow-ups from the alpha.33 re-verification (2026-10-08), outside that pass's
 docs-only scope:
-- [ ] No suite covers an alpha.32/alpha.33 change. Add `qa/tests/test_alpha33.ahk`
+- [x] DONE 2026-11-16 (`4e7cc003`, sections 4-8): No suite covered an alpha.32/alpha.33 change. Add `qa/tests/test_alpha33.ahk`
   in the `test_alpha31.ahk` style: `Object.Prototype.DefineProp.Call` on a Struct
   throws `TypeError` (guards `a020f5b0`), `ObjSetCapacity` on a Struct throws
   `TypeError`, `a.b[1]` with `b => unset` throws `UnsetError`, `#Import` inside a
   function, `NumPut(Int32, ...)`/`NumGet(buf, Int32)`, `#Requires` scoping in an
   `#Include`. (`test_alpha33.ahk` exists since 2026-10-09 with the `&Module.Var`
-  pins as a fixed-bug section; the other cases are still to add.)
+  pins as a fixed-bug section; the other cases were added 2026-11-16.)
 - [x] FIXED 2026-10-08: `tests/test_powershell_cli.py` and
   `debugger-tool/mcp-ahk/tests/conformance_native.py` read the version from
   `source/ahkversion.h` instead of hard-coding `2.1-alpha.33`, and

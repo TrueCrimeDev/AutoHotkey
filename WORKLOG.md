@@ -1135,3 +1135,41 @@ unlogged loop session between 3 and now.)
   `.github/FUNDING.yml` is deleted, and the issue template config enables
   blank issues and keeps the forum links for script help and stock-AutoHotkey
   bugs only.
+
+### Session 24 (2026-11-16) — `/Headless` dialogs, DBGp `eval`, small fixes
+
+- `ac51392e`: under `/Headless` (and `check`/`test`) `MsgBox`, `InputBox`,
+  `FileSelect` and `DirSelect` no longer open. Each answers as Enter would
+  (default button; OK with the default text; Cancel for the file dialogs) and
+  `Script::ReportHeadlessDialog` reports it on stderr, as text or a
+  `"kind":"dialog"` record under `/Diag=json`. Two
+  `test_runtime_regressions.py` cases; `be8ecff3` blocks on the first
+  `MsgBox` until the 10 s timeout. `Gui` is unchanged.
+- `4491441f`: DBGp `eval` through `ConsoleEval::Evaluate` in the paused
+  function's scope; one `<property>`, or error 206 with the exception's
+  message (`EXCPTMODE_CATCH` keeps the thrown token, which
+  `EXCPTMODE_DEBUGGER` alone would free unreported). New
+  `tests/test_debugger_eval.py` (5 cases, all failing on `be8ecff3`) joins the
+  gate, which is now 18 suites.
+- `cafc3c72`: JSON `MaxDepth` counts containers in the parser as the writer
+  does; the stdio transport notices a failed flush, so `/Debug=stdio` with no
+  reader on stdout runs the script instead of waiting on stdin, and
+  `Connect()` reports that once; the crash log indents stack lines with LF.
+  Probing the double notice showed it could not happen over stdio until the
+  flush check, so the new `test_debugger_fatal.py` case holds stdin open: the
+  old engine never runs the script.
+- `4e7cc003`: `test_alpha33.ahk` sections 4-9 (Struct `DefineProp`/
+  `ObjSetCapacity` TypeError, unset getter indexed, `NumPut`/`NumGet` with
+  `Int32`, `#Import` in a function, `#Requires` in an `#Include`, module
+  start-up order). The `#Requires` probe showed an included file's
+  `#Requires` still sets the mode for that file's own code (its function
+  threw `UnsetError` while the main file's same call returned `""`); the
+  `CLAUDE.md` note calling it inert is corrected.
+- `7d6bc796`: `--capabilities` features list `headlessDialogs` and
+  `dbgpEval`; `--help` and the SessionStart context describe `/Headless`.
+- On `7d6bc796`: gate 18/18 on x64 and on Win32 (qa 1064/1064 across 22
+  files on each), `check_all` 120/120, `conformance_native.py` 60/60, hook
+  tests 171/171. All four `bin/AutoHotkey{64,32}{,Console}.exe` hold
+  `7d6bc796` (sha256 `65a317ec18dd5b6c` x64 GUI, `5c9a9eaad02712ce` x64
+  Console, `42caf0f1259a83a3` Win32 GUI, `5e8a37e77f4ab1a3` Win32 Console);
+  the previous x64 pair is `bin/*.be8ecff3.bak`.
