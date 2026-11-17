@@ -1264,6 +1264,25 @@ bif_impl FResult MsgBox(optl<StrArg> aText, optl<StrArg> aTitle, optl<StrArg> aO
 	double timeout;
 	if (!MsgBoxParseOptions(aOptions.value_or_null(), type, timeout, dialog_owner))
 		return FR_FAIL;
+	if (g_script.mHeadless)
+	{
+		// Answer with the default button, as Enter would.
+		static const int sButtons[][3] = {
+			{IDOK}, {IDOK, IDCANCEL}, {IDABORT, IDRETRY, IDIGNORE}, {IDYES, IDNO, IDCANCEL},
+			{IDYES, IDNO}, {IDRETRY, IDCANCEL}, {IDCANCEL, IDTRYAGAIN, IDCONTINUE} };
+		int set = type & MB_TYPEMASK;
+		if (set >= _countof(sButtons))
+			set = 0;
+		int def = (type & MB_DEFMASK) >> 8;
+		if (def >= _countof(sButtons[0]) || !sButtons[set][def])
+			def = 0;
+		LPTSTR answer = MsgBoxResultString(sButtons[set][def]);
+		g_script.ReportHeadlessDialog(_T("MsgBox"), aTitle.has_value() ? aTitle.value() : g_script.DefaultDialogTitle()
+			, aText.has_value() ? aText.value() : (type & 0xF) ? _T("") : _T("Press OK to continue.") // As MsgBox() defaults it.
+			, answer);
+		aRetVal.SetStatic(answer);
+		return OK;
+	}
 	SetLastError(0); // To differentiate MAX_MSGBOXES from invalid parameters.
 	result = MsgBox(aText.value_or_null(), type, aTitle.value_or_null(), timeout, dialog_owner);
 	// If the MsgBox window can't be displayed for any reason, always return FAIL to
@@ -1884,6 +1903,22 @@ bif_impl FResult FileSelect(optl<StrArg> aOptions, optl<StrArg> aWorkingDir, opt
 	// present, the caller must specify or omit 'S' to choose the dialog type, and one option has no effect.
 	if ((flags & FOS_OVERWRITEPROMPT) && !(flags & (FOS_CREATEPROMPT | FOS_PICKFOLDERS)))
 		always_use_save_dialog = true;
+
+	if (g_script.mHeadless)
+	{
+		// Answer as Cancel would: no file.
+		g_script.ReportHeadlessDialog(_T("FileSelect"), greeting, default_file_name, _T("Cancel"));
+		if (flags & FOS_ALLOWMULTISELECT)
+		{
+			auto *files = Array::Create();
+			if (!files)
+				return FR_E_OUTOFMEM;
+			aResultToken.Return(files);
+		}
+		else
+			aResultToken.SetValue(_T(""), 0);
+		return OK;
+	}
 
 	IFileDialog *pfd = NULL;
 	HRESULT hr = CoCreateInstance(always_use_save_dialog ? CLSID_FileSaveDialog : CLSID_FileOpenDialog,

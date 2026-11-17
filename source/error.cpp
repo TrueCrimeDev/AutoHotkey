@@ -653,6 +653,51 @@ static std::wstring FormatDiagnostic(LPCTSTR aErrorText, LPCTSTR aExtraInfo, Fil
 }
 
 // For backward compatibility, this actually prints to stderr, not stdout.
+// Under /Headless (and so under check and test) a script's own MsgBox, InputBox,
+// FileSelect and DirSelect are not shown: the caller answers as Enter would (Cancel
+// for the file dialogs) and reports the dialog here, on stderr, so an unattended run
+// never blocks on one. Under /Diag=json the report is one "dialog" record.
+void Script::ReportHeadlessDialog(LPCTSTR aDialog, LPCTSTR aTitle, LPCTSTR aText, LPCTSTR aResult)
+{
+	Line *line = mCurrLine;
+	FileIndexType file_index = line ? line->mFileIndex : mCurrFileIndex;
+	int line_no = (int)(line ? line->mLineNumber : mCombinedLineNumber);
+	LPCTSTR file_name = (file_index < Line::sSourceFileCount && Line::sSourceFile[file_index])
+		? Line::sSourceFile[file_index] : _T("");
+	TCHAR number[48];
+	std::wstring out;
+	if (mDiagJson)
+	{
+		out = _T("{\"kind\":\"dialog\",\"format\":\"json\",\"schema\":2,\"dialog\":\"");
+		AppendJsonText(out, aDialog);
+		out += _T("\",\"title\":\"");
+		AppendJsonText(out, aTitle);
+		out += _T("\",\"text\":\"");
+		AppendJsonText(out, aText);
+		out += _T("\",\"result\":\"");
+		AppendJsonText(out, aResult);
+		out += _T("\",\"file\":\"");
+		AppendJsonText(out, file_name);
+		sntprintf(number, _countof(number), _T("\",\"line\":%d}\n"), line_no);
+		out += number;
+	}
+	else
+	{
+		out = file_name;
+		sntprintf(number, _countof(number), _T(" (%d) : ==> Headless "), line_no);
+		out += number;
+		out += aDialog;
+		out += _T(" \"");
+		out += aTitle ? aTitle : _T("");
+		out += _T("\" answered ");
+		out += aResult;
+		out += _T(": ");
+		out += aText ? aText : _T("");
+		out += _T("\n");
+	}
+	PrintErrorStdOut(out.c_str(), (int)out.size(), _T("**"));
+}
+
 void Script::PrintErrorStdOut(LPCTSTR aErrorText, LPCTSTR aExtraInfo, FileIndexType aFileIndex, LineNumberType aLineNumber, Line *aLine)
 {
 	// This is the load-time path (mIsReadyToExecute is false here); FormatDiagJson derives

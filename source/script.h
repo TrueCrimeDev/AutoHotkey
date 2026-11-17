@@ -2328,6 +2328,7 @@ public:
 	void SetDiagJson(bool aEnable = true) { mDiagJson = aEnable; }
 	int DefaultExitCode(ExitReasons aExitReason) const;
 	void PrintErrorStdOut(LPCTSTR aErrorText, int aLength = 0, LPCTSTR aFile = _T("*"));
+	void ReportHeadlessDialog(LPCTSTR aDialog, LPCTSTR aTitle, LPCTSTR aText, LPCTSTR aResult);
 	void PrintErrorStdOut(LPCTSTR aErrorText, LPCTSTR aExtraInfo, FileIndexType aFileIndex, LineNumberType aLineNumber, Line *aLine = nullptr);
 #ifndef AUTOHOTKEYSC
 	bool mValidateThenExit;

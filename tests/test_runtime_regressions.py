@@ -334,6 +334,41 @@ Print(JSON.Stringify({{ok:valid.Ok, validDiagnostics:valid.Diagnostics.Length,
         record = self.uncaught_diagnostic(source)
         self.assertEqual((record["line"], record["source"]), (3, '    e := Error("made on 3")'))
 
+    HEADLESS_DIALOGS = ('Print(MsgBox("hello", "T1"))\n'
+                        'Print(MsgBox("pick", "T2", "YesNoCancel Default2"))\n'
+                        'ib := InputBox("Name?", "T3", , "Bob")\n'
+                        'Print(ib.Result " " ib.Value)\n'
+                        'Print("[" FileSelect() "] " FileSelect("M").Length)\n'
+                        'Print("[" DirSelect(, , "Pick one") "]")\n')
+
+    def test_headless_dialogs_answer_as_enter_and_report_on_stderr(self):
+        # Before 2026-11-16 /Headless covered only error dialogs: these blocked until killed.
+        result = self.run_script(self.HEADLESS_DIALOGS)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [b"OK", b"No", b"OK Bob", b"[] 0", b"[]"])
+        report = result.stderr.decode("utf-8").splitlines()
+        self.assertEqual([line.split(" : ", 1)[1] for line in report], [
+            '==> Headless MsgBox "T1" answered OK: hello',
+            '==> Headless MsgBox "T2" answered No: pick',
+            '==> Headless InputBox "T3" answered OK: Name?',
+            '==> Headless FileSelect "Select File - sample.ahk" answered Cancel: ',
+            '==> Headless FileSelect "Select File - sample.ahk" answered Cancel: ',
+            '==> Headless DirSelect "sample.ahk" answered Cancel: Pick one',
+        ])
+        self.assertTrue(report[0].endswith("sample.ahk (1) : " + report[0].split(" : ", 1)[1]))
+
+    def test_headless_dialogs_are_dialog_records_under_diag_json(self):
+        result = self.run_script(self.HEADLESS_DIALOGS, "/Diag=json")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        records = [json.loads(line) for line in result.stderr.decode("utf-8").splitlines()]
+        self.assertEqual([(r["kind"], r["dialog"], r["title"], r["result"], r["line"]) for r in records], [
+            ("dialog", "MsgBox", "T1", "OK", 1), ("dialog", "MsgBox", "T2", "No", 2),
+            ("dialog", "InputBox", "T3", "OK", 3), ("dialog", "FileSelect", "Select File - sample.ahk", "Cancel", 5),
+            ("dialog", "FileSelect", "Select File - sample.ahk", "Cancel", 5), ("dialog", "DirSelect", "sample.ahk", "Cancel", 6),
+        ])
+        self.assertEqual(records[0]["text"], "hello")
+        self.assertEqual(Path(records[0]["file"]), self.root / "sample.ahk")
+
     def test_script_get_lines_finds_lines_inside_functions(self):
         source = ('F() {\n    x := 1\n    return _ScriptGetLines(A_LineFile, 2)\n}\n'
                   'Outer() {\n    Inner() => _ScriptGetLines(A_LineFile, 6)\n    return Inner()\n}\n'
