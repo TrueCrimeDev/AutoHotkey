@@ -96,7 +96,7 @@ static void PrintCliInfo()
 			L"  --version         Engine version, revision, compiler and architecture. Alias: /version.\n"
 			L"  --capabilities    Commands, features, diagnostic formats and exit codes as JSON.\n\n"
 			L"Options (before the script; may precede or follow the command):\n"
-			L"  /Headless, --headless        Report errors without interactive error or instance prompts.\n"
+			L"  /Headless, --headless        Report errors on stderr; answer MsgBox, InputBox, FileSelect, DirSelect.\n"
 			L"  /Diag[=text|json], --diag[=text|json]\n"
 			L"                               Diagnostic output format on stderr (default text).\n"
 			L"  /ErrorStdOut[=encoding]      Diagnostic text encoding: UTF-8, UTF-16, CPnnn or nnn.\n"
@@ -152,7 +152,7 @@ static void PrintCliInfo()
 			+ L"},\"commands\":[\"run\",\"check\",\"test\",\"repl\",\"mcp\"],"
 			L"\"diagnostics\":{\"formats\":[\"text\",\"json\"],\"jsonSchema\":2},"
 			L"\"mcp\":{\"transport\":\"stdio\",\"protocolVersions\":[\"2025-06-18\",\"2024-11-05\"]},"
-			L"\"features\":{\"eval\":\"opt-in\",\"json\":true,\"check\":true,\"repl\":true,\"coverage\":true,\"inspect\":true,\"processPipe\":true,\"traceFormats\":[\"text\",\"json\"]},"
+			L"\"features\":{\"eval\":\"opt-in\",\"json\":true,\"check\":true,\"repl\":true,\"coverage\":true,\"inspect\":true,\"processPipe\":true,\"headlessDialogs\":true,\"dbgpEval\":true,\"traceFormats\":[\"text\",\"json\"]},"
 			L"\"exitCodes\":{\"success\":0,\"runtime\":10,\"critical\":11,\"parse\":12,\"check\":13,\"test\":14,\"usage\":64,\"interrupted\":130}}";
 	}
 	PrintWideLine(out.c_str(), (int)out.size());
