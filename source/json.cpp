@@ -968,12 +968,6 @@ bool ParseArray(JsonScanner &sc, JsonValue &aOut, int aDepth)
 
 bool ParseValue(JsonScanner &sc, JsonValue &aOut, int aDepth)
 {
-	if (aDepth > sc.opt.maxDepth)
-	{
-		TCHAR buf[96];
-		sntprintf(buf, _countof(buf), _T("Maximum nesting depth of %i exceeded"), sc.opt.maxDepth);
-		return sc.Fail(_T("DepthExceeded"), buf);
-	}
 	sc.SkipWs();
 	if (sc.failed)
 		return false;
@@ -983,6 +977,14 @@ bool ParseValue(JsonScanner &sc, JsonValue &aOut, int aDepth)
 		sc.MarkTop();
 
 	TCHAR c = sc.s[sc.i];
+	// MaxDepth counts containers, as the writer's Enter does: a container at aDepth
+	// is level aDepth + 1, so whatever parses under a MaxDepth also serializes under it.
+	if ((c == '{' || c == '[') ? aDepth >= sc.opt.maxDepth : aDepth > sc.opt.maxDepth)
+	{
+		TCHAR buf[96];
+		sntprintf(buf, _countof(buf), _T("Maximum nesting depth of %i exceeded"), sc.opt.maxDepth);
+		return sc.Fail(_T("DepthExceeded"), buf);
+	}
 	if (c == '{')
 		return ParseObject(sc, aOut, aDepth);
 	if (c == '[')
@@ -1015,12 +1017,6 @@ bool ParseValue(JsonScanner &sc, JsonValue &aOut, int aDepth)
 // whole JSONTestSuite corpus through both and asserts they always agree.
 bool SkipValue(JsonScanner &sc, int aDepth)
 {
-	if (aDepth > sc.opt.maxDepth)
-	{
-		TCHAR buf[96];
-		sntprintf(buf, _countof(buf), _T("Maximum nesting depth of %i exceeded"), sc.opt.maxDepth);
-		return sc.Fail(_T("DepthExceeded"), buf);
-	}
 	sc.SkipWs();
 	if (sc.failed)
 		return false;
@@ -1030,6 +1026,14 @@ bool SkipValue(JsonScanner &sc, int aDepth)
 		sc.MarkTop();
 
 	TCHAR c = sc.s[sc.i];
+	// MaxDepth counts containers, as the writer's Enter does: a container at aDepth
+	// is level aDepth + 1, so whatever parses under a MaxDepth also serializes under it.
+	if ((c == '{' || c == '[') ? aDepth >= sc.opt.maxDepth : aDepth > sc.opt.maxDepth)
+	{
+		TCHAR buf[96];
+		sntprintf(buf, _countof(buf), _T("Maximum nesting depth of %i exceeded"), sc.opt.maxDepth);
+		return sc.Fail(_T("DepthExceeded"), buf);
+	}
 	if (c == '{')
 	{
 		++sc.i;

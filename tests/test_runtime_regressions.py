@@ -158,6 +158,21 @@ class RuntimeRegressions(unittest.TestCase):
         self.assertLessEqual(len(message.encode("utf-8")), 2047)
         self.assertIn("  What: context-marker\n", content)
 
+    def test_crash_log_indents_stack_lines(self):
+        # The crash log wrote Error.Stack raw after "  Stack:": unindented and CRLF-terminated.
+        log = self.root / "stack.log"
+        result = self.run_script('Inner() {\n    throw Error("deep")\n}\nOuter() => Inner()\nOuter()\n',
+                                 f"/CrashLog={log}")
+        self.assertEqual(result.returncode, 10, result.stderr)
+        content = log.read_bytes()
+        self.assertNotIn(b"\r", content)
+        after = content.decode("utf-8").split("  Stack:\n", 1)[1].splitlines()
+        stack = after[:next(i for i, line in enumerate(after) if line.startswith("["))]  # Up to the next record.
+        self.assertEqual(len(stack), 4, after)
+        self.assertTrue(all(line.startswith("    ") for line in stack), stack)
+        self.assertIn("[Inner]", stack[0])
+        self.assertEqual(stack[-1], "    > Auto-execute")
+
     def test_crash_log_unicode_truncation_remains_valid_utf8(self):
         log = self.root / "unicode.log"
         source = 'text := ""\nLoop 1500\n    text .= "😀"\nthrow Error(text)\n'

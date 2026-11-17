@@ -2832,8 +2832,9 @@ void StdioTransport::Disconnect()
 int StdioTransport::Send(const char *aData, size_t aSize)
 {
 	size_t written = fwrite(aData, 1, aSize, stdout);
-	fflush(stdout);
-	if (written != aSize)
+	// fwrite only buffers, so a client that has gone away (a broken pipe) shows up
+	// as a failed flush.
+	if (fflush(stdout) || written != aSize)
 		return DEBUGGER_E_INTERNAL_ERROR;
 	return DEBUGGER_E_OK;
 }
@@ -2947,8 +2948,9 @@ int Debugger::Connect(const char *aAddress, const char *aPort)
 		return DEBUGGER_E_OK;
 	}
 
-	mTransport->Disconnect();
-	return FatalError(DEBUGGER_ERR_FAILEDTOCONNECT DEBUGGER_ERR_DISCONNECT_PROMPT);
+	// SendResponse() has already disconnected and reported the loss through FatalError(),
+	// so a second FatalError() here would print a second notice.
+	return DEBUGGER_E_INTERNAL_ERROR;
 }
 
 // Debugger::Disconnect

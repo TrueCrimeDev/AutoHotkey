@@ -257,6 +257,35 @@ class DebuggerFatalError(unittest.TestCase):
                 self.assertEqual(output.splitlines(), [b"after-reset"], errors)
                 self.assertEqual(code, 0, errors)
 
+    def test_stdio_init_send_failure_reports_once(self):
+        # /Debug=stdio with no reader on stdout: the init packet cannot be sent. StdioTransport
+        # ignored the failed flush, so the engine went on to wait for commands on stdin
+        # (held open here) and never ran the script; and Connect() would then have reported
+        # a second notice after SendResponse() had reported the first.
+        script = self.write("stdio_init.ahk", 'FileAppend("after`n", "**")\n')
+        read_end, write_end = os.pipe()
+        os.close(read_end)
+        try:
+            process = subprocess.Popen([str(ENGINE), "/Headless", "/Debug=stdio", str(script)],
+                                       stdin=subprocess.PIPE, stdout=write_end, stderr=subprocess.PIPE,
+                                       creationflags=CREATE_NO_WINDOW)
+        finally:
+            os.close(write_end)
+        try:
+            code = process.wait(timeout=DEADLINE)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=DEADLINE)
+            raise AssertionError("Engine still waiting for debugger commands after its init "
+                                 "packet could not be sent") from None
+        finally:
+            process.stdin.close()
+            errors = process.stderr.read()
+            process.stderr.close()
+        self.assertEqual(errors.splitlines(), [
+            b"Debugger error: Connection to stdio lost; continuing without the debugger.", b"after"])
+        self.assertEqual(code, 0, errors)
+
     def test_reset_while_running_continues_without_debugger(self):
         # After "run", the loss arrives as FD_CLOSE while the script sleeps.
         session = self.start("running.ahk",

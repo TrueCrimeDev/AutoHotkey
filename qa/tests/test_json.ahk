@@ -373,6 +373,23 @@ loop 5 {
         scalarSeen .= SubStr(e.Message, InStr(e.Message, "(")) "|"
 }
 Assert.eq(scalarSeen, "[1]|(line 2, col 2, pos 6) [UnexpectedChar]|[2]|", "json.notoplevel.parseat.advances")
+; MaxDepth counts containers in Parse and Validate as Stringify does, so what
+; parses under a limit also serializes under it ([[]] is two levels).
+DepthOk(fn) {
+    try {
+        fn()
+        return true
+    }
+    return false
+}
+Assert.eq(DepthOk(() => JSON.Parse("[[]]", , {MaxDepth: 1})) " " JSON.Validate("[[]]", {MaxDepth: 1}).Valid, "0 0", "json.maxdepth.empty.inner.rejected")
+Assert.eq(JSON.Stringify(JSON.Parse("[[]]", , {MaxDepth: 2}), , , {MaxDepth: 2}), "[[]]", "json.maxdepth.roundtrip")
+deep := ""
+loop 256
+    deep := "[" deep "]"
+Assert.eq(StrLen(JSON.Stringify(JSON.Parse(deep))), 512, "json.maxdepth.default.256.roundtrip")
+Assert.falsy(DepthOk(() => JSON.Parse("[" deep "]")), "json.maxdepth.default.257.rejected")
+Assert.eq(DepthOk(() => JSON.Parse("[1]", , {MaxDepth: 1})) " " DepthOk(() => JSON.Parse("[{}]", , {MaxDepth: 1})), "1 0", "json.maxdepth.one.level")
 ; ParseAt counts an error's line from the start of Text, not from Pos.
 badPos := 5, badMsg := ""
 try JSON.ParseAt("[1]`n`n[x]", &badPos)
