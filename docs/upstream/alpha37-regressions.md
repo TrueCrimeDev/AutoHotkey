@@ -8,8 +8,9 @@ the alpha.36 behaviour (`0b8e6fa3`) for comparison.
 
 **Status after v2.1-alpha.38 (2026-11-07):** upstream fixed two of the five
 independently: sections 2 (`1e55d515`) and 3 (`51547074`). The fork took
-those versions in its alpha.38 merge (`c47c4c8b`). Sections 1, 4 and 5 are
-still unfixed upstream and fixed only in the fork.
+those versions in its alpha.38 merge (`c47c4c8b`). Sections 1, 4 and 5 were
+fixed upstream in v2.1-alpha.39 by `c8e6cd51` ("Fix #378, #379"), merged into
+the fork in `ca5b713b`; nothing is left to report.
 
 **Filed 2026-11-12:** section 1 as [AutoHotkey/AutoHotkey#378](https://github.com/AutoHotkey/AutoHotkey/issues/378), section 4 as
 [AutoHotkey/AutoHotkey#379](https://github.com/AutoHotkey/AutoHotkey/issues/379), with section 5 as a from-source note in the same issue

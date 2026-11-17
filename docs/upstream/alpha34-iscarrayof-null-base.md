@@ -1,5 +1,8 @@
 # Upstream report: `IsCArrayOf` dereferences a null base (since v2.1-alpha.34)
 
+**Resolved upstream** in v2.1-alpha.39 (2026-11-14): `5378e6da` ("Fix #380").
+The fork merged it in `ca5b713b`; nothing is left to report.
+
 Filed 2026-11-12 as [AutoHotkey/AutoHotkey#380](https://github.com/AutoHotkey/AutoHotkey/issues/380).
 
 **Affects:** upstream `8fcbf453` ("Changed typed properties and DllCall to

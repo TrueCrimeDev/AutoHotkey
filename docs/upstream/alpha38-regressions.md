@@ -1,5 +1,9 @@
 # v2.1-alpha.38: seven regressions in the open-structure and import changes, and one import fix already upstream
 
+**Resolved upstream** in v2.1-alpha.39 (2026-11-14): `cddd24af` (#371-#374),
+`37252fd8` (#375), `ab46ff0e` (#376) and `3e817b79` (#377). The fork merged
+them in `ca5b713b`; nothing is left to report.
+
 Upstream report, filed 2026-11-12 as one GitHub issue per section
 ([AutoHotkey/AutoHotkey#371](https://github.com/AutoHotkey/AutoHotkey/issues/371) to [AutoHotkey/AutoHotkey#377](https://github.com/AutoHotkey/AutoHotkey/issues/377); each section names its
 issue). Found 2026-11-12 by GitHub Copilot's review of the

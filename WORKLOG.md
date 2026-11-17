@@ -1093,3 +1093,45 @@ unlogged loop session between 3 and now.)
   Win32 qa 1045/1045. `bin/AutoHotkey64*.exe` hold `560b1f7e` (sha256
   `ac8926b45b62ab60` GUI, `382833c77f55bb1d` Console);
   `bin/AutoHotkey64Console.capabilities.json` was regenerated.
+
+### Session 23 (2026-11-16) — open items and housekeeping
+
+- Re-ran three open items on `560b1f7e`: an empty `FileRead` under a v2.1
+  `#Requires` threw `UnsetError`, and `JSON.ParseAt` with
+  `AllowTopLevelScalar: false` reported `(line 1, col 1, pos 1)` and left
+  `Pos` where it was. Both still reproduced.
+- `be8ecff3` fixes them, and the outline matcher. `FileRead` sets an
+  explicit `""`. The JSON scanner records where the top-level value starts,
+  so `Parse`, `Validate` and `ParseAt` report a rejected scalar there, and
+  `ParseAt` moves `Pos` past it. The new `ParseAt` assert then showed every
+  `ParseAt` error counting its line from `Pos` but its column from the start
+  of `Text` (`line 1, col 6` for a scalar on line 2); `ThrowParseAtError`
+  recounts both from the start of `Text`, only on failure. `MatchFuncDecl`
+  balances parentheses, skips quoted strings and accepts `=>`, and
+  `mcp.ahk`'s `_FuncDeclRe` matches the same lines.
+- New asserts: `qa/tests/test_fileread_empty.ahk` (3, the v2.1 case fails on
+  `560b1f7e`) and four in `test_json.ahk` (all fail on `560b1f7e`).
+  `conformance_native.py`'s fixture gained a function with a parenthesised
+  default and a fat-arrow function: 60/60, and the old engine fails the two
+  outline diffs. `source_outline` on `qa/Harness.ahk` now finds `RunQaChild`
+  and `SnippetOut`.
+- Verified on the installed `be8ecff3` engines: gate 17/17, qa 1052/1052
+  across 22 files on x64 and on Win32, `check_all` 120/120.
+- All four `bin/AutoHotkey{64,32}{,Console}.exe` are now the local MSVC build
+  of `be8ecff3` (sha256 `d6655f048e5ed14b` x64 GUI, `d23738e2082d5d3c` x64
+  Console, `f7adeef9043f87fd` Win32 GUI, `05536a6485721630` Win32 Console);
+  the 32-bit pair had still been alpha.33 (`f14d7427`). Both capabilities
+  JSON files were regenerated. Backups pruned from 23 files (35 MB) to the
+  x64 pairs `*.560b1f7e.bak` and `*.a6763d81.bak`.
+- Housekeeping: the upstream issues the fork filed by mistake (#371-#381)
+  were all closed by alpha.39 (`cddd24af`, `37252fd8`, `ab46ff0e`,
+  `3e817b79`, `c8e6cd51`, `5378e6da`, `776836e3`). In the files they touch
+  (`script_object.cpp`, `interop.cpp`, `DllCall.cpp`, `CCallback.cpp`) the
+  fork now differs from the tag only in mingw compatibility (named
+  `ExprTokenType` temporaries, `std::min`) and its own features
+  (`ProcessPipe`, `JSON`, the `JSON.Array` tag hooks). Each
+  `docs/upstream/` report says so. `CLAUDE.md`'s Current State is cut to a
+  summary that points here, and its "report it upstream" to-dos are gone.
+  `.github/FUNDING.yml` is deleted, and the issue template config enables
+  blank issues and keeps the forum links for script help and stock-AutoHotkey
+  bugs only.

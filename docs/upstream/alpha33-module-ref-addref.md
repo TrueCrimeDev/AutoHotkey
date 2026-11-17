@@ -1,5 +1,8 @@
 # Upstream report: `&Module.Var` returns an uncounted VarRef (alpha.33)
 
+**Resolved upstream** in v2.1-alpha.39 (2026-11-14): `776836e3` ("Fix #381").
+The fork merged it in `ca5b713b`; nothing is left to report.
+
 Filed 2026-11-12 as [AutoHotkey/AutoHotkey#381](https://github.com/AutoHotkey/AutoHotkey/issues/381), after
 reproducing on the official alpha.38 zip, x64 and x86 (`__Ref` is
 unchanged at `upstream/alpha` `42ddbabc`).

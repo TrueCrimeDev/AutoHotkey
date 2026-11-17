@@ -1,10 +1,10 @@
+# Issues for this fork (its engine, CLI, MCP server and tooling) go to this
+# repository. Bugs in stock AutoHotkey go to the AutoHotkey forum instead.
+blank_issues_enabled: true
 contact_links:
   - name: "Help with a script"
     url: "https://www.autohotkey.com/boards/viewforum.php?f=82"
-    about: "Get prompt help from volunteers at the autohotkey.com Ask for Help subforum."
-  - name: "Feature request"
-    url: "https://www.autohotkey.com/boards/viewforum.php?f=13"
-    about: "Request new or changed features at the autohotkey.com Wish List subforum."
-  - name: "Bug report"
+    about: "General AutoHotkey v2 questions: the autohotkey.com Ask for Help subforum."
+  - name: "Bug in stock AutoHotkey"
     url: "https://www.autohotkey.com/boards/viewforum.php?f=14"
-    about: "Report issues with documented functionality at the autohotkey.com Bug Reports subforum."
+    about: "A bug that also happens on the official AutoHotkey release: the autohotkey.com Bug Reports subforum."
