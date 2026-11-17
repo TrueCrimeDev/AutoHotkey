@@ -187,6 +187,10 @@ Tool_GetSourceContext(args) {
     return Json.Stringify(out)
 }
 
+; Name(Params) { or Name(Params) => Expr, where Params may nest parentheses (default
+; values such as x := F()) and hold quoted strings; matches source/mcp_server.cpp MatchFuncDecl.
+_FuncDeclRe() => "^([A-Za-z_]\w*)\s*(\((?:[^()`"']++|`"(?:[^`"``]|``.)*+`"|'(?:[^'``]|``.)*+'|(?2))*\))\s*(?:\{\s*$|=>)"
+
 Tool_SourceOutline(args) {
     lines := StrSplit(FileRead(args["file"], "UTF-8") ?? "", "`n", "`r")
     syms := []
@@ -194,7 +198,7 @@ Tool_SourceOutline(args) {
         kind := "", nm := "", t := Trim(ln)
         if (RegExMatch(t, "i)^class\s+([A-Za-z_]\w*)", &m))
             kind := "class", nm := m[1]
-        else if (RegExMatch(t, "^([A-Za-z_]\w*)\s*\([^)]*\)\s*\{\s*$", &m) && !_IsKeyword(m[1]))
+        else if (RegExMatch(t, _FuncDeclRe(), &m) && !_IsKeyword(m[1]))
             kind := "function", nm := m[1]
         else if (RegExMatch(t, "^(\S.*?)::", &m))
             kind := "hotkey", nm := m[1]
@@ -234,7 +238,7 @@ Tool_WorkspaceSymbols(args) {
             kind := "", nm := "", t := Trim(ln)
             if (RegExMatch(t, "i)^class\s+([A-Za-z_]\w*)", &m))
                 kind := "class", nm := m[1]
-            else if (RegExMatch(t, "^([A-Za-z_]\w*)\s*\([^)]*\)\s*\{\s*$", &m) && !_IsKeyword(m[1]))
+            else if (RegExMatch(t, _FuncDeclRe(), &m) && !_IsKeyword(m[1]))
                 kind := "function", nm := m[1]
             if (kind = "")
                 continue

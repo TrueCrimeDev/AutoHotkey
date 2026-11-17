@@ -147,7 +147,7 @@ written (a path under an existing file, or one naming a directory) it prints
 one stderr line, `Coverage report "<path>" not written: ... (Win32 error N:
 ...)`, or a schema-2 `"severity":"warning"`, `"type":"OSError"` record with the
 path in `extra` under `--diag=json`, and the exit code stays the script's own.
-An engine before `ec684fd0` (such as `bin/*.alpha33.bak`) writes nothing and
+An engine before `ec684fd0` (alpha.33 and earlier) writes nothing and
 says nothing there, so create the directory first for one of those.
 `/Headless` only routes error and warning dialogs to stderr; `MsgBox`,
 `InputBox` and `Gui` still block, so do not run dialog-driven scripts
@@ -187,7 +187,7 @@ live server's registry and counters.
 | Tools | Purpose |
 | --- | --- |
 | `ast_outline` | Tree-sitter structure and spans; needs the x64 `tree-sitter-ahk.dll` beside the engine |
-| `source_outline`, `workspace_symbols` | Lightweight line-regex scans (`source/mcp_server.cpp:930`): they miss functions whose default parameters contain parentheses and every fat-arrow (`=>`) function, so use `ast_outline` for a complete list |
+| `source_outline`, `workspace_symbols` | Lightweight line scans (`MatchFuncDecl`, `source/mcp_server.cpp`): one line per declaration, so a function whose `{` is on the next line is missed; use `ast_outline` for a complete list. Before `be8ecff3` they also missed fat-arrow functions and default parameters containing parentheses |
 | `get_source_context` | Source lines around a location |
 | `check`, `run`, `test` | Child-engine execution with diagnostics and captured streams |
 | `server_status` | Engine identity, health, and counters |
@@ -348,7 +348,7 @@ Under `--diag=json` each notice is one schema-2 record instead:
 No engine built from `f14d7427` on prompts here, with or without `/Headless`,
 and that includes the GUI exe (`mErrorStdOut` defaults to true in both builds,
 `source/script.cpp:327`), so a GUI session whose debugger is missing or dies
-just continues. An older engine (such as `bin/*.alpha33.bak`) opens modal
+just continues. An older engine (alpha.33 and earlier) opens modal
 Abort/Retry/Ignore and Yes/No boxes instead, even with `/Headless`, so never
 point one at a port nobody listens on. `/Headless` turns the engine's other
 prompts into stderr text. That includes the default
@@ -441,84 +441,30 @@ DBGp commands: `run`, `step_into`, `step_over`, `breakpoint_set`, `property_get`
 
 ---
 
-# Current State & Open Items (updated 2026-11-15)
+# Current State & Open Items (updated 2026-11-16)
 
 - Target language version: `2.1-alpha.39+Console`, based on the upstream tag
-  `v2.1-alpha.39` (`768d9bdc`, released 2026-11-14; merged 2026-11-15 on
-  `m1/upstream-alpha38-post` as `ca5b713b`, 23 commits past the alpha.38
-  tag, before the alpha.39 tag was noticed; the version string followed in
-  `560b1f7e`; `docs/alpha/v2.1-alpha.39.md`, alpha.34-38 notes beside it;
-  WORKLOG Session 22). Alpha.38 (`afde2333`) was merged 2026-11-12 on
-  `m1/upstream-alpha38` as `c47c4c8b`. Always verify the actual executable's
-  `--version` and hash; historical files in `bin/` or `bin_harness/` may be
-  stale. Since 2026-11-15 `bin/AutoHotkey64*.exe` are the local MSVC x64
-  build of `560b1f7e` (`2.1-alpha.39+Console`: the alpha.39 merge plus the
-  fork's fix for lines inside functions, `ec2f18d9`); `bin/*.a6763d81.bak` are the
-  previous x64 engines (the alpha.38 merge plus the fork's
-  fixes to seven alpha.38 regressions and the alpha.34 `IsCArrayOf` crash,
-  below), and `bin/AutoHotkey32*.exe` are still `f14d7427`; `bin/*.a911f73d.bak` are the alpha.37
-  engines (the alpha.37 merge plus the fork's fixes to five alpha.37
-  regressions, below) installed 2026-10-25, `bin/*.165d7384.bak`
-  are the alpha.36 engines (`165d73849eb0`, the alpha.36 merge plus the
-  struct-view fix) installed 2026-10-22, `bin/*.a41db9a1.bak` the alpha.36
-  engines without that fix, `bin/*.56f57edb.bak`
-  the alpha.35 engines, `bin/*.f14d7427.bak` the CI engines of
-  `f14d7427` (run 37807040408), and `bin/*.alpha33.bak` the `f7712ec15171` ones.
-  Alpha.35's `Script::GetSearchPath` bug (every library directory after the
-  first missing one dropped) was fixed here and then upstream in `abe3ff20`.
-  Alpha.36's `ObjCreateWithDataPtr` wrote its pointer over the fields of a
-  native class larger than `Object` (`Map`, `Array`, `Buffer`, `ProcessPipe`,
-  `JSON.Object`) and corrupted the heap; fixed here in `a41db9a1`, pinned by
-  `qa/tests/test_alpha36.ahk` section 3, report in
-  `docs/upstream/alpha36-createstructptr-offset.md` (resolved upstream in
-  alpha.38, below).
-  CI run 39685156323 on `83d013e8` passed every build, test and
-  debugger-clients job (x64 after one rerun of a PowerShell cold-start
-  timeout; WORKLOG Session 18). The same upstream change also left every
-  struct view able to own properties; fixed here in `f24c23d1` (section 7 of
-  the same test, WORKLOG Session 19). Alpha.37 (WORKLOG Session 20) merged
-  without conflicts; `qa/tests/test_alpha37.ahk` (32 asserts) pins its
-  release-note items, and CI run 40216066837 on `6460921b` passed every job.
-  Alpha.37 itself regressed five things (Copilot review of PR #33, each
-  reproduced): `NumPut` accepted an invalid type in a later pair, `a.b()`
-  replaced a throwing getter's exception with `UnsetError`, `CallbackCreate`
-  rejected a struct subclass with only inherited fields, and on Win32
-  `"Int64*", unset` took two stack slots and an array callback parameter was
-  counted at its struct size; fixed here in `a911f73d`, pinned by section 9
-  of the same test, report in `docs/upstream/alpha37-regressions.md`.
-  Alpha.38 (WORKLOG Session 21) conflicted only where the fork had patched
-  upstream code. Upstream's `CreateStructPtr` rewrite covers both alpha.36
-  fixes (`a41db9a1`, `f24c23d1`), and `1e55d515`/`51547074` fix the `a.b()`
-  and `CallbackCreate` regressions, so upstream's versions were taken. The
-  `NumPut` per-pair size and the two Win32 fixes stay fork-only (report
-  sections 1, 4 and 5, filed 2026-11-12 as AutoHotkey/AutoHotkey #378
-  and #379). `ee8080f8` changed native class
-  factories to `ctor(void *p)`; the fork's `JSON.Object` factory follows it.
-  `qa/tests/test_alpha38.ahk` sections 1-8 pin the changelog. CI run
-  43271605576 (PR #35, `5497c7c8`) passed every build, test and
-  debugger-clients job, mingw included. Alpha.38 itself regressed seven
-  things (Copilot's five reviews of PR #35, each reproduced first): a
-  struct containing itself by value was accepted and corrupted the heap
-  when constructed (and one derived from an invalid struct kept a nonzero
-  size), `{Type: ComValue(3, 0)}` in `DefineProp` exited 11, a
-  `Class(Int32)` field dropped its class, `GetOwnPropDesc` lost an `Offset`
-  naming a later-sorted field, a module's wildcard re-export was looked up
-  with the calling function's imports, an array class accepted typed
-  fields until first use (element 2 of `Int32[2]` moved to offset 6), and
-  `NumGet` accepted a `Class(Int32)` subclass only until its layout closed.
-  They are fixed here in `b2885254`, `e474e616`, `07fa54d7` and `e13b80d8`,
-  pinned by section 9 of the same test (52 asserts), report in
-  `docs/upstream/alpha38-regressions.md` (filed 2026-11-12 as
-  AutoHotkey/AutoHotkey #371-#377, one per regression, each reproduced
-  first on the official alpha.38 zip, x64 and x86). Another, nested
-  functions missing a global wildcard import, is upstream's post-tag
-  `c727bdf0`, cherry-picked. On `e13b80d8` the gate is 17/17 and qa
-  1038/1038 on x64 and on a local Win32 build; CI run 43281421940 on
-  `54b92412` passed every job, and PR #35 merged into `alpha` as `ec6f5b32`
-  (Copilot's sixth review did not run: the account's review quota was
-  spent). `examples/alpha38/` has one script per change. `a6763d81` then
-  fixed the alpha.34 `IsCArrayOf` crash (open items, below); on it the gate
-  is 17/17 and qa 1040/1040 on x64, qa 1040/1040 on Win32.
+  `v2.1-alpha.39` (`768d9bdc`, released 2026-11-14), merged as `ca5b713b`
+  (PR #39); the version string followed in `560b1f7e` (PR #40). Release notes
+  for alpha.21-39 are in `docs/alpha/`. How each alpha merged, the
+  regressions it brought and the fork's fixes are in WORKLOG Sessions 17-22.
+- Always verify the actual executable's `--version` and hash; `bin/` may be
+  stale. Since 2026-11-16 all four `bin/AutoHotkey{64,32}{,Console}.exe` are
+  the local MSVC build of `be8ecff3` (alpha.39 plus the fixes for an empty
+  `FileRead`, JSON scalar positions and the outline matcher, below).
+  `bin/*.560b1f7e.bak` (alpha.39 before those fixes) and `bin/*.a6763d81.bak`
+  (alpha.38) are the only older engines kept, both x64; the rest were
+  deleted that day. `bin/archive/` still holds the alpha.30-era builds.
+- Every upstream report in `docs/upstream/` is resolved upstream. Alpha.39
+  closed AutoHotkey/AutoHotkey #371-#381 (filed there by mistake on
+  2026-11-12), so the struct, DllCall and module fixes the fork carried are
+  upstream's own code now. The fork's remaining source differences from the
+  tag are its own features and fixes, the mingw build, and `ec2f18d9` (`GetLine` and
+  coverage walk function bodies, which alpha.39 split from module line lists).
+- All issues, PRs and comments go to TrueCrimeDev/AutoHotkey. Never file
+  anything on AutoHotkey/AutoHotkey; the `upstream` remote's push URL is
+  `DISABLED`. A bug found in upstream code is fixed in this fork and noted
+  here.
 - CMake builds GUI and Console by default, sharing the common runtime objects.
   Harness is an explicit optional target. CI gates Console for MSVC x64,
   MSVC Win32, and mingw x64, then publishes tag releases and checksums.
@@ -554,8 +500,8 @@ Open items:
   second `&Mod.X` gives up another count). Also reproduced on the
   official `AutoHotkey_2.1-alpha.33.zip` GUI build (2026-10-08), so it is not
   the merge. Use `#Import Mod {X}` plus `&X`. Engine fix: `AddRef` before
-  `_o_return(ref)`, then report it upstream. No suite pins it yet.
-  Fixed 2026-10-09 on m1/module-ref: `ref->AddRef()` before `_o_return(ref)`; pinned by `qa/tests/test_alpha33.ahk` and two `tests/test_runtime_regressions.py` cases (both fail on `d9fd14ac`, exit 3221226356); upstream report in `docs/upstream/alpha33-module-ref-addref.md`, filed 2026-11-12 as AutoHotkey/AutoHotkey #381 after reproducing on the official alpha.38 zip (x64 and x86; `__Ref` is unchanged at `42ddbabc`).
+  `_o_return(ref)`.
+  Fixed 2026-10-09 on m1/module-ref: `ref->AddRef()` before `_o_return(ref)`; pinned by `qa/tests/test_alpha33.ahk` and two `tests/test_runtime_regressions.py` cases (both fail on `d9fd14ac`, exit 3221226356); upstream report in `docs/upstream/alpha33-module-ref-addref.md`, filed 2026-11-12 as AutoHotkey/AutoHotkey #381 after reproducing on the official alpha.38 zip (x64 and x86; `__Ref` is unchanged at `42ddbabc`). Resolved upstream in alpha.39 (`776836e3`).
 - [ ] **Module init is not lazy, by upstream design** (rechecked on alpha.33,
   2026-10-08): every module runs at startup in reverse order of creation
   (`source/script.cpp:1042`-`1048`, `Script::AutoExecSection`), so a
@@ -576,12 +522,14 @@ Open items:
   for in-process, incremental parsing in a Node host. Needs the grammar
   **source**: only `bin/tree-sitter-ahk.dll` (loaded by `source/ts_api.cpp:41`
   and `:45`) is vendored.
-- [ ] `FileRead` of a zero-byte file returns no value (`source/lib/file.cpp:228`
-  returns `OK` without one; upstream alpha.33 has the same line): `""` in v2.0
-  mode, but under a top-level `#Requires AutoHotkey v2.1-...` it throws
-  `UnsetError` "No value was returned." (`source/script_expression.cpp:452`);
-  `FileRead(f, "RAW")` returns an empty Buffer (rechecked 2026-10-08). Pin it
-  with a qa test and report it upstream.
+- [x] FIXED 2026-11-16 (`be8ecff3`): `FileRead` of a zero-byte file returned
+  no value (`source/lib/file.cpp` returned `OK` without one, as upstream
+  alpha.39 still does): `""` in v2.0 mode, but under a top-level
+  `#Requires AutoHotkey v2.1-...` `UnsetError` "No value was returned.". It
+  now sets an explicit `""`, as upstream's `f3291c14` did for
+  `WinGetTransparent`; `FileRead(f, "RAW")` still returns an empty Buffer.
+  Pinned by `qa/tests/test_fileread_empty.ahk` (the v2.1 case fails on
+  `560b1f7e`).
 
 Engine bugs found 2026-10-07 (WORKLOG Sessions 12-14), all rechecked on
 alpha.33 (`f7712ec15171`) on 2026-10-08. Five were fixed that day on
@@ -592,10 +540,10 @@ skipped, as on any non-tag run) and are marked [x] below with how they were veri
 - [x] FIXED 2026-10-08 (`7b1a23b6`): `JSON()` was callable (the class was built on `JsonObject::sPrototype` with no factory) and returned a plain Object posing as `JSON.Object`, whose `Set`, `Count` and `Keys` read and wrote past its end (exit 11 or 0xC0000374). `source/json.cpp` now records a `JsonObject` factory and defines `JSON.Call`. Verified: `qa/tests/test_json_class.ahk` 48/48; probes give `TypeError` "JSON cannot be constructed. Use JSON.Parse() to create a JSON.Object." for `JSON()`, `JSON(1, 2, 3)` and a subclass `X()`, and `ValueError` "Invalid base." for `(Object.Call)(JSON)`, `(Object.Call)(X)` and `(Object.Call)({Prototype: JSON.Prototype})`.
 - [x] FIXED 2026-10-08 (`7b1a23b6`): `JSON.True`/`False`/`Null` were writable value properties, so `JSON.True := 5` replaced the singleton. They are getter-only now (`JSON.True.Get` etc.). Verified: assigning on `JSON` or a subclass throws `Error` "Property is read-only.", the singletons stay identical, and native-mode `Stringify` still writes `[true,false,null]`. `DefineProp`/`DeleteProp` can still replace or remove them (standard for built-in members; Parse and Stringify are unaffected).
 - [ ] JSON `MaxDepth`: the parser checks each value's depth with the root at 0 (`source/json.cpp:954`, `:999`), the writer counts containers (`:1108`), so an innermost empty container one level deeper parses (and `Validate` accepts it) but cannot re-serialize: `[[]]` with `MaxDepth: 1`, or 257 nested `[]` by default (`[[1]]` is rejected).
-- [ ] With `AllowTopLevelScalar: false`, `Parse`/`ParseAt` (`source/json.cpp:1464`, `:1875`) report `(line 1, col 1, pos 1)` wherever the scalar is, and `ParseAt` leaves `Pos` on it, so a catch-and-continue loop never advances; `Validate` (`:1780`) reports the position after the value (Line 3, Col 6, Pos 8 for "\n\n   42").
+- [x] FIXED 2026-11-16 (`be8ecff3`): with `AllowTopLevelScalar: false`, `Parse`/`ParseAt` reported `(line 1, col 1, pos 1)` wherever the scalar was and `ParseAt` left `Pos` on it, so a catch-and-continue loop never advanced; `Validate` reported the position after the value (Line 3, Col 6, Pos 8 for "\n\n   42"). All three now report where the scalar starts (line 3, col 4, pos 6), using the start the scanner records for the top-level value (`JsonScanner::MarkTop`/`FailAtTop`), and `ParseAt` moves `Pos` past the rejected scalar. Fixing it showed that every `ParseAt` error counted its line from `Pos` but its column from the start of `Text`; `ThrowParseAtError` now recounts both from the start of `Text`, only on failure. Pinned by four `qa/tests/test_json.ahk` asserts, all failing on `560b1f7e`.
 - [x] FIXED 2026-10-08 (`47bc3fcb`): `Check()` built its single diagnostic from the first record of any severity, so a VarUnset warning printed before a missing `Goto` label gave `Ok=0` with only the warning. `CheckFindDiagRecord` (`source/console_check.cpp:206`) now takes the first `error` or `critical` record, and the first record of any severity only when none is an error. Verified: `qa/tests/test_check_severity.ahk` 22/22; on `x := neverAssigned` + `Goto NoSuchLabel`, `Diagnostics[1]` is Severity "error", Code 13, Line 2, "Label not found in current scope."; after two warnings, `break` on line 3 is reported; a warning-only source gives `Ok=1` and no diagnostics.
 - [ ] `Check()` field extraction (`source/console_check.cpp:111`, `:138`) still searches from the chosen record to the end of the captured output, so a key missing from that record would be read from a later one. Both emitters write every field today (from source).
-- [x] FIXED 2026-10-09 (`m1/dbgp-property-data`): DBGp `WritePropertyData` (same in upstream alpha.33 and v2.0) staged UTF-8 at the buffer tail and base64-encoded it forward over unread bytes (one 196000-byte value via `property_get -m 0` arrived 192142 bytes wrong from offset 1953 while a 140000-byte one arrived intact; the damage depended on the value's size), and its sizing loop counted a surrogate pair as 7 bytes (three emoji: `size="21"` for 12 bytes) with `-m 5` splitting the pair into U+FFFD. `source/Debugger.cpp` now reserves the UTF-8 scratch area beyond the encoded data's end and skips the low surrogate it has counted. Verified: `tests/test_debugger_property_data.py` 4/4 (16 failures on the previous engine: 90000- and 180000-byte values corrupt from bytes 32721 and 65925, `size="20"` for 14 bytes). Still to report upstream.
+- [x] FIXED 2026-10-09 (`m1/dbgp-property-data`): DBGp `WritePropertyData` (same in upstream alpha.33 and v2.0) staged UTF-8 at the buffer tail and base64-encoded it forward over unread bytes (one 196000-byte value via `property_get -m 0` arrived 192142 bytes wrong from offset 1953 while a 140000-byte one arrived intact; the damage depended on the value's size), and its sizing loop counted a surrogate pair as 7 bytes (three emoji: `size="21"` for 12 bytes) with `-m 5` splitting the pair into U+FFFD. `source/Debugger.cpp` now reserves the UTF-8 scratch area beyond the encoded data's end and skips the low surrogate it has counted. Verified: `tests/test_debugger_property_data.py` 4/4 (16 failures on the previous engine: 90000- and 180000-byte values corrupt from bytes 32721 and 65925, `size="20"` for 14 bytes). Upstream fixed the large-value corruption separately in v2.0 (`b71f5841`, reached alpha.39 through its `v2.0` merge); the alpha.39 merge kept the fork's `Debugger.cpp`.
 - [x] FIXED 2026-10-08 (`76973889` lost connection, `f14d7427` refused connect): `Debugger::FatalError` showed a modal Yes/No box even under `/Headless` on a failed connect or a lost connection (only `/Debug=stdio` printed it). The refused-connect Abort/Retry/Ignore box in `SocketTransport::Connect`, which comes before FatalError, was folded into this item's "failed connect" case; `76973889` fixed only the lost connection, and `f14d7427` fixed the refused connect. Both now take `DebuggerErrorsToStdErr()` (`source/Debugger.cpp:2481`: `g_DebugStdio || mErrorStdOut || mHeadless`, Script::ShowError's test) and print one notice through `PrintErrorStdOut` (`ReportContinuingWithoutDebugger`, `:2506`). Verified: `tests/test_debugger_fatal.py` 3/3 on `bin/AutoHotkey64Console.exe`; probes on bound-then-closed ports print `Debugger error: Could not connect to localhost:PORT; continuing without the debugger.` (no flags, `/Headless`, `/StdErrFile` byte-identical), an RST after the init packet prints `Connection to localhost:PORT lost; ...`, `/Debug=stdio` with stdin closed prints `Connection to stdio lost; ...`, `--diag=json` gives one warning record (`what` "Debugger", `extra` the client); each run printed `after` and exited 0, and `detach` printed nothing.
 - Trade-off, by design (`76973889`, `f14d7427`): `mErrorStdOut` defaults to true in both builds (`source/script.cpp:327`; only an invalid `/ErrorStdOut` encoding clears it, `source/error.cpp:222`), so `DebuggerErrorsToStdErr()` holds in every normal run and neither debugger prompt appears in any build. A GUI `AutoHotkey64.exe` session (an IDE, or Explorer, with no visible stderr) whose debugger is missing or dies now continues silently without the "Continue running the script without the debugger?" choice, and the old Retry workflow is gone; use `/StdErrFile` to see the notice. To restore the GUI prompt, narrow `DebuggerErrorsToStdErr()` to `g_DebugStdio || g_script.mHeadless`.
 - [ ] Two notices when the init packet cannot be sent: `SendResponse` calls `FatalError()` itself (`source/Debugger.cpp:2463`, "Connection ... lost"), then `Debugger::Connect` calls `FatalError(DEBUGGER_ERR_FAILEDTOCONNECT ...)` again (`:2812`, "Could not connect ..."), so stderr gets both lines (two warning records under `--diag=json`). From source; not triggered. Fix: return `DEBUGGER_E_INTERNAL_ERROR` from Connect without a second FatalError once SendResponse has reported.
@@ -621,8 +569,8 @@ skipped, as on any non-tag run) and are marked [x] below with how they were veri
   Both now throw `TypeError` ("Expected a Number but got a Prototype.",
   "Expected an Int32 but got a Prototype."), as alpha.33 did, and an
   `Int32[3]` still decays. Pinned by `qa/tests/test_alpha38.ahk` section 10
-  (`e13b80d8` fails it). Filed upstream as AutoHotkey/AutoHotkey #380;
-  report in `docs/upstream/alpha34-iscarrayof-null-base.md`.
+  (`e13b80d8` fails it). Filed upstream as AutoHotkey/AutoHotkey #380,
+  resolved in alpha.39 (`5378e6da`); report in `docs/upstream/alpha34-iscarrayof-null-base.md`.
 - [ ] x86 `stdcall` callbacks: `CallbackCreate` (`source/lib/CCallback.cpp`)
   guards the parameter count at 31 before expanding 64-bit parameters to two
   four-byte slots, so 16 `Int64` parameters give 32 slots and the generated
@@ -634,7 +582,7 @@ skipped, as on any non-tag run) and are marked [x] below with how they were veri
   throw `ValueError` "Invalid parameter(s)."; `qa/tests/test_alpha37.ahk`
   section 7 pins it.
 - [ ] DBGp has no `eval` command (`source/Debugger.cpp:47` command table; `eval` answers error 4) and `breakpoint_set` rejects `--` conditions (`:771`, error 3), as upstream alpha.33 does: clients read paths with `property_get`.
-- [ ] Native `source_outline`/`workspace_symbols` match functions with one line regex (`source/mcp_server.cpp:930`-`931`, `MatchFuncDecl`), so they miss a function whose default parameters contain parentheses and every fat-arrow function: on `qa/Harness.ahk` they skip `RunQaChild` (line 25) and `SnippetOut` (line 118), which `ast_outline` finds (same on alpha.31). Engine fix: balance nested parentheses and accept `=>` bodies.
+- [x] FIXED 2026-11-16 (`be8ecff3`): native `source_outline`/`workspace_symbols` matched functions with one line regex (`MatchFuncDecl`, `source/mcp_server.cpp`), so they missed a function whose default parameters contain parentheses and every fat-arrow function (on `qa/Harness.ahk`, `RunQaChild` and `SnippetOut`). `MatchFuncDecl` now balances parentheses, skips quoted strings and accepts `=>`; `debugger-tool/mcp-ahk/mcp.ahk`'s `_FuncDeclRe` matches the same lines, and the `conformance_native.py` fixture has one of each (60/60; the old engine fails the two outline diffs).
 - [x] FIXED 2026-10-09 (`m1/cli-help`): `--help` (`source/AutoHotkey.cpp:86`) listed only slash options. It now lists every spelling `ParseCmdLineArgs` accepts, grouped as commands, information, options and command switches: `/Debug[=host[:port]|stdio]`, the Git Bash aliases (`--headless`, `--diag`, `--eval`, `--trace`, `--check`, `--test`, `--crashlog=`, `--stderrfile=`, `--coverage=`), `/ErrorStdOut:color|nocolor`, `/version`, `/restart`, `/script`, `/validate` and `/iLib file`. `tests/test_console_cli.py` pins that list and also scans the parser's own `_T("/...")`/`_T("--...")` literals, so an option added to the parser without help text fails the gate. `--capabilities` carries no options list and gained none.
 
 Follow-ups from the alpha.33 re-verification (2026-10-08), outside that pass's
@@ -655,10 +603,11 @@ docs-only scope:
   any directory with its own `.git` (a nested worktree such as
   `.kilo/worktrees/`), so it passes locally (103/103) and still checks exactly
   the files a fresh CI checkout has.
-- [ ] The b44b48e3 merge brought in upstream's `.github/FUNDING.yml` (Lexikos)
-  and `.github/ISSUE_TEMPLATE/config.yml` (bug reports to the autohotkey.com
-  forum, wrong for fork features): replace with fork links or delete
-  (maintainer decision).
+- [x] FIXED 2026-11-16: the b44b48e3 merge brought in upstream's
+  `.github/FUNDING.yml` (Lexikos) and `.github/ISSUE_TEMPLATE/config.yml`
+  (bug reports to the autohotkey.com forum). `FUNDING.yml` is deleted, and the
+  template config enables blank issues here and keeps the forum links only
+  for script help and bugs in stock AutoHotkey.
 - [x] `.vscode/launch.json` no longer calls `bin\AutoHotkey64.exe` older than
   the console build (fixed 2026-10-08): both `bin/` exes are now the CI build
   of `f14d7427`, and their sha256 match run 37807040408's artifacts.

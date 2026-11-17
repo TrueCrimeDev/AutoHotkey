@@ -1020,7 +1020,7 @@ under `run` is reported with `timedOut: true` rather than hanging the server.
 
 Four behavior changes from `fix/engine-bugs`, merged at `4e9349b5` (CI runs
 37801628398 and 37807040408). Engines built before them, such as revision
-`f7712ec15171` (`bin/*.alpha33.bak`), behave as each "Before" line says.
+`f7712ec15171` (the alpha.33 engines, no longer kept in `bin/`), behave as each "Before" line says.
 
 ### Debugger connection notices (`76973889`, `f14d7427`)
 

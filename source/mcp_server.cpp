@@ -927,7 +927,8 @@ bool MatchClassDecl(const wstring &t, wstring &name)
 	return true;
 }
 
-// ^([A-Za-z_]\w*)\s*\([^)]*\)\s*\{\s*$
+// Name(Params) { or Name(Params) => Expr, where Params may hold nested
+// parentheses (default values such as `x := F()`) and quoted strings.
 bool MatchFuncDecl(const wstring &t, wstring &name)
 {
 	size_t p = 0;
@@ -940,14 +941,34 @@ bool MatchFuncDecl(const wstring &t, wstring &name)
 		++p;
 	if (p >= t.size() || t[p] != L'(')
 		return false;
-	++p;
-	while (p < t.size() && t[p] != L')')
-		++p;
+	int depth = 0;
+	for (; p < t.size(); ++p)
+	{
+		wchar_t c = t[p];
+		if (c == L'"' || c == L'\'')
+		{
+			// Skip the string; a backtick escapes the next character.
+			for (++p; p < t.size() && t[p] != c; ++p)
+				if (t[p] == L'`')
+					++p;
+			if (p >= t.size())
+				return false;
+		}
+		else if (c == L'(')
+			++depth;
+		else if (c == L')' && !--depth)
+			break;
+	}
 	if (p >= t.size())
 		return false;
-	++p; // past ')'
+	++p; // past the closing ')'
 	while (p < t.size() && IsPcreWs(t[p]))
 		++p;
+	if (p + 1 < t.size() && t[p] == L'=' && t[p + 1] == L'>')
+	{
+		name = t.substr(0, name_end);
+		return true;
+	}
 	if (p >= t.size() || t[p] != L'{')
 		return false;
 	++p;

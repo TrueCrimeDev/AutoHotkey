@@ -353,6 +353,32 @@ for badScalar in ["42", '"s"', "true", "null", "3.14"]
     Assert.truthy(JsonAgree(badScalar, {AllowTopLevelScalar:false}), "json.validate.notoplevel.agree." badScalar)
 Assert.falsy(JSON.Validate("42", {AllowTopLevelScalar:false}).Valid, "json.validate.notoplevel.rejects")
 Assert.truthy(JSON.Validate("[1]", {AllowTopLevelScalar:false}).Valid, "json.validate.notoplevel.array.ok")
+; A rejected top-level scalar is reported where it starts, not at line 1 col 1,
+; and ParseAt moves Pos past it so a loop that catches the error carries on.
+ScalarErr(fn) {
+    try fn()
+    catch as e
+        return e.Message
+    return ""
+}
+Assert.truthy(InStr(ScalarErr(() => JSON.Parse("`n`n   42", {AllowTopLevelScalar:false})), "(line 3, col 4, pos 6)"), "json.notoplevel.parse.position")
+v := JSON.Validate("`n`n   42", {AllowTopLevelScalar:false})
+Assert.eq(v.Line " " v.Col " " v.Pos, "3 4 6", "json.notoplevel.validate.position")
+scalarText := '[1]`n 42`n[2]', scalarPos := 1, scalarSeen := ""
+loop 5 {
+    if (scalarPos > StrLen(scalarText))
+        break
+    try scalarSeen .= JSON.Stringify(JSON.ParseAt(scalarText, &scalarPos, {AllowTopLevelScalar:false})) "|"
+    catch as e
+        scalarSeen .= SubStr(e.Message, InStr(e.Message, "(")) "|"
+}
+Assert.eq(scalarSeen, "[1]|(line 2, col 2, pos 6) [UnexpectedChar]|[2]|", "json.notoplevel.parseat.advances")
+; ParseAt counts an error's line from the start of Text, not from Pos.
+badPos := 5, badMsg := ""
+try JSON.ParseAt("[1]`n`n[x]", &badPos)
+catch as e
+    badMsg := e.Message
+Assert.truthy(InStr(badMsg, "(line 3, col 2, pos 7)"), "json.parseat.error.line.from.text.start")
 
 ; UTF-16 with an odd byte count is malformed, not silently truncated.
 oddBuf := Buffer(5)
