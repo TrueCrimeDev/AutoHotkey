@@ -19,6 +19,7 @@ freely, without restriction.
 #include "script_object.h"
 #include "script_com.h"
 #include "TextIO.h"
+#include "console_eval.h"
 //#include "Debugger.h" // included by globaldata.h
 
 #ifdef CONFIG_DEBUGGER
@@ -64,6 +65,7 @@ Debugger::CommandDef Debugger::sCommands[] =
 	{"property_get", &property_get},
 	{"property_set", &property_set},
 	{"property_value", &property_value},
+	{"eval", &eval},
 	
 	{"feature_get", &feature_get},
 	{"feature_set", &feature_set},
@@ -2101,6 +2103,81 @@ int Debugger::property_get_or_value(char **aArgV, int aArgCount, char *aTransact
 			err = WritePropertyData(prop.value, prop.max_data);
 		}
 	}
+	return err ? err : mResponseBuf.Write("</response>");
+}
+
+// eval -i ID [-p PAGE] -- BASE64(EXPRESSION)
+// Evaluates an AutoHotkey expression with the fork's Eval, in the scope of the function
+// the script is paused in (the global scope outside any function), and answers with one
+// <property> as property_get would. #EnableEval is not required: a debugger client can
+// already read and set any variable. A failure (a syntax error, or anything the
+// expression throws) answers error 206 with the exception's message.
+DEBUGGER_COMMAND(Debugger::eval)
+{
+	char *expression = NULL;
+	CStringA name_buf;
+	TCHAR value_buf[_f_retval_buf_size];
+	PropertyInfo prop(name_buf, value_buf);
+	prop.pagesize = mMaxChildren;
+	prop.max_data = mMaxPropertyData;
+	prop.max_depth = mMaxDepth;
+
+	for (int i = 0; i < aArgCount; ++i)
+	{
+		char *value = ArgValue(aArgV, i);
+		switch (ArgChar(aArgV, i))
+		{
+		case '-': expression = value; break;
+		case 'p': prop.page = atoi(value); break;
+		default:
+			return DEBUGGER_E_INVALID_OPTIONS;
+		}
+	}
+	if (!expression)
+		return DEBUGGER_E_INVALID_OPTIONS;
+
+	int length = (int)Base64Decode(expression, expression);
+	CString expression_buf;
+	StringUTF8ToTChar(expression, expression_buf, length);
+
+	// EXCPTMODE_DEBUGGER alone would free a thrown exception unreported; CATCH keeps it in
+	// g->ThrownToken (and keeps the parser from reporting a syntax error) so its message
+	// can be returned.
+	auto excptmode = g->ExcptMode;
+	g->ExcptMode |= EXCPTMODE_CATCH;
+	FResult result = ConsoleEval::Evaluate(expression_buf, g->CurrentFunc, prop.value);
+	g->ExcptMode = excptmode;
+
+	if (result != OK)
+	{
+		CStringA message;
+		if (g->ThrownToken)
+		{
+			if (g->ThrownToken->symbol == SYM_OBJECT)
+			{
+				auto obj = dynamic_cast<Object *>(g->ThrownToken->object);
+				LPTSTR text = obj ? obj->GetOwnPropString(_T("Message")) : NULL;
+				if (text)
+					StringTCharToUTF8(text, message);
+			}
+			else
+				StringTCharToUTF8(TokenToString(*g->ThrownToken, value_buf), message);
+			g_script.FreeExceptionToken(g->ThrownToken);
+		}
+		else
+			message = result == FR_E_OUTOFMEM ? "Out of memory." : "Evaluation failed.";
+		return mResponseBuf.WriteF(
+			"<response command=\"eval\" success=\"0\" transaction_id=\"%e\"><error code=\"%i\"><message>%e</message></error></response>"
+			, aTransactionId, DEBUGGER_E_EVAL_FAIL, message.GetString());
+	}
+
+	prop.kind = PropValue;
+	prop.name = "";
+	int err = mResponseBuf.WriteF(
+		"<response command=\"eval\" success=\"1\" transaction_id=\"%e\">"
+		, aTransactionId);
+	if (!err)
+		err = WritePropertyXml(prop);
 	return err ? err : mResponseBuf.Write("</response>");
 }
 

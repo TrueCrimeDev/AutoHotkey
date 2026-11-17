@@ -249,6 +249,7 @@ public:
 	DEBUGGER_COMMAND(property_get);
 	DEBUGGER_COMMAND(property_set);
 	DEBUGGER_COMMAND(property_value);
+	DEBUGGER_COMMAND(eval);
 	
 	DEBUGGER_COMMAND(source);
 
