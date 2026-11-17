@@ -213,7 +213,7 @@ cat <<'EOF'
 - check: 0 prints CHECK PASS. 13 is a syntax error, but also a missing script file ("Script file not found.", line 0) or a failed #DllLoad: read the message. Warnings print as "==> Warning:" on stderr with exit 0.
 - --diag=json: NDJSON, one flat object per line {kind,severity,type,code,message,extra,file,line,...} on stderr (#Warn ..., StdOut sends warnings to stdout); the pass marker {"kind":"check","status":"pass"} is on stdout. Read both streams.
 - test: 0 pass. An uncaught runtime error keeps 10 and a parse error 12; 14 comes only from ExitApp(14), a persistent script, or an exec failure.
-- --headless (and check/test) only turn error dialogs into stderr text. MsgBox, InputBox and Gui still block: never run GUI/MsgBox scripts unattended; check them, or run a copy with MsgBox -> Print.
+- --headless (and check/test) turn error dialogs into stderr text and answer MsgBox (default button), InputBox (OK), FileSelect and DirSelect (Cancel), each reported on stderr. A Gui still opens and keeps the script running, and engines before ac51392e block on MsgBox: run dialog scripts unattended only through tools/run_hidden.py --timeout.
 - check is not a sandbox: loading performs #DllLoad. Do not check or run untrusted scripts.
 - Fork BIFs (no #Include): Print, Eval (needs #EnableEval or /Eval), JSON, Inspect, ProcessPipe, Check, TSParse (structure only, not a validity test), _ScriptGetLines, SyntaxError.
 

@@ -158,6 +158,21 @@ class RuntimeRegressions(unittest.TestCase):
         self.assertLessEqual(len(message.encode("utf-8")), 2047)
         self.assertIn("  What: context-marker\n", content)
 
+    def test_crash_log_indents_stack_lines(self):
+        # The crash log wrote Error.Stack raw after "  Stack:": unindented and CRLF-terminated.
+        log = self.root / "stack.log"
+        result = self.run_script('Inner() {\n    throw Error("deep")\n}\nOuter() => Inner()\nOuter()\n',
+                                 f"/CrashLog={log}")
+        self.assertEqual(result.returncode, 10, result.stderr)
+        content = log.read_bytes()
+        self.assertNotIn(b"\r", content)
+        after = content.decode("utf-8").split("  Stack:\n", 1)[1].splitlines()
+        stack = after[:next(i for i, line in enumerate(after) if line.startswith("["))]  # Up to the next record.
+        self.assertEqual(len(stack), 4, after)
+        self.assertTrue(all(line.startswith("    ") for line in stack), stack)
+        self.assertIn("[Inner]", stack[0])
+        self.assertEqual(stack[-1], "    > Auto-execute")
+
     def test_crash_log_unicode_truncation_remains_valid_utf8(self):
         log = self.root / "unicode.log"
         source = 'text := ""\nLoop 1500\n    text .= "😀"\nthrow Error(text)\n'
@@ -333,6 +348,41 @@ Print(JSON.Stringify({{ok:valid.Ok, validDiagnostics:valid.Diagnostics.Length,
         self.assertIn("sample.ahk (3) : ==> made on 3", self.uncaught_report(source))
         record = self.uncaught_diagnostic(source)
         self.assertEqual((record["line"], record["source"]), (3, '    e := Error("made on 3")'))
+
+    HEADLESS_DIALOGS = ('Print(MsgBox("hello", "T1"))\n'
+                        'Print(MsgBox("pick", "T2", "YesNoCancel Default2"))\n'
+                        'ib := InputBox("Name?", "T3", , "Bob")\n'
+                        'Print(ib.Result " " ib.Value)\n'
+                        'Print("[" FileSelect() "] " FileSelect("M").Length)\n'
+                        'Print("[" DirSelect(, , "Pick one") "]")\n')
+
+    def test_headless_dialogs_answer_as_enter_and_report_on_stderr(self):
+        # Before 2026-11-16 /Headless covered only error dialogs: these blocked until killed.
+        result = self.run_script(self.HEADLESS_DIALOGS)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [b"OK", b"No", b"OK Bob", b"[] 0", b"[]"])
+        report = result.stderr.decode("utf-8").splitlines()
+        self.assertEqual([line.split(" : ", 1)[1] for line in report], [
+            '==> Headless MsgBox "T1" answered OK: hello',
+            '==> Headless MsgBox "T2" answered No: pick',
+            '==> Headless InputBox "T3" answered OK: Name?',
+            '==> Headless FileSelect "Select File - sample.ahk" answered Cancel: ',
+            '==> Headless FileSelect "Select File - sample.ahk" answered Cancel: ',
+            '==> Headless DirSelect "sample.ahk" answered Cancel: Pick one',
+        ])
+        self.assertTrue(report[0].endswith("sample.ahk (1) : " + report[0].split(" : ", 1)[1]))
+
+    def test_headless_dialogs_are_dialog_records_under_diag_json(self):
+        result = self.run_script(self.HEADLESS_DIALOGS, "/Diag=json")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        records = [json.loads(line) for line in result.stderr.decode("utf-8").splitlines()]
+        self.assertEqual([(r["kind"], r["dialog"], r["title"], r["result"], r["line"]) for r in records], [
+            ("dialog", "MsgBox", "T1", "OK", 1), ("dialog", "MsgBox", "T2", "No", 2),
+            ("dialog", "InputBox", "T3", "OK", 3), ("dialog", "FileSelect", "Select File - sample.ahk", "Cancel", 5),
+            ("dialog", "FileSelect", "Select File - sample.ahk", "Cancel", 5), ("dialog", "DirSelect", "sample.ahk", "Cancel", 6),
+        ])
+        self.assertEqual(records[0]["text"], "hello")
+        self.assertEqual(Path(records[0]["file"]), self.root / "sample.ahk")
 
     def test_script_get_lines_finds_lines_inside_functions(self):
         source = ('F() {\n    x := 1\n    return _ScriptGetLines(A_LineFile, 2)\n}\n'

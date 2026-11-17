@@ -90,6 +90,17 @@ bif_impl FResult InputBox(optl<StrArg> aPrompt, optl<StrArg> aTitle, optl<StrArg
 	if (aOptions.has_value() && !InputBoxParseOptions(aOptions.value(), inputbox))
 		return FR_FAIL; // It already displayed the error.
 
+	if (g_script.mHeadless)
+	{
+		// Answer as Enter would: OK with the default text.
+		LPTSTR value = (LPTSTR)(inputbox.default_string ? inputbox.default_string : _T(""));
+		g_script.ReportHeadlessDialog(_T("InputBox"), inputbox.title, inputbox.text, _T("OK"));
+		ExprTokenType argt[] = { _T("Result"), _T("OK"), _T("Value"), value };
+		ExprTokenType *args[_countof(argt)] = { argt, argt+1, argt+2, argt+3 };
+		aRetVal = Object::Create(args, _countof(args));
+		return aRetVal ? OK : FR_E_OUTOFMEM;
+	}
+
 	// At this point, we know a dialog will be displayed.  See macro's comments for details:
 	DIALOG_PREP
 

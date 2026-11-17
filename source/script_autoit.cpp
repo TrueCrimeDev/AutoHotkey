@@ -1140,6 +1140,15 @@ bif_impl FResult DirSelect(optl<StrArg> aRootDir, optl<int> aOptions, optl<StrAr
 		sntprintf(greeting, _countof(greeting), _T("Select Folder - %s"), g_script.DefaultDialogTitle());
 	bi.lpszTitle = greeting;
 
+	if (g_script.mHeadless)
+	{
+		// Answer as Cancel would: no folder.
+		pMalloc->Release();
+		g_script.ReportHeadlessDialog(_T("DirSelect"), g_script.DefaultDialogTitle(), greeting, _T("Cancel"));
+		aRetVal.SetEmpty();
+		return OK;
+	}
+
 	// Bitwise flags:
 	#define FSF_ALLOW_CREATE 0x01
 	#define FSF_EDITBOX      0x02

@@ -1204,3 +1204,68 @@ of type "SyntaxError" has no property named "What".`), so a generic
 uncaught-error report of an `Eval` outside `try`, `Check()` records, and the
 REPL's `SyntaxError` line, which prints only the type and message. Test:
 `tests/test_eval.ahk` section I.
+
+## 26. `/Headless` answers script dialogs; DBGp `eval` (2026-11-16)
+
+### `/Headless` answers `MsgBox`, `InputBox`, `FileSelect` and `DirSelect`
+
+Under `/Headless`, and so under `check` and `test`, these no longer open a
+window. Each is answered as pressing Enter would and reported on stderr:
+
+| Call | Answer |
+| --- | --- |
+| `MsgBox` | its default button: `OK`, `Yes`, or the `Default2`/`Default3` button |
+| `InputBox` | `{Result: "OK", Value: <the Default argument, or "">}` |
+| `FileSelect` | `""`, or an empty Array with `M` (as Cancel) |
+| `DirSelect` | `""` (as Cancel) |
+
+```text
+C:\s\x.ahk (3) : ==> Headless MsgBox "Confirm" answered Yes: Delete it?
+```
+
+Under `/Diag=json` the report is one record per dialog:
+`{"kind":"dialog","format":"json","schema":2,"dialog":"MsgBox","title":"Confirm","text":"Delete it?","result":"Yes","file":"C:\\s\\x.ahk","line":3}`.
+A `Gui` still opens and keeps the script running. `--capabilities` lists
+`"headlessDialogs": true`.
+
+Before: `/Headless` only turned error and warning dialogs into stderr text, so
+an unattended run blocked on the first `MsgBox` until something killed it.
+Tests: `tests/test_runtime_regressions.py` (`test_headless_dialogs_*`).
+
+### DBGp `eval`
+
+`eval -i ID [-p PAGE] -- BASE64(EXPRESSION)` evaluates an AutoHotkey
+expression with the fork's `Eval`, in the scope of the function the script is
+paused in (the global scope outside any function), and answers with one
+`<property>` as `property_get` does. A syntax error, or anything the expression
+throws, answers `<error code="206"><message>...</message></error>` with the
+exception's message, and the script stays paused. `#EnableEval` is not needed:
+a debugger client can already read and set any variable. As with the `Eval`
+BIF, assigning to a new name inside a function creates a local there.
+`feature_get -n eval` reports it, and `--capabilities` lists `"dbgpEval": true`.
+Upstream answers `eval` with error 4 (unimplemented command). Tests:
+`tests/test_debugger_eval.py`.
+
+## 27. Engine fixes of 2026-11-16
+
+- **`FileRead` of an empty file** returns `""`. Under a top-level v2.1
+  `#Requires` it threw `UnsetError` "No value was returned.". `RAW` still
+  returns an empty Buffer.
+- **JSON `AllowTopLevelScalar: false`**: `Parse`, `Validate` and `ParseAt`
+  report the rejected scalar where it starts (`"\n\n   42"`: line 3, col 4,
+  pos 6), and `ParseAt` moves `Pos` past it so a catch-and-continue loop reads
+  the next record. Before: line 1, col 1, pos 1 (`Validate`: the position
+  after the value), and `Pos` stayed put.
+- **`ParseAt` error positions** count lines and columns from the start of
+  `Text`; the line was counted from `Pos`.
+- **JSON `MaxDepth`** counts containers in `Parse` and `Validate` as
+  `Stringify` does, so whatever parses under a limit also serializes under it.
+  Before, `[[]]` parsed under `MaxDepth: 1` and 257 nested arrays under the
+  default 256, and neither would serialize.
+- **`source_outline` / `workspace_symbols`** find fat-arrow functions and
+  functions whose default parameters hold parentheses or quoted strings.
+- **`/Debug=stdio` with no reader on stdout**: the failed init packet is
+  noticed (a failed flush was ignored, so the engine waited on stdin and never
+  ran the script), and it prints one notice, not two.
+- **Crash log**: each `Error.Stack` line is indented under `  Stack:` and ends
+  in LF; the stack was written raw, unindented and CRLF-terminated.

@@ -179,8 +179,27 @@ void CrashLog::LogError(LPCTSTR aType, LPCTSTR aMode, LPCTSTR aMessage,
     DWORD n = FormatHeader(header, sizeof(header), "ERROR", rest);
     AppendRaw(s_crash_path, header, n);
 
+    // Error.Stack has one CRLF-terminated line per frame (the last may lack one).
+    // Indent each under "Stack:" and end it with LF, like every other line here.
+    char stack_lines[sizeof(stack_u8) * 2];
+    size_t sn = 0;
+    for (const char *line = stack_u8; *line && sn + 6 < sizeof(stack_lines); )
+    {
+        const char *end = strchr(line, '\n');
+        size_t len = end ? (size_t)(end - line) : strlen(line);
+        size_t keep = (len && line[len - 1] == '\r') ? len - 1 : len;
+        if (keep > sizeof(stack_lines) - sn - 6)
+            keep = sizeof(stack_lines) - sn - 6;
+        memcpy(stack_lines + sn, "    ", 4);
+        memcpy(stack_lines + sn + 4, line, keep);
+        sn += 4 + keep;
+        stack_lines[sn++] = '\n';
+        line += end ? len + 1 : len;
+    }
+    stack_lines[sn] = '\0';
+
     // Indented continuation lines.
-    char body[16384];
+    char body[16384 + sizeof(stack_lines)];
     int bn = _snprintf_s(body, sizeof(body), _TRUNCATE,
         "  Message: %s\n"
         "  File: %s\n"
@@ -188,7 +207,7 @@ void CrashLog::LogError(LPCTSTR aType, LPCTSTR aMode, LPCTSTR aMessage,
         "  What: %s\n"
         "  Extra: %s\n"
         "  Stack:\n%s",
-        msg_u8, file_u8, aLine, what_u8, extra_u8, stack_u8);
+        msg_u8, file_u8, aLine, what_u8, extra_u8, stack_lines);
     if (bn > 0)
         AppendRaw(s_crash_path, body, (DWORD)bn);
 
