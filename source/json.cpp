@@ -81,6 +81,10 @@ struct JsonScanner
 	LPCTSTR errCode = _T("");
 	size_t errPos = 0;
 	int errLine = 1, errCol = 1;
+	// Where the top-level value starts (after leading whitespace), for errors
+	// about the value as a whole such as a rejected top-level scalar.
+	size_t topPos = 0;
+	int topLine = 1, topCol = 1;
 
 	JsonScanner(LPCTSTR aText, size_t aLen, const JsonParseOpts &aOpt)
 		: s(aText), n(aLen), opt(aOpt) {}
@@ -115,6 +119,19 @@ struct JsonScanner
 	}
 
 	void Newline() { ++line; lineStart = i + 1; }
+
+	void MarkTop() { topPos = i; topLine = line; topCol = Col(); }
+	bool FailAtTop(LPCTSTR aCode, LPCTSTR aMsg)
+	{
+		if (!failed)
+		{
+			Fail(aCode, aMsg);
+			errPos = topPos;
+			errLine = topLine;
+			errCol = topCol;
+		}
+		return false;
+	}
 
 	void SkipWs()
 	{
@@ -962,6 +979,8 @@ bool ParseValue(JsonScanner &sc, JsonValue &aOut, int aDepth)
 		return false;
 	if (sc.i >= sc.n)
 		return sc.Fail(_T("UnexpectedEnd"), _T("Unexpected end of JSON input"));
+	if (!aDepth)
+		sc.MarkTop();
 
 	TCHAR c = sc.s[sc.i];
 	if (c == '{')
@@ -1007,6 +1026,8 @@ bool SkipValue(JsonScanner &sc, int aDepth)
 		return false;
 	if (sc.i >= sc.n)
 		return sc.Fail(_T("UnexpectedEnd"), _T("Unexpected end of JSON input"));
+	if (!aDepth)
+		sc.MarkTop();
 
 	TCHAR c = sc.s[sc.i];
 	if (c == '{')
@@ -1460,8 +1481,8 @@ void ParseCore(LPTSTR text, size_t len, const JsonParseOpts &po, ResultToken &aR
 	if (!po.allowTopLevelScalar && val.IsScalar())
 	{
 		val.Release();
-		aResultToken.SetExitResult(ThrowJsonError(_T("UnexpectedChar")
-			, _T("Expected an object or array at the top level"), 1, 1, 0) == OK ? OK : FAIL);
+		sc.FailAtTop(_T("UnexpectedChar"), _T("Expected an object or array at the top level"));
+		aResultToken.SetExitResult(ThrowJsonError(sc.errCode, sc.errMsg, sc.errLine, sc.errCol, sc.errPos) == OK ? OK : FAIL);
 		return;
 	}
 	EmitJsonValue(aResultToken, val);
@@ -1777,12 +1798,25 @@ BIF_DECL(JsonClass_Validate)
 			sc.Fail(_T("TrailingContent"), _T("Unexpected content after the JSON value")), ok = false;
 	}
 	if (ok && !po.allowTopLevelScalar && topIsScalar)
-		sc.Fail(_T("UnexpectedChar"), _T("Expected an object or array at the top level")), ok = false;
+		sc.FailAtTop(_T("UnexpectedChar"), _T("Expected an object or array at the top level")), ok = false;
 
 	free(owned);
 	auto result = MakeValidateResult(ok, &sc, nullptr, nullptr);
 	if (!result) { aResultToken.SetExitResult(FR_E_OUTOFMEM == OK ? OK : FAIL); return; }
 	aResultToken.SetValue(result);
+}
+
+// ParseAt starts its scanner at Pos with the line count at 1, so recount the
+// error's line and column from the start of Text, as Parse would report them.
+// Done only on failure, so a loop over a long stream stays linear.
+FResult ThrowParseAtError(JsonScanner &sc)
+{
+	int line = 1;
+	size_t lineStart = 0;
+	for (size_t k = 0; k < sc.errPos && k < sc.n; ++k)
+		if (sc.s[k] == '\n')
+			++line, lineStart = k + 1;
+	return ThrowJsonError(sc.errCode, sc.errMsg, line, (int)(sc.errPos - lineStart) + 1, sc.errPos);
 }
 
 // JSON.ParseAt(Text, &Pos, Options?) — parse ONE value beginning at Pos (1-based),
@@ -1848,7 +1882,7 @@ BIF_DECL(JsonClass_ParseAt)
 	if (sc.failed) // an unterminated comment while skipping
 	{
 		posVar->Assign((__int64)(sc.i + 1));
-		aResultToken.SetExitResult(ThrowJsonError(sc.errCode, sc.errMsg, sc.errLine, sc.errCol, sc.errPos) == OK ? OK : FAIL);
+		aResultToken.SetExitResult(ThrowParseAtError(sc) == OK ? OK : FAIL);
 		return;
 	}
 	if (sc.i >= sc.n)
@@ -1865,14 +1899,18 @@ BIF_DECL(JsonClass_ParseAt)
 	{
 		val.Release();
 		posVar->Assign((__int64)(sc.errPos + 1));
-		aResultToken.SetExitResult(ThrowJsonError(sc.errCode, sc.errMsg, sc.errLine, sc.errCol, sc.errPos) == OK ? OK : FAIL);
+		aResultToken.SetExitResult(ThrowParseAtError(sc) == OK ? OK : FAIL);
 		return;
 	}
 	if (!po.allowTopLevelScalar && val.IsScalar())
 	{
+		// The scalar itself is well-formed, so move Pos past it as a successful
+		// call would; a loop that catches the error then reads the next record.
 		val.Release();
-		aResultToken.SetExitResult(ThrowJsonError(_T("UnexpectedChar")
-			, _T("Expected an object or array at the top level"), 1, 1, 0) == OK ? OK : FAIL);
+		sc.FailAtTop(_T("UnexpectedChar"), _T("Expected an object or array at the top level"));
+		sc.SkipWs();
+		posVar->Assign((__int64)(sc.i + 1));
+		aResultToken.SetExitResult(ThrowParseAtError(sc) == OK ? OK : FAIL);
 		return;
 	}
 
@@ -1880,7 +1918,7 @@ BIF_DECL(JsonClass_ParseAt)
 	if (sc.failed)
 	{
 		posVar->Assign((__int64)(sc.errPos + 1));
-		aResultToken.SetExitResult(ThrowJsonError(sc.errCode, sc.errMsg, sc.errLine, sc.errCol, sc.errPos) == OK ? OK : FAIL);
+		aResultToken.SetExitResult(ThrowParseAtError(sc) == OK ? OK : FAIL);
 		return;
 	}
 	posVar->Assign((__int64)(sc.i + 1));

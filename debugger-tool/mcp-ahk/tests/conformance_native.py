@@ -146,6 +146,10 @@ Baz(x) {
 
 MyLabel:
 return
+
+Defaults(a, b := Max(1, 2), c := ")") {
+}
+Square(x) => x * x
 """
 UNI = 'Uni() {\n    s := "héllo 日本語"\n}\nclass Ünicode {\n}\n'
 paths = {}

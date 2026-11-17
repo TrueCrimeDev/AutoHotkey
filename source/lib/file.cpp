@@ -225,6 +225,7 @@ bif_impl FResult FileRead(StrArg aFilespec, optl<StrArg> aOptions, ResultToken &
 	{
 		g->LastError = GetLastError();
 		CloseHandle(hfile);
+		aResultToken.SetValue(_T(""), 0); // Explicit "" rather than no value, which a v2.1 #Requires turns into UnsetError.
 		return OK; // Indicate success (a zero-length file results in an empty string).
 	}
 
